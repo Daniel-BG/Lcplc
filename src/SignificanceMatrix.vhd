@@ -1,14 +1,14 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel
 -- 
 -- Create Date: 23.10.2017 15:28:39
 -- Design Name: 
 -- Module Name: SignificanceMatrix - Behavioral
--- Project Name: 
+-- Project Name: Vypec
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Module that stores the significance state of a whole block
 -- 
 -- Dependencies: 
 -- 
@@ -21,27 +21,28 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
-
 use work.JypecConstants.all;
 
+
+--Generic and port definition
 entity SignificanceMatrix is
 	generic (
+		--number of rows (must be multiple of four)
 		ROWS: integer := 64;
+		--number of columns
 		COLS: integer := 64
 	);
 	port (
-		clk: in std_logic;
-		rst: in std_logic;
-		clk_en: in std_logic;
+		--control signals
+		clk, rst, clk_en: in std_logic;
+		--significance state to save in current memory cell
 		in_value: in significance_state_t;
+		--current neighborhood 
 		out_value: out sign_neighborhood_t
 	);
 end SignificanceMatrix;
+
 
 architecture Behavioral of SignificanceMatrix is
 
@@ -147,7 +148,8 @@ begin
 			neigh.next_p3 <= neigh.next_p4;
 			neigh.next_p4 <= storage_main((index_main));
 			
-			--update indices from all 3 memory modules
+			--update indices from all 3 memory modules 
+			--(make them circular FIFOs)
 			if (index_main = SIZE_MAIN_STORAGE - 1) then
 				index_main <= 0;
 			else

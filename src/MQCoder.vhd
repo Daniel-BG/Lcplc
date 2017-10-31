@@ -1,14 +1,16 @@
 ----------------------------------------------------------------------------------
--- Company:º 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 24.10.2017 10:26:39
 -- Design Name: 
 -- Module Name: MQCoder - Behavioral
--- Project Name: 
+-- Project Name: Jypec
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: MQ-arithmetic coder. Has internal states for different contexts with
+--		the aim of modelling a custom probability for each one, making compression 
+--		more efficient. Context generator goes outside
 -- 
 -- Dependencies: 
 -- 
@@ -21,25 +23,26 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 use work.JypecConstants.all;
 
+
+--MQCODER entity. No generics, can keep coding forever
 entity MQCoder is
 	port(
+		--control signals
 		clk, rst, clk_en: in std_logic;
+		--bit to code
 		in_bit: in std_logic;
+		--flag to end coding and output remaining bits
 		end_coding_enable: in std_logic;
+		--context with which this is coding
 		in_context: in context_label_t;
-		out_bytes: out std_logic_vector(23 downto 0);	--while coding two bytes suffice, but with 3 we can do the final cleanup in one cycle
-		out_enable: out std_logic_vector(2 downto 0) 	--individually enable first and second and third byte. By design out_en(2) implies out_en(1) implies out_en(0)
+		--while coding two bytes suffice, but with 3 we can do the final cleanup in one cycle
+		out_bytes: out std_logic_vector(23 downto 0);
+		--individually enable first, second and third byte. 
+		--By design out_en(2) implies out_en(1) implies out_en(0)	
+		out_enable: out std_logic_vector(2 downto 0) 	
 	);
 end MQCoder;
 
@@ -112,7 +115,15 @@ architecture Behavioral of MQCoder is
 	
 begin
 
-
+	--this process updates the coder. Usually shifting is done to the normalized lower bound
+	--until it goes over the normalized interval length. This can happen a bounded number of
+	--times (14), and in at most two of those a byte is output. This process precalculates
+	--that number, and then does the outputting in only one cycle, by shifting twice a variable
+	--number of bits. This complicates the underlying circuit, but allows for faster 
+	--compression
+	--You should be familiar with the mq coding process first to understand how this works
+	--(can be checked at https://github.com/Daniel-BG/Jypec in the MQCoder class), this is
+	--basically a hardware translation of that software
 	update_mqcoder: process(rst, clk, clk_en)
 		variable current_table: probability_table_t;
 		variable original_prediction: std_logic;
@@ -305,7 +316,7 @@ end Behavioral;
 
 
 
---code below is how it was defined at first before optimizations took place
+--code below is how it was defined at first before optimizations took place, contains a for loop of 14 iterations instead of the 3 required now
 
 --			--renormalization shift
 --			for i in 0 to 13 loop --need to set for the max possible number of iterations

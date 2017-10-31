@@ -1,21 +1,21 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 25.10.2017 12:02:13
 -- Design Name: 
 -- Module Name: CoordinateGenerator - Behavioral
--- Project Name: 
+-- Project Name: Vypec
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Coordinate generator for coding blocks. Here the coordinates
+-- 		are four-dimensional: row, column, bitplane and pass
 -- 
 -- Dependencies: 
 -- 
 -- Revision:
 -- Revision 0.01 - File Created
--- Additional Comments:
--- 
+-- Additional Comments: 
 ----------------------------------------------------------------------------------
 
 
@@ -23,31 +23,36 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use work.JypecConstants.all;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
 
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
+--Coordinate generator.
+-- sweeps the row+col space by going through four sample strips (vertically)
+-- then when finished it increases the pass counter. When all passes are done,
+-- the bit plane counter is at last increased
 entity CoordinateGenerator is
 	generic (
-		ROWS: integer := 64; --must be multiple of 4
-		COLS: integer := 64; --works w/whatever size
-		BITPLANES: integer := 15 --whatever size >= 2 (sign + magnitude)
+		--number of rows, must be multiple of 4
+		ROWS: integer := 64;
+		--number of columns of the block, works w/whatever size
+		COLS: integer := 64;
+		--number of bitplanes must be >= 2 (sign + magnitude)
+		BITPLANES: integer := 15 
+		);
+	Port ( 
+		--control signals
+		clk, rst, clk_en : in std_logic;
+		--row output
+		row_out: out natural range 0 to ROWS - 1;
+		--column output
+		col_out: out natural range 0 to COLS - 1;
+		--bitplane output
+		bitplane_out: out natural range 0 to BITPLANES - 1;
+		--pass output
+		pass_out: out encoder_pass_t;
+		--'1' when all coordinates have been generated, 
+		--will only be up for one cycle
+		--then the generator starts counting again
+		done_out: out std_logic	
 	);
-    Port ( clk : in std_logic;
-           rst : in std_logic;
-           clk_en : in std_logic;
-           row_out: out natural range 0 to ROWS - 1;	--current row
-           col_out: out natural range 0 to COLS - 1;	--current column
-           bitplane_out: out natural range 0 to BITPLANES - 1; --current bitplane
-           pass_out: out encoder_pass_t;	--current pass
-           done_out: out std_logic	--'1' when all coordinates have been generated
-    );
 end CoordinateGenerator;
 
 architecture Behavioral of CoordinateGenerator is
@@ -60,15 +65,16 @@ architecture Behavioral of CoordinateGenerator is
 	
 begin
 
+	--output inner signals
 	row_out <= row;
 	col_out <= col;
 	bitplane_out <= bitplane;
 	pass_out <= pass;
 	done_out <= done;
-
+	
+	--update state
 	update_coords: process(clk, rst, clk_en)
 	begin
-	
 		if (rst = '1') then
 			row <= 0;
 			col <= 0;

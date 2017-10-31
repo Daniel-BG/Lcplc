@@ -1,60 +1,64 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 24.10.2017 17:58:18
 -- Design Name: 
 -- Module Name: ContextGenerator - Behavioral
--- Project Name: 
+-- Project Name: Vypec
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Generate contexts based on the significance state and other
+--		flags of neighboring samples
 -- 
 -- Dependencies: 
 -- 
 -- Revision:
 -- Revision 0.01 - File Created
--- Additional Comments:
+-- Additional Comments: 
 -- 
 ----------------------------------------------------------------------------------
 
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
 use work.JypecConstants.all;
 
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
+
+-- Context generator entity
 entity ContextGenerator is
 	generic(
+		--rows of the block, must be multiple of four
 		ROWS: integer := 64;
+		--cols of the block, must be greater than four
 		COLS: integer := 64
 	);
 	port(
+		--significance status of neighboring values
 		raw_neighborhood: in sign_neighborhood_t;
+		--subband that this block is coding (LL, HL, LH, HH have 
+		--different contexts for the same neighbor configurations
 		subband: in subband_t;
+		--current row and column, used when on edges to set neighbors that do not
+		--exist to default values
 		row: in natural range 0 to ROWS - 1;
 		col: in natural range 0 to COLS - 1;
+		--true if this is the current sample's first refinement
 		first_refinement_in: in std_logic;
+		--contexts out
 		magnitude_refinement_context, sign_bit_decoding_context, significance_propagation_context: out context_label_t;
+		--flags out
 		sign_bit_xor: out std_logic;
 		is_strip_zero_context: out std_logic
 	);
 end ContextGenerator;
 
 architecture Behavioral of ContextGenerator is
-
+	--filtered neighborhood for easy usage
 	signal neighborhood: neighborhood_3x3_t;
-	
+	--precalculated values for easier context calculation
 	signal horizontal_contribution, vertical_contribution: integer range -2 to 2;
-	
 	signal sum_horizontal, sum_vertical: natural range 0 to 2;
 	signal sum_diagonal, sum_horizontal_vertical: natural range 0 to 4;
 	
@@ -135,6 +139,7 @@ begin
 	
 	--using the 3x3 neighborhood, generate the contributions and sums
 	generate_contributions_and_sums: process(neighborhood) 
+		--use variables which are then assigned to the signals
 		variable tmp_h_c, tmp_v_c: integer range -2 to 2;
 		variable tmp_h_s, tmp_v_s: natural range 0 to 2;
 		variable tmp_d_s: natural range 0 to 4;
@@ -202,16 +207,18 @@ begin
 	
 	--output magnitude refinement context	
 	magnitude_refinement_gen: process(neighborhood, first_refinement_in) 
-		variable exists_neighbor_one: boolean;
+		variable exists_significant_neighbor: boolean;
 	begin
-		--check if any of the neighbors is significant (either positive or negative work)
-		exists_neighbor_one := (neighborhood.top_left /= INSIGNIFICANT or neighborhood.top /= INSIGNIFICANT or neighborhood.top_right /= INSIGNIFICANT or 
-			neighborhood.right /= INSIGNIFICANT or neighborhood.bottom_right /= INSIGNIFICANT or neighborhood.bottom /= INSIGNIFICANT or
-			neighborhood.bottom_left /= INSIGNIFICANT or neighborhood.left /= INSIGNIFICANT);
+		--check for significant neighbors
+		exists_significant_neighbor := (
+			neighborhood.top_left		/= INSIGNIFICANT or neighborhood.top	/= INSIGNIFICANT or neighborhood.top_right		/= INSIGNIFICANT or 
+			neighborhood.left			/= INSIGNIFICANT or 										neighborhood.right			/= INSIGNIFICANT or 
+			neighborhood.bottom_left	/= INSIGNIFICANT or neighborhood.bottom /= INSIGNIFICANT or neighborhood.bottom_right	/= INSIGNIFICANT
+		);
 
-	
+		--select appropiate context	
 		if (first_refinement_in = '1') then
-			if (not exists_neighbor_one) then
+			if (not exists_significant_neighbor) then
 				magnitude_refinement_context <= CONTEXT_FOURTEEN;
 			else
 				magnitude_refinement_context <= CONTEXT_FIFTEEN;
@@ -355,6 +362,8 @@ begin
 	begin
 		any_non_zero := false;
 	
+		--this is basically a 6x3 rectangle in which all samples are checked for significance
+		--if all are insignificant, then the whole strip is
 		if (raw_neighborhood.curr_m4 /= INSIGNIFICANT or raw_neighborhood.curr_m3 /= INSIGNIFICANT or
 				raw_neighborhood.curr_m2 /= INSIGNIFICANT or raw_neighborhood.curr_m1 /= INSIGNIFICANT or
 				raw_neighborhood.curr_c  /= INSIGNIFICANT or raw_neighborhood.curr_p1 /= INSIGNIFICANT or
