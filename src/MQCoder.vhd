@@ -140,8 +140,11 @@ begin
 		
 		--last for variables
 		variable full_byte: std_logic;
+		--output values are zero unless otherwise specified.
+		--thus, the output holds up for only one cycle before being erased when
+		--mq_enable is up
 		variable next_output_bytes: std_logic_vector(23 downto 0) := (others => '0');
-		variable next_output_enable: std_logic_vector(2 downto 0);
+		variable next_output_enable: std_logic_vector(2 downto 0) := (others => '0');
 		
 		--spetial encoding vars
 		variable n_bits: integer range -7 to 12 := 0;
@@ -160,10 +163,17 @@ begin
 			original_prediction := current_table.prediction;
 			next_countdown_timer := countdown_timer;
 			next_temp_byte_buffer := temp_byte_buffer;
+			next_bytes_generated := bytes_generated_plus_one;
+			next_normalized_lower_bound := normalized_lower_bound;
+			next_normalized_interval := normalized_interval_length;
+			number_of_shifts := 0;
+			temp_shift := 0;
+			next_output_bytes := (others => '0');
+			next_output_enable := (others => '0');
 			--CODE--
 			
 			--adjust prediction
-			next_normalized_interval := normalized_interval_length - normalized_probability;
+			next_normalized_interval := next_normalized_interval - normalized_probability;
 			if (next_normalized_interval < normalized_probability) then
 				if (original_prediction = '1') then
 					original_prediction := '0';
@@ -172,10 +182,11 @@ begin
 				end if;
 			end if;
 			--adjust interval
+			
 			if (in_bit = original_prediction) then
-				next_normalized_lower_bound := normalized_lower_bound + normalized_probability;
+				next_normalized_lower_bound := next_normalized_lower_bound + normalized_probability;
 			else
-				next_normalized_lower_bound := to_unsigned(normalized_probability, 28);
+				next_normalized_interval := to_unsigned(normalized_probability, 16);
 			end if;
 			
 			--change state
@@ -190,7 +201,7 @@ begin
 							current_table.prediction := '1';
 						end if;
 					end if;
-					current_table.state := SIGMA_MPS(current_table.state);
+					current_table.state := SIGMA_LPS(current_table.state);
 				end if;
 			end if;
 			
@@ -210,7 +221,7 @@ begin
 				if (number_of_shifts > 0) then
 					--shift max possible quantity
 					temp_shift := number_of_shifts;
-					if (next_countdown_timer < number_of_shifts) then
+					if (temp_shift > next_countdown_timer) then
 						temp_shift := next_countdown_timer;
 					end if;
 					--update results
@@ -264,7 +275,6 @@ begin
 				n_bits := 12 - countdown_timer;
 				next_output_bytes := (others => '0');
 				next_temp_byte_buffer := temp_byte_buffer; 
-				next_bytes_generated := bytes_generated_plus_one;
 				next_output_enable := "000";
 				
 				for i in 0 to 2 loop
@@ -309,7 +319,7 @@ begin
 			out_bytes <= next_output_bytes;
 			out_enable <= next_output_enable;
 		end if;
-	end process;
+	end process update_mqcoder;
 
 
 end Behavioral;

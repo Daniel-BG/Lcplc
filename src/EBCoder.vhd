@@ -100,13 +100,13 @@ architecture Behavioral of EBCoder is
 	
 	--flag that indicates if the current coordinate is being refined for the first
 	--time or not
-	signal first_refinement_flag_curr: std_logic;
+	signal first_refinement_flag_curr, first_refinement_flag_curr_mem: std_logic;
 	signal first_refinement_flag_next: std_logic; --unused as output
 	
 	--flag indicating if the current coordinate has already been coded or not
 	--we also have the full strip for when run_length coding
 	signal iscoded_flag_curr: std_logic; --unused as input
-	signal iscoded_flag_strip: std_logic_vector(3 downto 0);
+	signal iscoded_flag_strip_mem, iscoded_flag_strip: std_logic_vector(3 downto 0);
 	signal iscoded_flag_next: std_logic; --unused as output
 	signal full_strip_uncoded: std_logic;
 	
@@ -197,8 +197,10 @@ begin
 		port map (
 			clk => clk, rst => rst, clk_en => memory_shift_enable,
 			in_value => first_refinement_flag_next,
-			out_value => first_refinement_flag_curr
+			out_value => first_refinement_flag_curr_mem
 		);
+		
+	first_refinement_flag_curr <= first_refinement_flag_curr_mem when bitplane /= 0 else '1';
 		
 	--is coded flag matrix storage
 	--stores flags indicating, for each position, if it is coded already in this pass
@@ -207,9 +209,11 @@ begin
 		port map (
 			clk => clk, rst => rst, clk_en => memory_shift_enable,
 			in_value => iscoded_flag_next,
-			out_values => iscoded_flag_strip
+			out_values => iscoded_flag_strip_mem
 		);
 		
+	--on the first bitplane set as zero by default, otherwise use stored values
+	iscoded_flag_strip <= iscoded_flag_strip_mem when bitplane /= 0 else "0000";
 	iscoded_flag_curr <= iscoded_flag_strip(3);
 	full_strip_uncoded <= '1' when iscoded_flag_strip = "0000" else '0';
 		
@@ -244,10 +248,10 @@ begin
 		
 		
 	--static calculations
-	current_bit <= shift_left(unsigned(current_data), bitplane + 1)(0);
-	next_p1_bit <= shift_left(unsigned(next_p1_data), bitplane + 1)(0);
-	next_p2_bit <= shift_left(unsigned(next_p2_data), bitplane + 1)(0);
-	next_p3_bit <= shift_left(unsigned(next_p3_data), bitplane + 1)(0);
+	current_bit <= shift_left(unsigned(current_data), bitplane + 1)(BITPLANES - 1);
+	next_p1_bit <= shift_left(unsigned(next_p1_data), bitplane + 1)(BITPLANES - 1);
+	next_p2_bit <= shift_left(unsigned(next_p2_data), bitplane + 1)(BITPLANES - 1);
+	next_p3_bit <= shift_left(unsigned(next_p3_data), bitplane + 1)(BITPLANES - 1);
 	strip_first_nonzero <= 0 when current_bit = '1' else
 						   1 when next_p1_bit = '1' else
 						   2 when next_p2_bit = '1' else
@@ -368,22 +372,7 @@ begin
 			--default state, from this spawn the other branches
 			when CODING_DEFAULT => 
 				if (pass = CLEANUP) then
-					if (row mod 4 /= 0) then
-						if (iscoded_flag_curr = '0') then
-							mqcoder_enable <= '1';
-							mqcoder_in <= current_bit;
-							mqcoder_context_in <= significance_propagation_context;
-							if (current_bit = '1') then
-								--if the sign bit is to be coded, just enable the coder, and then in the
-								--sign bit coding step update memory values
-								state_next <= CODING_SIGN;
-							else
-								--if no sign bit is to be encoded, set as coded, and shift memory
-								state_next <= CODING_DEFAULT;
-								memory_shift_enable <= '1';
-							end if;
-						end if;
-					elsif (full_strip_uncoded = '1' and is_strip_zero_context = '1') then
+					if (row mod 4 = 0 and full_strip_uncoded = '1' and is_strip_zero_context = '1') then
 						if (strip_first_nonzero = -1) then
 							state_next <= BURN_3;
 							memory_shift_enable <= '1';
@@ -395,6 +384,22 @@ begin
 							mqcoder_in <= '1';
 							mqcoder_context_in <= CONTEXT_RUN_LENGTH;
 							state_next <= UNIFORM_2;
+						end if;
+					else 
+						if (iscoded_flag_curr = '0') then
+							mqcoder_enable <= '1';
+							mqcoder_in <= current_bit;
+							mqcoder_context_in <= significance_propagation_context;
+							if (current_bit = '1') then
+								--if the sign bit is to be coded, just enable the coder, and then in the
+								--sign bit coding step update memory values
+								state_next <= CODING_SIGN;
+							else
+								--if no sign bit is to be encoded, set as coded (already done by default), and shift memory
+								memory_shift_enable <= '1';
+							end if;
+						else --no coding to be done, shift memory
+							memory_shift_enable <= '1';
 						end if;
 					end if;
 					
@@ -413,6 +418,8 @@ begin
 							iscoded_flag_next <= '1';
 							memory_shift_enable <= '1';
 						end if;
+					else	--no coding to be done, shift memory
+						memory_shift_enable <= '1';
 					end if;
 				else --refinement
 					state_next <= CODING_DEFAULT;

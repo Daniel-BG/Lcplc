@@ -21,7 +21,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
+use ieee.numeric_std.all;
 
 --temporary entity to module a memory block which should be loaded by a processor
 entity DataBlock is
@@ -38,7 +38,24 @@ end DataBlock;
 
 architecture Behavioral of DataBlock is
 	type mem_t is array(0 to ROWS * COLS - 1) of std_logic_vector(BIT_DEPTH - 1 downto 0);
-	signal memory: mem_t;
+	
+	--------------------------------------------------------------------
+	--For testing purposes, this is supposed to be loaded by a processor
+	constant PRIME: integer := 9973; --for pseudo randomly generating numbers
+	
+	function gen_rom return mem_t is
+		variable res: mem_t;
+	begin
+		for i in 0 to ROWS*COLS - 1 loop
+			--choose a random prime number
+			res(i) := std_logic_vector(to_unsigned((i*PRIME) mod (2**BIT_DEPTH - 1), BIT_DEPTH));
+		end loop;
+		return res;
+	end gen_rom;
+	--------------------------------------------------------------------
+	
+	
+	signal memory: mem_t := gen_rom;
 	
 	signal index: natural range 0 to ROWS * COLS - 1;
 	
