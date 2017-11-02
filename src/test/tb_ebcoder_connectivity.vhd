@@ -21,6 +21,10 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use ieee.numeric_std.all;
+
+library std;
+use std.textio.all;
 
 
 entity tb_ebcoder_connectivity is
@@ -38,6 +42,12 @@ architecture Behavioral of tb_ebcoder_connectivity is
 	
 	
 	constant clk_period : time := 40 ns;
+	
+	
+	---save output
+	file out_file: text is out "out_test.bin";
+	shared variable out_line: line; --line number declaration
+	constant CYCLES_TO_WRITE: integer := 10000;
 	
 begin
 
@@ -64,6 +74,28 @@ begin
 		clk <= '1';
 		wait for clk_period/2;
 		clk <= '0';
+	end process;
+	
+	
+	-- Clock process definitions
+	save_process: process
+	begin
+		--write only first 10000 things
+		for j in 0 to CYCLES_TO_WRITE loop
+			wait for clk_period/2;
+			wait for clk_period/2;
+			--here we are on the falling edge, save here since signals are stable (only when they are ready and not undefined)
+			if (not is_x(out_enable)) then
+				for i in 2 downto 0 loop
+					if (out_enable(i) = '1') then
+						write(out_line, CHARACTER'VAL( to_integer(unsigned(out_bytes(i*8+7 downto i*8)))));
+					end if;
+				end loop;
+			end if;
+		end loop;
+		writeline(out_file, out_line);
+		report "Output file written!!!";
+		wait; --do not write again
 	end process;
 
 
