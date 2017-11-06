@@ -357,22 +357,76 @@ begin
 	end process;
 	
 	
-	strip_zero_context: process(raw_neighborhood, row)
+	strip_zero_context: process(raw_neighborhood, row, col)
 		variable any_non_zero: boolean;
+		variable filtered_neighborhood: sign_neighborhood_t;
 	begin
 		any_non_zero := false;
+		
+		--by default assign same values, we will filter later
+		filtered_neighborhood.curr_m4 := raw_neighborhood.curr_m4;
+		filtered_neighborhood.curr_m3 := raw_neighborhood.curr_m3;
+		filtered_neighborhood.curr_m2 := raw_neighborhood.curr_m2;
+		filtered_neighborhood.curr_m1 := raw_neighborhood.curr_m1;
+		filtered_neighborhood.curr_c  := raw_neighborhood.curr_c;
+		filtered_neighborhood.curr_p1 := raw_neighborhood.curr_p1;
+		filtered_neighborhood.curr_p2 := raw_neighborhood.curr_p2;
+		filtered_neighborhood.curr_p3 := raw_neighborhood.curr_p3;
+		filtered_neighborhood.curr_p4 := raw_neighborhood.curr_p4;
+		filtered_neighborhood.curr_p5 := raw_neighborhood.curr_p5;
+		filtered_neighborhood.curr_p6 := raw_neighborhood.curr_p6;
+		filtered_neighborhood.curr_p7 := raw_neighborhood.curr_p7;
+		filtered_neighborhood.prev_m1 := raw_neighborhood.prev_m1;
+		filtered_neighborhood.prev_p3 := raw_neighborhood.prev_p3;
+		filtered_neighborhood.prev_p7 := raw_neighborhood.prev_p7;
+		filtered_neighborhood.next_m4 := raw_neighborhood.next_m4;
+		filtered_neighborhood.next_c  := raw_neighborhood.next_c;
+		filtered_neighborhood.next_p4 := raw_neighborhood.next_p4;
+		
+		--now if any is out of bounds, set as insignificant
+		if (col = 0) then
+			filtered_neighborhood.prev_m1 := INSIGNIFICANT;
+			filtered_neighborhood.curr_m1 := INSIGNIFICANT;
+			filtered_neighborhood.curr_m2 := INSIGNIFICANT;
+			filtered_neighborhood.curr_m3 := INSIGNIFICANT;
+			filtered_neighborhood.curr_m4 := INSIGNIFICANT;
+			filtered_neighborhood.next_m4 := INSIGNIFICANT;
+		end if;
+		
+		if (col = ROWS - 1) then
+			filtered_neighborhood.prev_p7 := INSIGNIFICANT;
+			filtered_neighborhood.curr_p4 := INSIGNIFICANT;
+			filtered_neighborhood.curr_p5 := INSIGNIFICANT;
+			filtered_neighborhood.curr_p6 := INSIGNIFICANT;
+			filtered_neighborhood.curr_p7 := INSIGNIFICANT;
+			filtered_neighborhood.next_p4 := INSIGNIFICANT;
+		end if;
+		
+		if (row = 0) then
+			filtered_neighborhood.prev_m1 := INSIGNIFICANT;
+			filtered_neighborhood.prev_p3 := INSIGNIFICANT;
+			filtered_neighborhood.prev_p7 := INSIGNIFICANT;
+		end if;
+		
+		if (row = COLS - 1) then
+			filtered_neighborhood.next_m4 := INSIGNIFICANT;
+			filtered_neighborhood.next_c  := INSIGNIFICANT;
+			filtered_neighborhood.next_p4 := INSIGNIFICANT;
+		end if;
+		
+		
 	
 		--this is basically a 6x3 rectangle in which all samples are checked for significance
 		--if all are insignificant, then the whole strip is
-		if (raw_neighborhood.curr_m4 /= INSIGNIFICANT or raw_neighborhood.curr_m3 /= INSIGNIFICANT or
-				raw_neighborhood.curr_m2 /= INSIGNIFICANT or raw_neighborhood.curr_m1 /= INSIGNIFICANT or
-				raw_neighborhood.curr_c  /= INSIGNIFICANT or raw_neighborhood.curr_p1 /= INSIGNIFICANT or
-				raw_neighborhood.curr_p2 /= INSIGNIFICANT or raw_neighborhood.curr_p3 /= INSIGNIFICANT or
-				raw_neighborhood.curr_p4 /= INSIGNIFICANT or raw_neighborhood.curr_p5/= INSIGNIFICANT or
-				raw_neighborhood.curr_p6 /= INSIGNIFICANT or raw_neighborhood.curr_p7 /= INSIGNIFICANT or
-				raw_neighborhood.prev_m1 /= INSIGNIFICANT or raw_neighborhood.prev_p3 /= INSIGNIFICANT or
-				raw_neighborhood.prev_p7 /= INSIGNIFICANT or raw_neighborhood.next_m4 /= INSIGNIFICANT or
-				raw_neighborhood.next_c  /= INSIGNIFICANT or raw_neighborhood.next_p4 /= INSIGNIFICANT) then
+		if (	filtered_neighborhood.curr_m4 /= INSIGNIFICANT or filtered_neighborhood.curr_m3 /= INSIGNIFICANT or
+				filtered_neighborhood.curr_m2 /= INSIGNIFICANT or filtered_neighborhood.curr_m1 /= INSIGNIFICANT or
+				filtered_neighborhood.curr_c  /= INSIGNIFICANT or filtered_neighborhood.curr_p1 /= INSIGNIFICANT or
+				filtered_neighborhood.curr_p2 /= INSIGNIFICANT or filtered_neighborhood.curr_p3 /= INSIGNIFICANT or
+				filtered_neighborhood.curr_p4 /= INSIGNIFICANT or filtered_neighborhood.curr_p5 /= INSIGNIFICANT or
+				filtered_neighborhood.curr_p6 /= INSIGNIFICANT or filtered_neighborhood.curr_p7 /= INSIGNIFICANT or
+				filtered_neighborhood.prev_m1 /= INSIGNIFICANT or filtered_neighborhood.prev_p3 /= INSIGNIFICANT or
+				filtered_neighborhood.prev_p7 /= INSIGNIFICANT or filtered_neighborhood.next_m4 /= INSIGNIFICANT or
+				filtered_neighborhood.next_c  /= INSIGNIFICANT or filtered_neighborhood.next_p4 /= INSIGNIFICANT) then
 			any_non_zero := true;
 		end if;
 	

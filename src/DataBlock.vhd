@@ -48,7 +48,7 @@ architecture Behavioral of DataBlock is
 	begin
 		for i in 0 to ROWS*COLS - 1 loop
 			--choose a random prime number
-			res(i) := std_logic_vector(to_unsigned((i*PRIME) mod (2**BIT_DEPTH - 1), BIT_DEPTH));
+			res(i) := std_logic_vector(to_unsigned((i*PRIME) mod (2**BIT_DEPTH), BIT_DEPTH));
 		end loop;
 		return res;
 	end gen_rom;

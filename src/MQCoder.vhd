@@ -156,7 +156,23 @@ begin
 			countdown_timer <= 12;
 			bytes_generated_plus_one <= 0;
 			state_table <= STATE_TABLE_DEFAULT;
+			out_bytes <= (others => '0');
+			out_enable <= (others => '0');
 		elsif (rising_edge(clk) and clk_en = '1') then
+			--debug
+--			if (rising_edge(clk)) then
+--				report "MQCoder state debug: "
+--					& "(A, C, T, tbar) -> " & integer'image(to_integer(unsigned(normalized_interval_length))) & ", "   
+--					& integer'image(to_integer(unsigned(normalized_lower_bound))) & ", "
+--					& integer'image(to_integer(unsigned(temp_byte_buffer))) & ", "
+--					& countdown_timer_t'image(countdown_timer)
+--				& " Coder: (bin, cin, enable) -> "
+--					& std_logic'image(in_bit) & "," 
+--					& context_label_t'image(in_context) & "," 
+--					& std_logic'image(clk_en) & "," & LF;
+--			end if;
+			
+			
 			--read stuff
 			current_table := state_table(in_context);
 			normalized_probability := P_ESTIMATE(current_table.state);
@@ -208,7 +224,7 @@ begin
 			--get number of shifts
 			temp_next_normalized_interval := next_normalized_interval;
 			for i in 0 to 13 loop
-				if (temp_next_normalized_interval < 32768) then
+				if (temp_next_normalized_interval >= 32768) then
 					exit;
 				end if;
 				temp_next_normalized_interval := temp_next_normalized_interval(14 downto 0) & '0';

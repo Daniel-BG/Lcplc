@@ -48,9 +48,9 @@ architecture Behavioral of SignificanceMatrix is
 
 	--derived constants
 	constant STRIPE_SAMPLES: integer := COLS * 4;
-	constant SIZE_MAIN_STORAGE: integer := COLS * (ROWS - 8) - 7; --7 or 6, check
-	constant SIZE_NEXT_STORAGE: integer := STRIPE_SAMPLES - 16; --16 or 15, check
-	constant SIZE_PREV_STORAGE: integer := STRIPE_SAMPLES - 14; --14 or 13, check
+	constant SIZE_MAIN_STORAGE: integer := COLS * (ROWS - 8) - 6; --7 or 6, check
+	constant SIZE_NEXT_STORAGE: integer := STRIPE_SAMPLES - 15; --16 or 15, check
+	constant SIZE_PREV_STORAGE: integer := STRIPE_SAMPLES - 13; --14 or 13, check
 	--buffer sizes
 	type storage_main_t is array(0 to SIZE_MAIN_STORAGE - 1) of significance_state_t;
 	type storage_next_t is array(0 to SIZE_NEXT_STORAGE - 1) of significance_state_t;

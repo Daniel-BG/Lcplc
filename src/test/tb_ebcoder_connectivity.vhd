@@ -38,7 +38,7 @@ architecture Behavioral of tb_ebcoder_connectivity is
 	signal clk_en: std_logic := '0';
 	signal busy: std_logic;
 	signal out_bytes: std_logic_vector(23 downto 0);
-	signal out_enable: std_logic_vector(2 downto 0);
+	signal valid: std_logic_vector(2 downto 0);
 	
 	
 	constant clk_period : time := 40 ns;
@@ -53,8 +53,8 @@ begin
 
 	uut: entity work.EBCoder
 		generic map(
-			ROWS => 16,
-			COLS => 16,
+			ROWS => 64,
+			COLS => 64,
 			BITPLANES => 16
 		)
 		port map (
@@ -63,7 +63,7 @@ begin
 			clk_en => clk_en,
 			busy => busy,
 			out_bytes => out_bytes,
-			out_enable => out_enable
+			valid => valid
 		);
 		
 		
@@ -79,16 +79,26 @@ begin
 	
 	-- Clock process definitions
 	save_process: process
+		variable busy_up: boolean := false;
 	begin
 		--write only first 10000 things
-		for j in 0 to CYCLES_TO_WRITE loop
+		while true loop
 			wait for clk_period/2;
 			wait for clk_period/2;
+			--check for busy indicator starting up
+			if (busy = '1' and not busy_up) then
+				busy_up := true;
+			end if;	
+			--if busy falls then end 
+			if (busy_up and not busy = '1') then
+				exit;
+			end if;
 			--here we are on the falling edge, save here since signals are stable (only when they are ready and not undefined)
-			if (not is_x(out_enable)) then
+			if (not is_x(valid)) then
 				for i in 2 downto 0 loop
-					if (out_enable(i) = '1') then
+					if (valid(i) = '1') then
 						write(out_line, CHARACTER'VAL( to_integer(unsigned(out_bytes(i*8+7 downto i*8)))));
+						--report "Writing stuff: " & integer'image(to_integer(unsigned(out_bytes(i*8+7 downto i*8)))) &  "(" & integer'image(i) & ")" & LF;
 					end if;
 				end loop;
 			end if;

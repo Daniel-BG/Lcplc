@@ -46,7 +46,7 @@ entity EBCoder is
 		--current output (valid only if out_enable is active)
 		out_bytes: out std_logic_vector(23 downto 0);	
 		--if set, the corresponding byte of out_bytes must be read in the next clk edge or it will be lost
-		out_enable: out std_logic_vector(2 downto 0)	
+		valid: out std_logic_vector(2 downto 0)	
 	);
 end EBCoder;
 
@@ -67,11 +67,16 @@ architecture Behavioral of EBCoder is
 		--after the first magnitude bit of a sample is coded, we code its sign bit 
 		CODING_SIGN, 
 		--when coding a run of zeros, we might have to jump over some samples, these
-		--states allow that. They differ from the LOADING states in that BURN states
+		--states allow that. They differ from the LOADING states in that SKIP states
 		--update the coordinate counter, while LOADING states do not.
-		BURN_3, 
-		BURN_2, 
-		BURN_1, 
+		--after a skip_thensign state, the sign bit of the current sample is coded
+		SKIP_3_THEN_SIGN, 
+		SKIP_2_THEN_SIGN, 
+		SKIP_1_THEN_SIGN, 
+		--after a skip state, coding resumes as usual
+		SKIP_3,
+		SKIP_2,
+		SKIP_1,
 		--if a run length coding is interrupted, UNIFORM states code the pointer to the
 		--sample that interrupted it
 		UNIFORM_2, 
@@ -116,7 +121,7 @@ architecture Behavioral of EBCoder is
 	
 
 	--context gen outputs
-	signal subband: subband_t;
+	constant subband: subband_t := LL;
 	signal magnitude_refinement_context, sign_bit_decoding_context, significance_propagation_context: context_label_t; --unused as input
 	signal sign_bit_xor: std_logic; --unused as input
 	signal is_strip_zero_context: std_logic; --unused as input
@@ -125,7 +130,7 @@ architecture Behavioral of EBCoder is
 	--coord gen outputs
 	signal row: natural range 0 to ROWS - 1;
 	signal col: natural range 0 to COLS - 1;
-	signal bitplane: natural range 0 to BITPLANES - 1;
+	signal bitplane: natural range 0 to BITPLANES - 2; -- -2 since one is for sign, rest for magnitude, and we are only interested in sign here
 	signal pass: encoder_pass_t; --unsued as input
 	signal coord_gen_done: std_logic; --unused as input
 	
@@ -135,7 +140,7 @@ architecture Behavioral of EBCoder is
 	signal mqcoder_enable: std_logic;
 	signal mqcoder_end_coding: std_logic;
 	signal mqcoder_bytes: std_logic_vector(23 downto 0);
-	signal mqcoder_bytes_enable: std_logic_vector(2 downto 0);
+	signal mqcoder_bytes_enable, out_enable: std_logic_vector(2 downto 0);
 	
 	----shared and other stuff
 	--enable coordinate generation. this guides the coding process, and is used
@@ -258,15 +263,47 @@ begin
 						   3 when next_p3_bit = '1' else
 						   -1;
 	current_sign_bit <= current_data(BITPLANES - 1);
+	valid <= out_enable 
+				when mqcoder_enable = '1' 
+				or state_current = DUMPING_REMAINING 
+				or state_current = MARKING_END 
+				or state_current = FINISHED 
+			else 
+				(others => '0');
+
 		
 	--FSM update process
 	state_seq: process(clk, clk_en, rst) begin
+		--debug
+--		if (rising_edge(clk)) then
+--			report "Current state: " & ebcoder_state_t'image(state_current) & " -> " & ebcoder_state_t'image(state_next) & LF
+--				& "Flags: (frf, if, fsu, szc) -> " 
+--					& std_logic'image(first_refinement_flag_curr) & "," 
+--					& std_logic'image(iscoded_flag_curr) & "," 
+--					& std_logic'image(full_strip_uncoded) & ","
+--					& std_logic'image(is_strip_zero_context) & "," & LF
+--				& "Data: (c, p1, p2, p3) -> "
+--					& integer'image(to_integer(unsigned(current_data))) & ","											   
+--					& integer'image(to_integer(unsigned(next_p1_data))) & ","		
+--					& integer'image(to_integer(unsigned(next_p2_data))) & ","		
+--					& integer'image(to_integer(unsigned(next_p3_data))) & "," & LF
+--				& "Coords: (row, col, fnz) -> "
+--					& integer'image(row) & ","
+--					& integer'image(col) & ","
+--					& integer'image(strip_first_nonzero) & "," & LF
+--				& "Coder: (bin, cin, enable) -> "
+--					& std_logic'image(mqcoder_in) & "," 
+--					& context_label_t'image(mqcoder_context_in) & "," 
+--					& std_logic'image(mqcoder_enable) & "," & LF;
+--		end if;
 		if (rst = '1') then
 			state_current <= LOADING_4;
 		elsif(rising_edge(clk) and clk_en = '1') then
 			state_current <= state_next;
 		end if;
 	end process;
+	
+
 	
 	--this process ties all modules together, generating flags
 	--and state transitions
@@ -312,6 +349,8 @@ begin
 				state_next <= IDLE;
 				busy <= '0'; --al others do not set this and thus leave it at default ('1')
 				
+			--Loading states so that when the coder starts, it can load the first strip 
+			--(needed for looking ahead and knowing if it can be runlength coded)
 			when LOADING_4 =>
 				coordinate_gen_force_disable <= '1';
 				memory_shift_enable <= '1';
@@ -329,21 +368,34 @@ begin
 				memory_shift_enable <= '1';
 				state_next <= CODING_DEFAULT; 
 
-			--burn states for when we need to advance the shifting memory
-			--but do not need to do anything else
-			when BURN_3 =>
-				state_next <= BURN_2;
+			--skip states for when we need to advance the shifting memory
+			--and after that code the sign of the current sample
+			when SKIP_3_THEN_SIGN =>
+				state_next <= SKIP_2_THEN_SIGN;
 				memory_shift_enable <= '1';
-			when BURN_2 =>
-				state_next <= BURN_1;
+			when SKIP_2_THEN_SIGN =>
+				state_next <= SKIP_1_THEN_SIGN;
 				memory_shift_enable <= '1';
-			when BURN_1 =>
+			when SKIP_1_THEN_SIGN =>
+				state_next <= CODING_SIGN;
+				memory_shift_enable <= '1';
+				
+			--skip states for just skipping over, then proceeding as usual
+			when SKIP_3 =>
+				state_next <= SKIP_2;
+				memory_shift_enable <= '1';
+			when SKIP_2 =>
+				state_next <= SKIP_1;
+				memory_shift_enable <= '1';
+			when SKIP_1 =>
 				state_next <= CODING_DEFAULT;
 				memory_shift_enable <= '1';
+			
 				
 			--uniform states for coding the strip stuff
 			when UNIFORM_2 =>
 				state_next <= UNIFORM_1;
+				--code the MSB of the nonzero index
 				mqcoder_enable <= '1';
 				if (strip_first_nonzero >= 2) then
 					mqcoder_in <= '1';
@@ -352,15 +404,17 @@ begin
 				end if;
 				mqcoder_context_in <= CONTEXT_UNIFORM;
 			when UNIFORM_1 =>
-				memory_shift_enable <= '1'; --burn one here
+				--code current sign, or jump to failed position and code its sign
+				--after which we can continue as usual
 				case (strip_first_nonzero) is
-					when 0 => state_next <= CODING_DEFAULT;
-					when 1 => state_next <= BURN_1;
-					when 2 => state_next <= BURN_2;
-					when 3 => state_next <= BURN_3;
+					when 0 => state_next <= CODING_SIGN;
+					when 1 => state_next <= SKIP_1_THEN_SIGN;
+					when 2 => state_next <= SKIP_2_THEN_SIGN;
+					when 3 => state_next <= SKIP_3_THEN_SIGN;
 					when others => state_next <= IDLE; --should not get here, but just in case to detect errors
 				end case;
-
+				
+				--code the LSB of the nonzero index
 				mqcoder_enable <= '1';
 				if (strip_first_nonzero mod 2 = 0) then
 					mqcoder_in <= '0';
@@ -374,15 +428,21 @@ begin
 				if (pass = CLEANUP) then
 					if (row mod 4 = 0 and full_strip_uncoded = '1' and is_strip_zero_context = '1') then
 						if (strip_first_nonzero = -1) then
-							state_next <= BURN_3;
+							--skip one sample (current) then skip 3 more
+							--so that we are right on the next strip
 							memory_shift_enable <= '1';
+							state_next <= SKIP_3;
+							--run length code these 4 zero bits
 							mqcoder_enable <= '1';
 							mqcoder_in <= '0';
 							mqcoder_context_in <= CONTEXT_RUN_LENGTH;
 						else
+							--if the strip has a nonzero bit, code a fail in the run length context
 							mqcoder_enable <= '1';
 							mqcoder_in <= '1';
 							mqcoder_context_in <= CONTEXT_RUN_LENGTH;
+							--jump to uniform state so that the pointer to the nonzero bit is coded, 
+							--and then the algorithm proceeds as usual
 							state_next <= UNIFORM_2;
 						end if;
 					else 
