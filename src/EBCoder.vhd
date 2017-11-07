@@ -518,6 +518,7 @@ begin
 			when DUMPING_REMAINING =>
 				state_next <= MARKING_END; --
 				mqcoder_end_coding <= '1';
+				mqcoder_enable <= '1';
 				
 			when MARKING_END => --need one extra state since the MQCODER is delayed by one clock cycle
 				state_next <= FINISHED;

@@ -292,10 +292,13 @@ begin
 				next_output_bytes := (others => '0');
 				next_temp_byte_buffer := temp_byte_buffer; 
 				next_output_enable := "000";
+				next_normalized_lower_bound := normalized_lower_bound;
+				next_countdown_timer := countdown_timer;
 				
 				for i in 0 to 2 loop
 					next_bytes_generated := next_bytes_generated + 1;
 					next_output_enable := next_output_enable(1 downto 0) & '1';
+					next_normalized_lower_bound := shift_left(next_normalized_lower_bound, next_countdown_timer);
 						
 					if (next_temp_byte_buffer = "11111111") then
 						next_output_bytes := next_output_bytes(15 downto 0) & std_logic_vector(next_temp_byte_buffer);
@@ -303,24 +306,24 @@ begin
 						next_normalized_lower_bound := "00000000" & next_normalized_lower_bound(19 downto 0);
 						next_countdown_timer := 7;
 					else
-						next_temp_byte_buffer := next_temp_byte_buffer + 1;
+						next_temp_byte_buffer := next_temp_byte_buffer + ("0000000" & next_normalized_lower_bound(27));
 						next_normalized_lower_bound := '0' & next_normalized_lower_bound(26 downto 0);
 						next_output_bytes := next_output_bytes(15 downto 0) & std_logic_vector(next_temp_byte_buffer);
 						if (next_temp_byte_buffer = "11111111") then
-							next_temp_byte_buffer := next_normalized_lower_bound(26 downto 19);
-							next_normalized_lower_bound := next_normalized_lower_bound(27) & "00000000" & next_normalized_lower_bound(18 downto 0);
-							next_countdown_timer := 8;
-						else
 							next_temp_byte_buffer := next_normalized_lower_bound(27 downto 20);
 							next_normalized_lower_bound := "00000000" & next_normalized_lower_bound(19 downto 0);
 							next_countdown_timer := 7;
+						else
+							next_temp_byte_buffer := next_normalized_lower_bound(26 downto 19);
+							next_normalized_lower_bound := next_normalized_lower_bound(27) & "00000000" & next_normalized_lower_bound(18 downto 0);
+							next_countdown_timer := 8;
 						end if;
 					end if;
-				
-					--end loop when there are no more bits
+					--end loop when there are no more bits (delayed by one cycle)
 					if (n_bits <= 0) then
 						exit;
 					end if;
+					n_bits := n_bits - next_countdown_timer;
 				end loop;
 
 			end if;
