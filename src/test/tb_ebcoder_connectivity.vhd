@@ -23,8 +23,6 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use ieee.numeric_std.all;
 
-library std;
-use std.textio.all;
 
 
 entity tb_ebcoder_connectivity is
@@ -45,8 +43,8 @@ architecture Behavioral of tb_ebcoder_connectivity is
 	
 	
 	---save output
-	file out_file: text is out "out_test.bin";
-	shared variable out_line: line; --line number declaration
+	type data_file_t is file of character;
+	file out_file : data_file_t open write_mode is "out_test.bin";
 	constant CYCLES_TO_WRITE: integer := 10000;
 	
 begin
@@ -97,13 +95,12 @@ begin
 			if (not is_x(valid)) then
 				for i in 2 downto 0 loop
 					if (valid(i) = '1') then
-						write(out_line, CHARACTER'VAL( to_integer(unsigned(out_bytes(i*8+7 downto i*8)))));
+						write(out_file, CHARACTER'VAL( to_integer(unsigned(out_bytes(i*8+7 downto i*8)))));
 						--report "Writing stuff: " & integer'image(to_integer(unsigned(out_bytes(i*8+7 downto i*8)))) &  "(" & integer'image(i) & ")" & LF;
 					end if;
 				end loop;
 			end if;
 		end loop;
-		writeline(out_file, out_line);
 		report "Output file written!!!";
 		wait; --do not write again
 	end process;
