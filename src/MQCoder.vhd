@@ -134,7 +134,7 @@ begin
 		variable next_countdown_timer: countdown_timer_t;
 		variable next_temp_byte_buffer: unsigned(7 downto 0);
 		variable next_bytes_generated: bytes_generated_t;
-		variable number_of_shifts: natural range 0 to 14 := 0;
+		variable number_of_shifts: natural range 0 to 15 := 0;
 		variable temp_shift: natural range 0 to 8 := 0;
 		
 		
@@ -223,7 +223,7 @@ begin
 			
 			--get number of shifts
 			temp_next_normalized_interval := next_normalized_interval;
-			for i in 0 to 13 loop
+			for i in 0 to 14 loop
 				if (temp_next_normalized_interval >= 32768) then
 					exit;
 				end if;
@@ -345,7 +345,7 @@ end Behavioral;
 --code below is how it was defined at first before optimizations took place, contains a for loop of 14 iterations instead of the 3 required now
 
 --			--renormalization shift
---			for i in 0 to 13 loop --need to set for the max possible number of iterations
+--			for i in 0 to 14 loop --need to set for the max possible number of iterations
 --				--if finished, stop doing stuff
 --				if (next_normalized_interval < 32768) then
 --					exit;
