@@ -181,7 +181,7 @@ begin
 		port map (
 			clk => clk, rst => rst, clk_en => coordinate_gen_enable,
 			row_out => row, col_out => col, bitplane_out => bitplane,
-			pass_out => pass, done_out => coord_gen_done
+			pass_out => pass, last_coord => coord_gen_done
 		);
 		
 	--significance matrix storage
@@ -388,9 +388,14 @@ begin
 				state_next <= SKIP_1;
 				memory_shift_enable <= '1';
 			when SKIP_1 =>
-				state_next <= CODING_DEFAULT;
 				memory_shift_enable <= '1';
-			
+				--check for end of bounds and go to next state
+				if (coord_gen_done = '1') then 
+					state_next <= DUMPING_REMAINING;
+				else
+					state_next <= CODING_DEFAULT;
+				end if;
+				
 				
 			--uniform states for coding the strip stuff
 			when UNIFORM_2 =>
@@ -457,12 +462,17 @@ begin
 							else
 								--if no sign bit is to be encoded, set as coded (already done by default), and shift memory
 								memory_shift_enable <= '1';
+								if (coord_gen_done = '1') then 
+									state_next <= DUMPING_REMAINING;
+								end if;
 							end if;
 						else --no coding to be done, shift memory
 							memory_shift_enable <= '1';
+							if (coord_gen_done = '1') then 
+								state_next <= DUMPING_REMAINING;
+							end if;
 						end if;
 					end if;
-					
 				elsif (pass = SIGNIFICANCE) then
 					if (significance_propagation_context /= CONTEXT_ZERO) then
 						mqcoder_enable <= '1';
@@ -492,14 +502,16 @@ begin
 						mqcoder_context_in <= magnitude_refinement_context;
 					end if;
 				end if;
-				--check for end of bounds and go to next state
-				if (row = ROWS - 1 and col = COLS - 1 and pass = CLEANUP and bitplane = BITPLANES - 2) then -- -2 since there are BITPLANES - 1 planes (plus the sign plane)
-					state_next <= DUMPING_REMAINING; --TODO this is not idle, we need to DUMP bits and MARK STREAM before
-				end if;
+
 			
 			--code sign. can come here from significance or cleanup passes
 			when CODING_SIGN =>
-				state_next <= CODING_DEFAULT;
+				--check for end of bounds and go to next state
+				if (coord_gen_done = '1') then 
+					state_next <= DUMPING_REMAINING;
+				else
+					state_next <= CODING_DEFAULT;
+				end if;
 				memory_shift_enable <= '1';
 				mqcoder_enable <= '1';
 				if (current_sign_bit = '1') then

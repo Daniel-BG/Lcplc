@@ -294,10 +294,13 @@ begin
 				next_output_enable := "000";
 				next_normalized_lower_bound := normalized_lower_bound;
 				next_countdown_timer := countdown_timer;
+				next_bytes_generated := bytes_generated_plus_one;
 				
 				for i in 0 to 2 loop
+					if (next_bytes_generated /= 0) then --just in case do not enable if we have yet to output a bit
+						next_output_enable := next_output_enable(1 downto 0) & '1';
+					end if;
 					next_bytes_generated := next_bytes_generated + 1;
-					next_output_enable := next_output_enable(1 downto 0) & '1';
 					next_normalized_lower_bound := shift_left(next_normalized_lower_bound, next_countdown_timer);
 						
 					if (next_temp_byte_buffer = "11111111") then

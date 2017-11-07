@@ -48,10 +48,8 @@ entity CoordinateGenerator is
 		bitplane_out: out natural range 0 to BITPLANES - 1;
 		--pass output
 		pass_out: out encoder_pass_t;
-		--'1' when all coordinates have been generated, 
-		--will only be up for one cycle
-		--then the generator starts counting again
-		done_out: out std_logic	
+		--'1' when the last coordinate is being output
+		last_coord: out std_logic	
 	);
 end CoordinateGenerator;
 
@@ -61,7 +59,6 @@ architecture Behavioral of CoordinateGenerator is
 	signal col : natural range 0 to COLS - 1;
 	signal bitplane: natural range 0 to BITPLANES - 1;
 	signal pass: encoder_pass_t;
-	signal done: std_logic;
 	
 begin
 
@@ -70,7 +67,7 @@ begin
 	col_out <= col;
 	bitplane_out <= bitplane;
 	pass_out <= pass;
-	done_out <= done;
+	last_coord <= '1' when row = ROWS - 1 and col = COLS - 1 and pass = CLEANUP and bitplane = BITPLANES - 1 else '0';
 	
 	--update state
 	update_coords: process(clk, rst, clk_en)
@@ -80,9 +77,7 @@ begin
 			col <= 0;
 			bitplane <= 0;
 			pass <= CLEANUP; --first plane only gets cleanup, significance and refinement do NOT appear on bitplane 0
-			done <= '0';
 		elsif (rising_edge(clk) and clk_en = '1') then
-			done <= '0';
 			if (row = ROWS - 1) then
 				if (col = COLS - 1) then
 					row <= 0;
@@ -92,7 +87,6 @@ begin
 						if (bitplane = BITPLANES - 1) then
 							bitplane <= 0;
 							pass <= CLEANUP;
-							done <= '1';
 						else
 							bitplane <= bitplane + 1;
 							pass <= SIGNIFICANCE;
