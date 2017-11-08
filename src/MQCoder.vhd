@@ -89,6 +89,24 @@ architecture Behavioral of MQCoder is
 		 12289, 10241, 9217, 8705, 7169,  6145,  5633,  5121,  4609,  4353, 
 		 2753,  2497,  2209, 1313, 1089,  673,   545,   321,   273,   133, 
 		 73,    37,    21,   9,    5,     1,     22017);
+		 
+	constant SHIFTED_P_ESTIMATE: probability_estimate_t :=
+		(44034, 53252, 49160, 44048, 42016, 34880, 44034, 43010, 36866, 57348,
+		 49156, 36868, 57352, 45064, 44034, 43010, 41474, 36866, 57348, 53252,
+		 49156, 40964, 36868, 34820, 57352, 49160, 45064, 40968, 36872, 34824,
+		 44048, 39952, 35344, 42016, 34848, 43072, 34880, 41088, 34944, 34048,
+		 37376, 37888, 43008, 36864, 40960, 32768, 44034);
+		 
+	subtype number_of_shifts_t is natural range 0 to 15;
+	type probability_estimate_shift_t is array(0 to 46) of number_of_shifts_t;
+	constant P_ESTIMATE_SHIFT: probability_estimate_shift_t :=
+		(1,	2,	3,	4,	5,	6,	1,	1,	1,	2,	
+		 2,	2,	3,	3,	1,	1,	1,	1,	2,	2,	
+		 2,	2,	2,	2,	3,	3,	3,	3,	3,	3,	
+		 4,	4,	4,	5,	5,	6,	6,	7,	7,	8,	
+		 9,	10,	11,	12,	13,	15,	1);
+
+	
 		 	 
 	constant STATE_TABLE_DEFAULT: state_table_t := 
 		(('0', 4), ('0', 0), ('0', 0), ('0', 0), ('0', 0), ('0', 0), ('0', 0), ('0', 0), ('0', 0), ('0', 0), 
@@ -129,7 +147,6 @@ begin
 		variable original_prediction: std_logic;
 		variable normalized_probability: probability_t;
 		variable next_normalized_interval: unsigned(15 downto 0);
-		variable temp_next_normalized_interval: unsigned(15 downto 0);
 		variable next_normalized_lower_bound: unsigned(27 downto 0);
 		variable next_countdown_timer: countdown_timer_t;
 		variable next_temp_byte_buffer: unsigned(7 downto 0);
@@ -201,12 +218,24 @@ begin
 			
 			if (in_bit = original_prediction) then
 				next_normalized_lower_bound := next_normalized_lower_bound + normalized_probability;
+				--only three posibilities. Nothing, renorm once or renorm twice
+				if (next_normalized_interval(15) = '1') then
+					number_of_shifts := 0;
+					next_normalized_interval := next_normalized_interval;
+				elsif (next_normalized_interval(14) = '1') then
+					number_of_shifts := 1;
+					next_normalized_interval := next_normalized_interval(14 downto 0) & '0';
+				else
+					number_of_shifts := 2;
+					next_normalized_interval := next_normalized_interval(13 downto 0) & "00";
+				end if;
 			else
-				next_normalized_interval := to_unsigned(normalized_probability, 16);
+				next_normalized_interval := to_unsigned(SHIFTED_P_ESTIMATE(current_table.state), 16);
+				number_of_shifts := P_ESTIMATE_SHIFT(current_table.state);
 			end if;
 			
 			--change state
-			if (next_normalized_interval < 32768) then
+			if (number_of_shifts /= 0) then
 				if (in_bit = current_table.prediction) then
 					current_table.state := SIGMA_MPS(current_table.state);
 				else
@@ -221,17 +250,6 @@ begin
 				end if;
 			end if;
 			
-			--get number of shifts
-			temp_next_normalized_interval := next_normalized_interval;
-			number_of_shifts := 0;
-			for i in 1 to 15 loop
-				if (temp_next_normalized_interval < 2**i) then
-					number_of_shifts := 16 - i;
-					exit;
-				end if;
-			end loop;			
-			temp_next_normalized_interval := shift_left(temp_next_normalized_interval, number_of_shifts);
-			
 			--at most three shifts
 			for i in 0 to 2 loop
 				--shift
@@ -242,7 +260,6 @@ begin
 						temp_shift := next_countdown_timer;
 					end if;
 					--update results
-					next_normalized_interval := shift_left(next_normalized_interval, temp_shift);
 					next_normalized_lower_bound := shift_left(next_normalized_lower_bound, temp_shift);
 					next_countdown_timer := next_countdown_timer - temp_shift;
 					number_of_shifts := number_of_shifts - temp_shift;
