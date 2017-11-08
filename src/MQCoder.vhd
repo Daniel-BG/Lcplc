@@ -223,13 +223,14 @@ begin
 			
 			--get number of shifts
 			temp_next_normalized_interval := next_normalized_interval;
-			for i in 0 to 14 loop
-				if (temp_next_normalized_interval >= 32768) then
+			number_of_shifts := 0;
+			for i in 1 to 15 loop
+				if (temp_next_normalized_interval < 2**i) then
+					number_of_shifts := 16 - i;
 					exit;
 				end if;
-				temp_next_normalized_interval := temp_next_normalized_interval(14 downto 0) & '0';
-				number_of_shifts := number_of_shifts + 1;
-			end loop;
+			end loop;			
+			temp_next_normalized_interval := shift_left(temp_next_normalized_interval, number_of_shifts);
 			
 			--at most three shifts
 			for i in 0 to 2 loop
