@@ -26,7 +26,11 @@ use ieee.numeric_std.all;
 
 
 entity tb_ebcoder_connectivity is
---  Port ( );
+	generic (
+		ROWS: integer := 64;
+		COLS: integer := 64;
+		BITPLANES: integer := 16
+	);
 end tb_ebcoder_connectivity;
 
 architecture Behavioral of tb_ebcoder_connectivity is
@@ -34,6 +38,8 @@ architecture Behavioral of tb_ebcoder_connectivity is
 	signal clk: std_logic := '0';
 	signal rst: std_logic := '0';
 	signal clk_en: std_logic := '0';
+	signal data_in: std_logic_vector(BITPLANES - 1 downto 0) := (others => '0');
+	signal data_in_en: std_logic := '0';
 	signal busy: std_logic;
 	signal out_bytes: std_logic_vector(23 downto 0);
 	signal valid: std_logic_vector(2 downto 0);
@@ -51,14 +57,16 @@ begin
 
 	uut: entity work.EBCoder
 		generic map(
-			ROWS => 64,
-			COLS => 64,
-			BITPLANES => 16
+			ROWS => ROWS,
+			COLS => COLS,
+			BITPLANES => BITPLANES
 		)
 		port map (
 			clk => clk,
 			rst => rst,
 			clk_en => clk_en,
+			data_in => data_in,
+			data_in_en => data_in_en,
 			busy => busy,
 			out_bytes => out_bytes,
 			valid => valid
@@ -113,6 +121,25 @@ begin
 		rst <= '0';
 		clk_en <= '1';
 		wait;
+	end process;
+
+	input: process
+	variable i: integer := 0;
+	variable PRIME: integer := 9973;
+	begin
+		wait for clk_period*20;
+		
+		while i <= ROWS * COLS loop
+			data_in <= std_logic_vector(to_unsigned((i*PRIME) mod (2**BITPLANES), BITPLANES));
+			data_in_en <= '1';
+			wait for clk_period;
+			data_in_en <= '0';
+			wait for clk_period*10;
+			i := i + 1;
+		end loop;
+		
+		wait;
+	
 	end process;
 
 end Behavioral;

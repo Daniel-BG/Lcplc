@@ -41,6 +41,9 @@ entity EBCoder is
 	port (
 		--control signals
 		clk, rst, clk_en: in std_logic;					
+		--input data
+		data_in: in std_logic_vector(BITPLANES - 1 downto 0);
+		data_in_en: in std_logic;
 		--active if the module has not processed the current block yet
 		busy: out std_logic;						
 		--current output (valid only if out_enable is active)
@@ -116,9 +119,9 @@ architecture Behavioral of EBCoder is
 	signal full_strip_uncoded: std_logic;
 	
 	--raw data for the current strip
+	signal data_available: std_logic;
 	signal data_strip_raw: std_logic_vector(BITPLANES * 4 - 1 downto 0);
 	signal current_data, next_p3_data, next_p1_data, next_p2_data: std_logic_vector(BITPLANES - 1 downto 0);
-	
 
 	--context gen outputs
 	constant subband: subband_t := LL;
@@ -238,13 +241,17 @@ begin
 		
 	--data block storage
 	--holds the data to be coded. 
-	--TODO: connect to the outside
 	data_block: entity work.DataBlock
 		generic map (ROWS => ROWS, COLS => COLS, BIT_DEPTH => BITPLANES)
 		port map (
-			clk => clk, rst => rst, clk_en => memory_shift_enable,
-			data => data_strip_raw
+			clk => clk, rst => rst, 
+			data_in => data_in,
+			data_in_en => data_in_en,
+			data_out_en => memory_shift_enable,
+			data_out => data_strip_raw,
+			data_out_available => data_available
 		);
+		
 		
 	current_data <= data_strip_raw(BITPLANES * 4 - 1 downto BITPLANES * 3);
 	next_p1_data <= data_strip_raw(BITPLANES * 3 - 1 downto BITPLANES * 2);
@@ -312,7 +319,7 @@ begin
 			row, current_bit, significance_propagation_context, full_strip_uncoded,
 			is_strip_zero_context, magnitude_refinement_context, col,
 			current_sign_bit, sign_bit_decoding_context, sign_bit_xor,
-			first_refinement_flag_curr, coordinate_gen_force_disable) begin
+			first_refinement_flag_curr, coordinate_gen_force_disable, data_available, coord_gen_done) begin
 		--by default do not shift memories. Set if necessary
 		memory_shift_enable <= '0';
 		coordinate_gen_force_disable <= '0';
@@ -343,115 +350,139 @@ begin
 		busy <= '1';
 		--first ref
 		
-		
-		case (state_current) is
-			when IDLE => --state for when this is finished until it is reset
-				state_next <= IDLE;
-				busy <= '0'; --al others do not set this and thus leave it at default ('1')
-				
-			--Loading states so that when the coder starts, it can load the first strip 
-			--(needed for looking ahead and knowing if it can be runlength coded)
-			when LOADING_4 =>
-				coordinate_gen_force_disable <= '1';
-				memory_shift_enable <= '1';
-				state_next <= LOADING_3;
-			when LOADING_3 =>
-				coordinate_gen_force_disable <= '1';
-				memory_shift_enable <= '1';
-				state_next <= LOADING_2;
-			when LOADING_2 =>
-				coordinate_gen_force_disable <= '1';
-				memory_shift_enable <= '1';
-				state_next <= LOADING_1;
-			when LOADING_1 =>
-				coordinate_gen_force_disable <= '1';
-				memory_shift_enable <= '1';
-				state_next <= CODING_DEFAULT; 
-
-			--skip states for when we need to advance the shifting memory
-			--and after that code the sign of the current sample
-			when SKIP_3_THEN_SIGN =>
-				state_next <= SKIP_2_THEN_SIGN;
-				memory_shift_enable <= '1';
-			when SKIP_2_THEN_SIGN =>
-				state_next <= SKIP_1_THEN_SIGN;
-				memory_shift_enable <= '1';
-			when SKIP_1_THEN_SIGN =>
-				state_next <= CODING_SIGN;
-				memory_shift_enable <= '1';
-				
-			--skip states for just skipping over, then proceeding as usual
-			when SKIP_3 =>
-				state_next <= SKIP_2;
-				memory_shift_enable <= '1';
-			when SKIP_2 =>
-				state_next <= SKIP_1;
-				memory_shift_enable <= '1';
-			when SKIP_1 =>
-				memory_shift_enable <= '1';
-				--check for end of bounds and go to next state
-				if (coord_gen_done = '1') then 
-					state_next <= DUMPING_REMAINING;
-				else
-					state_next <= CODING_DEFAULT;
-				end if;
-				
-				
-			--uniform states for coding the strip stuff
-			when UNIFORM_2 =>
-				state_next <= UNIFORM_1;
-				--code the MSB of the nonzero index
-				mqcoder_enable <= '1';
-				if (strip_first_nonzero >= 2) then
-					mqcoder_in <= '1';
-				else
-					mqcoder_in <= '0';
-				end if;
-				mqcoder_context_in <= CONTEXT_UNIFORM;
-			when UNIFORM_1 =>
-				--code current sign, or jump to failed position and code its sign
-				--after which we can continue as usual
-				case (strip_first_nonzero) is
-					when 0 => state_next <= CODING_SIGN;
-					when 1 => state_next <= SKIP_1_THEN_SIGN;
-					when 2 => state_next <= SKIP_2_THEN_SIGN;
-					when 3 => state_next <= SKIP_3_THEN_SIGN;
-					when others => state_next <= IDLE; --should not get here, but just in case to detect errors
-				end case;
-				
-				--code the LSB of the nonzero index
-				mqcoder_enable <= '1';
-				if (strip_first_nonzero mod 2 = 0) then
-					mqcoder_in <= '0';
-				else
-					mqcoder_in <= '1';
-				end if;
-				mqcoder_context_in <= CONTEXT_UNIFORM;
-				
-			--default state, from this spawn the other branches
-			when CODING_DEFAULT => 
-				if (pass = CLEANUP) then
-					if (row mod 4 = 0 and full_strip_uncoded = '1' and is_strip_zero_context = '1') then
-						if (strip_first_nonzero = -1) then
-							--skip one sample (current) then skip 3 more
-							--so that we are right on the next strip
-							memory_shift_enable <= '1';
-							state_next <= SKIP_3;
-							--run length code these 4 zero bits
-							mqcoder_enable <= '1';
-							mqcoder_in <= '0';
-							mqcoder_context_in <= CONTEXT_RUN_LENGTH;
-						else
-							--if the strip has a nonzero bit, code a fail in the run length context
-							mqcoder_enable <= '1';
-							mqcoder_in <= '1';
-							mqcoder_context_in <= CONTEXT_RUN_LENGTH;
-							--jump to uniform state so that the pointer to the nonzero bit is coded, 
-							--and then the algorithm proceeds as usual
-							state_next <= UNIFORM_2;
+		--only perform stuff if data is available, otherwise don't (obviously)
+		if (data_available = '1') then
+			case (state_current) is
+				when IDLE => --state for when this is finished until it is reset
+					state_next <= IDLE;
+					busy <= '0'; --al others do not set this and thus leave it at default ('1')
+					
+				--Loading states so that when the coder starts, it can load the first strip 
+				--(needed for looking ahead and knowing if it can be runlength coded)
+				when LOADING_4 =>
+					coordinate_gen_force_disable <= '1';
+					memory_shift_enable <= '1';
+					state_next <= LOADING_3;
+				when LOADING_3 =>
+					coordinate_gen_force_disable <= '1';
+					memory_shift_enable <= '1';
+					state_next <= LOADING_2;
+				when LOADING_2 =>
+					coordinate_gen_force_disable <= '1';
+					memory_shift_enable <= '1';
+					state_next <= LOADING_1;
+				when LOADING_1 =>
+					coordinate_gen_force_disable <= '1';
+					memory_shift_enable <= '1';
+					state_next <= CODING_DEFAULT; 
+	
+				--skip states for when we need to advance the shifting memory
+				--and after that code the sign of the current sample
+				when SKIP_3_THEN_SIGN =>
+					state_next <= SKIP_2_THEN_SIGN;
+					memory_shift_enable <= '1';
+				when SKIP_2_THEN_SIGN =>
+					state_next <= SKIP_1_THEN_SIGN;
+					memory_shift_enable <= '1';
+				when SKIP_1_THEN_SIGN =>
+					state_next <= CODING_SIGN;
+					memory_shift_enable <= '1';
+					
+				--skip states for just skipping over, then proceeding as usual
+				when SKIP_3 =>
+					state_next <= SKIP_2;
+					memory_shift_enable <= '1';
+				when SKIP_2 =>
+					state_next <= SKIP_1;
+					memory_shift_enable <= '1';
+				when SKIP_1 =>
+					memory_shift_enable <= '1';
+					--check for end of bounds and go to next state
+					if (coord_gen_done = '1') then 
+						state_next <= DUMPING_REMAINING;
+					else
+						state_next <= CODING_DEFAULT;
+					end if;
+					
+					
+				--uniform states for coding the strip stuff
+				when UNIFORM_2 =>
+					state_next <= UNIFORM_1;
+					--code the MSB of the nonzero index
+					mqcoder_enable <= '1';
+					if (strip_first_nonzero >= 2) then
+						mqcoder_in <= '1';
+					else
+						mqcoder_in <= '0';
+					end if;
+					mqcoder_context_in <= CONTEXT_UNIFORM;
+				when UNIFORM_1 =>
+					--code current sign, or jump to failed position and code its sign
+					--after which we can continue as usual
+					case (strip_first_nonzero) is
+						when 0 => state_next <= CODING_SIGN;
+						when 1 => state_next <= SKIP_1_THEN_SIGN;
+						when 2 => state_next <= SKIP_2_THEN_SIGN;
+						when 3 => state_next <= SKIP_3_THEN_SIGN;
+						when others => state_next <= IDLE; --should not get here, but just in case to detect errors
+					end case;
+					
+					--code the LSB of the nonzero index
+					mqcoder_enable <= '1';
+					if (strip_first_nonzero mod 2 = 0) then
+						mqcoder_in <= '0';
+					else
+						mqcoder_in <= '1';
+					end if;
+					mqcoder_context_in <= CONTEXT_UNIFORM;
+					
+				--default state, from this spawn the other branches
+				when CODING_DEFAULT => 
+					if (pass = CLEANUP) then
+						if (row mod 4 = 0 and full_strip_uncoded = '1' and is_strip_zero_context = '1') then
+							if (strip_first_nonzero = -1) then
+								--skip one sample (current) then skip 3 more
+								--so that we are right on the next strip
+								memory_shift_enable <= '1';
+								state_next <= SKIP_3;
+								--run length code these 4 zero bits
+								mqcoder_enable <= '1';
+								mqcoder_in <= '0';
+								mqcoder_context_in <= CONTEXT_RUN_LENGTH;
+							else
+								--if the strip has a nonzero bit, code a fail in the run length context
+								mqcoder_enable <= '1';
+								mqcoder_in <= '1';
+								mqcoder_context_in <= CONTEXT_RUN_LENGTH;
+								--jump to uniform state so that the pointer to the nonzero bit is coded, 
+								--and then the algorithm proceeds as usual
+								state_next <= UNIFORM_2;
+							end if;
+						else 
+							if (iscoded_flag_curr = '0') then
+								mqcoder_enable <= '1';
+								mqcoder_in <= current_bit;
+								mqcoder_context_in <= significance_propagation_context;
+								if (current_bit = '1') then
+									--if the sign bit is to be coded, just enable the coder, and then in the
+									--sign bit coding step update memory values
+									state_next <= CODING_SIGN;
+								else
+									--if no sign bit is to be encoded, set as coded (already done by default), and shift memory
+									memory_shift_enable <= '1';
+									if (coord_gen_done = '1') then 
+										state_next <= DUMPING_REMAINING;
+									end if;
+								end if;
+							else --no coding to be done, shift memory
+								memory_shift_enable <= '1';
+								if (coord_gen_done = '1') then 
+									state_next <= DUMPING_REMAINING;
+								end if;
+							end if;
 						end if;
-					else 
-						if (iscoded_flag_curr = '0') then
+					elsif (pass = SIGNIFICANCE) then
+						if (significance_propagation_context /= CONTEXT_ZERO) then
 							mqcoder_enable <= '1';
 							mqcoder_in <= current_bit;
 							mqcoder_context_in <= significance_propagation_context;
@@ -460,88 +491,66 @@ begin
 								--sign bit coding step update memory values
 								state_next <= CODING_SIGN;
 							else
-								--if no sign bit is to be encoded, set as coded (already done by default), and shift memory
+								--if no sign bit is to be encoded, set as coded, and shift memory
+								state_next <= CODING_DEFAULT;
+								iscoded_flag_next <= '1';
 								memory_shift_enable <= '1';
-								if (coord_gen_done = '1') then 
-									state_next <= DUMPING_REMAINING;
-								end if;
 							end if;
-						else --no coding to be done, shift memory
-							memory_shift_enable <= '1';
-							if (coord_gen_done = '1') then 
-								state_next <= DUMPING_REMAINING;
-							end if;
-						end if;
-					end if;
-				elsif (pass = SIGNIFICANCE) then
-					if (significance_propagation_context /= CONTEXT_ZERO) then
-						mqcoder_enable <= '1';
-						mqcoder_in <= current_bit;
-						mqcoder_context_in <= significance_propagation_context;
-						if (current_bit = '1') then
-							--if the sign bit is to be coded, just enable the coder, and then in the
-							--sign bit coding step update memory values
-							state_next <= CODING_SIGN;
-						else
-							--if no sign bit is to be encoded, set as coded, and shift memory
-							state_next <= CODING_DEFAULT;
-							iscoded_flag_next <= '1';
+						else	--no coding to be done, shift memory
 							memory_shift_enable <= '1';
 						end if;
-					else	--no coding to be done, shift memory
+					else --refinement
+						state_next <= CODING_DEFAULT;
 						memory_shift_enable <= '1';
+						first_refinement_flag_next <= '0';
+						if (iscoded_flag_curr = '0' and raw_neighborhood.curr_c /= INSIGNIFICANT) then
+							iscoded_flag_next <= '1';
+							mqcoder_enable <= '1';
+							mqcoder_in <= current_bit;
+							mqcoder_context_in <= magnitude_refinement_context;
+						end if;
 					end if;
-				else --refinement
-					state_next <= CODING_DEFAULT;
+	
+				
+				--code sign. can come here from significance or cleanup passes
+				when CODING_SIGN =>
+					--check for end of bounds and go to next state
+					if (coord_gen_done = '1') then 
+						state_next <= DUMPING_REMAINING;
+					else
+						state_next <= CODING_DEFAULT;
+					end if;
 					memory_shift_enable <= '1';
-					first_refinement_flag_next <= '0';
-					if (iscoded_flag_curr = '0' and raw_neighborhood.curr_c /= INSIGNIFICANT) then
-						iscoded_flag_next <= '1';
-						mqcoder_enable <= '1';
-						mqcoder_in <= current_bit;
-						mqcoder_context_in <= magnitude_refinement_context;
+					mqcoder_enable <= '1';
+					if (current_sign_bit = '1') then
+						significance_state_next <= SIGNIFICANT_NEGATIVE;
+					else
+						significance_state_next <= SIGNIFICANT_POSITIVE;
 					end if;
-				end if;
-
-			
-			--code sign. can come here from significance or cleanup passes
-			when CODING_SIGN =>
-				--check for end of bounds and go to next state
-				if (coord_gen_done = '1') then 
-					state_next <= DUMPING_REMAINING;
-				else
-					state_next <= CODING_DEFAULT;
-				end if;
-				memory_shift_enable <= '1';
-				mqcoder_enable <= '1';
-				if (current_sign_bit = '1') then
-					significance_state_next <= SIGNIFICANT_NEGATIVE;
-				else
-					significance_state_next <= SIGNIFICANT_POSITIVE;
-				end if;
-				mqcoder_context_in <= sign_bit_decoding_context;
-				mqcoder_in <= current_sign_bit xor sign_bit_xor;
-				--if on cleanup pass, clear iscoded flag for next round. If not, set it for further passes
-				if (pass /= CLEANUP) then --set as coded if on significance (refinement does not come here)
-					iscoded_flag_next <= '1';
-				end if;
-				
-				
-			when DUMPING_REMAINING =>
-				state_next <= MARKING_END; --
-				mqcoder_end_coding <= '1';
-				mqcoder_enable <= '1';
-				
-			when MARKING_END => --need one extra state since the MQCODER is delayed by one clock cycle
-				state_next <= FINISHED;
-				
-			when FINISHED =>
-				--just raw output the end of stream (EOS) marker
-				out_bytes <= "000000001111111111111110";
-				out_enable <= "011";
-				state_next <= IDLE;
-				
-		end case;
+					mqcoder_context_in <= sign_bit_decoding_context;
+					mqcoder_in <= current_sign_bit xor sign_bit_xor;
+					--if on cleanup pass, clear iscoded flag for next round. If not, set it for further passes
+					if (pass /= CLEANUP) then --set as coded if on significance (refinement does not come here)
+						iscoded_flag_next <= '1';
+					end if;
+					
+					
+				when DUMPING_REMAINING =>
+					state_next <= MARKING_END; --
+					mqcoder_end_coding <= '1';
+					mqcoder_enable <= '1';
+					
+				when MARKING_END => --need one extra state since the MQCODER is delayed by one clock cycle
+					state_next <= FINISHED;
+					
+				when FINISHED =>
+					--just raw output the end of stream (EOS) marker
+					out_bytes <= "000000001111111111111110";
+					out_enable <= "011";
+					state_next <= IDLE;
+					
+			end case;
+		end if;
 	end process;	
 	
 	--coordinate generation control

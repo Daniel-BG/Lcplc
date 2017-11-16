@@ -31,8 +31,20 @@ entity DataBlock is
 		COLS: integer := 64
 	);
 	port (
-		clk, rst, clk_en: in std_logic;
-		data: out std_logic_vector(BIT_DEPTH * 4 - 1 downto 0)
+		--control signals
+		clk, rst: in std_logic;
+		--data input
+		data_in: in std_logic_vector(BIT_DEPTH - 1 downto 0);
+		--data input is available
+		data_in_en: in std_logic;
+		--data output is requested
+		data_out_en: in std_logic;
+		--data output
+		data_out: out std_logic_vector(BIT_DEPTH * 4 - 1 downto 0);
+		--flag to signal if the next data_out_en will produce new data or not. 
+		--passing data_out_en = '1' when data_out_available will NOT change 
+		--the inner state
+		data_out_available: out std_logic
 	);
 end DataBlock;
 
@@ -57,25 +69,54 @@ architecture Behavioral of DataBlock is
 	
 	signal memory: mem_t := gen_rom;
 	
-	signal index: natural range 0 to ROWS * COLS - 1;
+	signal index_out, index_in: natural range 0 to ROWS * COLS - 1;
+	signal all_input: std_logic;
 	
 	signal shift_reg: std_logic_vector(BIT_DEPTH * 4 - 1 downto 0);
+	signal data_available: std_logic;
 begin
 	
-	data <= shift_reg;
+	data_out <= shift_reg;
+	data_out_available <= data_available;
+	
+	--static calcualtion
+	data_available <= '1' when index_in > index_out or all_input = '1' else '0';
 
-	output: process(clk, rst, clk_en) begin
+	--update memory output
+	update_output: process(clk, rst, data_out_en) begin
 		if (rst = '1') then
-			index <= 0;
-			shift_reg <= (others => '0');			
-		elsif(rising_edge(clk) and clk_en = '1') then
-			if (index = ROWS * COLS - 1) then
-				index <= 0;
-			else 
-				index <= index + 1;
+			index_out <= 0;
+			shift_reg <= (others => '0');		
+		--check if data is available
+		elsif(rising_edge(clk) and data_out_en = '1') then
+			if (data_available = '1') then 
+				--update output
+				if (index_out = ROWS * COLS - 1) then
+					index_out <= 0;
+				else 
+					index_out <= index_out + 1;
+				end if;
+				shift_reg <= shift_reg(BIT_DEPTH * 3 - 1 downto 0) & memory(index_out);
 			end if;
-			shift_reg <= shift_reg(BIT_DEPTH * 3 - 1 downto 0) & memory(index);
 		end if;
 	end process;
+	
+	--update memory input
+	update_input: process(clk, rst, data_in_en, all_input) begin
+		if (rst = '1') then
+			index_in <= 0;
+			all_input <= '0';		
+		elsif(rising_edge(clk) and data_in_en = '1' and all_input = '0') then
+			--check for bounds 
+			--update input (if necessary)
+			memory(index_in) <= data_in;
+			if (index_in = ROWS * COLS - 1) then
+				all_input <= '1'; --stop updating
+			else
+				index_in <= index_in + 1;
+			end if;
+		end if;
+	end process;
+	
 
 end Behavioral;
