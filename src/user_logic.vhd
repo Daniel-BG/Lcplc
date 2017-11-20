@@ -180,14 +180,34 @@ architecture IMP of user_logic is
   signal output_delay_counter_next, output_delay_counter_curr: natural range 0 to DELAY_CYCLES;
   signal input_delay_counter_next, input_delay_counter_curr: natural range 0 to DELAY_CYCLES;
 
+	component DCM_100Mhz_12_5MHz
+		port (
+			CLKIN_IN: in std_logic;
+			RST_IN: in std_logic;
+			CLKDV_OUT: out std_logic;
+			CLKIN_IBUFG_OUT: out std_logic;
+			CLK0_OUT: out std_logic
+		);
+	end component;
+	signal clk: std_logic;
+
 begin
+
+	clk_divisor: DCM_100Mhz_12_5MHz
+		port map (
+			CLKIN_IN => Bus2IP_Clk,
+			RST_IN => Bus2IP_Reset,
+			CLKDV_OUT => clk,
+			CLKIN_IBUFG_OUT => open,
+			CLK0_OUT => open
+		);
 
   --USER logic implementation added here
   
 	coder: entity codificacion_bloques_v1_00_a.EBCoder
 		generic map (ROWS => 64, COLS => 64, BITPLANES => 16)
 		port map (
-			clk => Bus2IP_Clk, rst => ebcoder_rst, clk_en => ebcoder_enable,
+			clk => clk, rst => ebcoder_rst, clk_en => ebcoder_enable,
 			data_in => ebcoder_data_in, data_in_en => ebcoder_data_in_en,
 			busy => ebcoder_busy, out_bytes => ebcoder_out_bytes, valid => ebcoder_out_enable);
 
