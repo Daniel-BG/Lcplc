@@ -167,13 +167,18 @@ architecture IMP of user_logic is
   
   -- signals to control peripheral state
   constant CODE_RESET: std_logic_vector(31 downto 0) := "10101010101010101010101010101010";
-  constant DELAY_CYCLES: integer := 10;
+
   
   type INPUT_STATE is (IDLE, READ_ACK, SAVING);
   signal input_state_curr, input_state_next: INPUT_STATE;
-  type OUTPUT_STATE is (IDLE, STABILIZING, PROCESSING, WRITING, WAITING_ACK);
+  type OUTPUT_STATE is (IDLE, PROCESSING, WRITING, WAITING_ACK);
   signal output_state_curr, output_state_next: OUTPUT_STATE;
+
+  
+  -- clk control stuff
+  constant DELAY_CYCLES: integer := 8;
   signal output_delay_counter_next, output_delay_counter_curr: natural range 0 to DELAY_CYCLES;
+  signal input_delay_counter_next, input_delay_counter_curr: natural range 0 to DELAY_CYCLES;
 
 begin
 
@@ -185,17 +190,6 @@ begin
 			clk => Bus2IP_Clk, rst => ebcoder_rst, clk_en => ebcoder_enable,
 			data_in => ebcoder_data_in, data_in_en => ebcoder_data_in_en,
 			busy => ebcoder_busy, out_bytes => ebcoder_out_bytes, valid => ebcoder_out_enable);
-			
-			
-	clk_divisor: entity codificacion_bloques_v1_00_a.DCM_100Mhz_12_5MHz
-		port map (
-			CLKIN_IN => Bus2IP_Clk,
-			RST_IN => Bus2IP_Rst,
-			CLKDV_OUT => clk_125MHz,
-			CLKIN_IBUFG_OUT => open,
-			CLK0_OUT => open
-		);
-
 
 
   ------------------------------------------
@@ -213,12 +207,14 @@ begin
   ------------------------------------------
   
 	--process for inputting data from processor to peripheral
-	data_input: process (input_state_curr, WFIFO2IP_empty, WFIFO2IP_RdAck, WFIFO2IP_Data) is
+	data_input: process (input_state_curr, WFIFO2IP_empty, WFIFO2IP_RdAck, WFIFO2IP_Data, input_delay_counter_curr) is
 	begin
 		ebcoder_rst				<= '0';
 		ebcoder_data_in_en	<= '0';
 		ebcoder_data_in		<= (others => '0');
 		input_state_next 		<= input_state_curr;
+		fifo_rdreq_cmb <= '0';
+		input_delay_counter_next <= 0;
 		
 		case (input_state_curr) is
 			when IDLE =>
@@ -231,15 +227,20 @@ begin
 				-- so we can tell the EBCODER
 				if ( WFIFO2IP_RdAck = '1' ) then
 					input_state_next  <= SAVING;
+					input_delay_counter_next <= DELAY_CYCLES - 1;
 				end if;
-			WHEN SAVING => --could be written in RD_REQ but leave one cycle to stabilize
+			WHEN SAVING => --maintain for as many cycles as needed by the divisor, to ensure saving
 				if (WFIFO2IP_Data = CODE_RESET) then
 					ebcoder_rst <= '1';
 				else
 					ebcoder_data_in_en <= '1';
 					ebcoder_data_in <= WFIFO2IP_Data(0 to 15);
 				end if;
-				input_state_next <= IDLE;
+				if (input_delay_counter_curr = 0) then
+					input_state_next <= IDLE;
+				else
+					input_delay_counter_next <= input_delay_counter_curr - 1;
+				end if;
 		end case;
 	end process;
 	
@@ -252,28 +253,31 @@ begin
 	--process for outputting data from peripheral to processor
 	data_output: process (output_state_curr, RFIFO2IP_full, output_delay_counter_curr, RFIFO2IP_WrAck) is
 	begin
-		output_delay_counter_next	<= output_delay_counter_curr;
+		output_delay_counter_next	<= 0;
 		output_state_next				<= output_state_curr;
 		ebcoder_enable					<= '0';
 	
 		case (output_state_curr) is
 			when IDLE => --advance state only if there is room in the output queue
 				if (RFIFO2IP_full = '0') then
-					output_state_next <= STABILIZING;
-					output_delay_counter_next <= DELAY_CYCLES; --delay 10 cycles to allow for signal propagation before enabling clock
-				end if;
-			when STABILIZING =>
-				if (output_delay_counter_curr = 0) then
 					output_state_next <= PROCESSING;
-				else
-					output_delay_counter_next <= output_delay_counter_curr - 1;
+					output_delay_counter_next <= DELAY_CYCLES - 1; --delay 10 cycles to allow for signal propagation before enabling clock
 				end if;
 			when PROCESSING =>
 				ebcoder_enable <= '1';
-				output_state_next <= WRITING;
+				if (output_delay_counter_curr = 0) then
+					output_state_next <= WRITING;
+					output_delay_counter_next <= (DELAY_CYCLES / 2) - 1;
+				else
+					output_delay_counter_next <= output_delay_counter_curr - 1;
+				end if;
 			when WRITING =>
-				fifo_wrreq_cmb <= '1';
-				output_state_next <= WAITING_ACK;
+				if (output_delay_counter_curr = 0) then
+					fifo_wrreq_cmb <= '1';
+					output_state_next <= WAITING_ACK;
+				else
+					output_delay_counter_next <= output_delay_counter_curr - 1;
+				end if;
 			when WAITING_ACK =>
 				if (RFIFO2IP_WrAck = '1') then
 					output_state_next <= IDLE;
@@ -293,12 +297,14 @@ begin
         output_state_curr	<= IDLE;
 		  input_state_curr	<= IDLE;
 		  output_delay_counter_curr <= 0;
+		  input_delay_counter_curr <= 0;
       else
         IP2WFIFO_RdReq		<= fifo_rdreq_cmb;
         IP2RFIFO_WrReq		<= fifo_wrreq_cmb;
         output_state_curr	<= output_state_next;
 		  input_state_curr	<= input_state_next;
 		  output_delay_counter_curr <= output_delay_counter_next;
+		  input_delay_counter_curr <= input_delay_counter_next;
       end if;
     end if;
 
@@ -371,5 +377,5 @@ end IMP;
 --        fifo_cntl_cs   <= fifo_cntl_ns;
 --      end if;
 --    end if;
---  end process FIFO_CNTL_SM_SEQ;
 --
+--  end process FIFO_CNTL_SM_SEQ;
