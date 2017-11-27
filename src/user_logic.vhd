@@ -189,7 +189,32 @@ architecture IMP of user_logic is
 			CLK0_OUT: out std_logic
 		);
 	end component;
-	signal clk: std_logic;
+	signal clk, clk_orig: std_logic;
+
+
+	component EBCoder
+		generic (
+			--number of rows in this block. Must be multiple of 4
+			ROWS: integer := 64;		
+			--number of columns in this block. Must be greater than 4
+			COLS: integer := 64;		
+			--number of bitplanes (depth) of the input data, which format is sign-magnitude
+			BITPLANES: integer := 16
+		);
+		port (
+			--control signals
+			clk, rst, clk_en: in std_logic;					
+			--input data
+			data_in: in std_logic_vector(BITPLANES - 1 downto 0);
+			data_in_en: in std_logic;
+			--active if the module has not processed the current block yet
+			busy: out std_logic;						
+			--current output (valid only if out_enable is active)
+			out_bytes: out std_logic_vector(23 downto 0);	
+			--if set, the corresponding byte of out_bytes must be read in the next clk edge or it will be lost
+			valid: out std_logic_vector(2 downto 0)	
+		);
+	end component;
 
 begin
 
@@ -199,12 +224,13 @@ begin
 			RST_IN => Bus2IP_Reset,
 			CLKDV_OUT => clk,
 			CLKIN_IBUFG_OUT => open,
-			CLK0_OUT => open
+			CLK0_OUT => clk_orig
 		);
 
   --USER logic implementation added here
   
-	coder: entity codificacion_bloques_v1_00_a.EBCoder
+--	coder: entity codificacion_bloques_v1_00_a.EBCoder
+	coder: EBCoder
 		generic map (ROWS => 64, COLS => 64, BITPLANES => 16)
 		port map (
 			clk => clk, rst => ebcoder_rst, clk_en => ebcoder_enable,
@@ -307,10 +333,10 @@ begin
   
   
 
-  FIFO_CNTL_SM_SEQ : process( Bus2IP_Clk ) is
+  FIFO_CNTL_SM_SEQ : process( clk_orig ) is
   begin
 
-    if ( rising_edge(Bus2IP_Clk) ) then
+    if ( rising_edge(clk_orig) ) then
       if ( Bus2IP_Reset = '1' ) then
         IP2WFIFO_RdReq		<= '0';
         IP2RFIFO_WrReq		<= '0';
