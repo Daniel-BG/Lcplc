@@ -129,7 +129,7 @@ begin
 			data_in_en <= '1';
 			wait for clk_period;
 			data_in_en <= '0';
-			--wait for clk_period*10;
+			wait for clk_period*10;
 			i := i + 1;
 		end loop;
 		
