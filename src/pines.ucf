@@ -1,0 +1,65 @@
+##SP3 BELOW
+#NET clk LOC=T9;
+##net clk PERIOD = 10ns;
+#
+##net reset_in LOC=H7;
+#Net sw2 LOC=P12;
+#
+##Net reset_in PULLUP;
+##Net reset_in IOSTANDARD = LVCMOS33;
+##Net reset_in TIG;
+##NET CTS LOC=G6;#D15;#
+##NET RTS LOC=F6;#D14;#
+##estan cambiados!!
+##NET Rx LOC=D6;
+##NET Tx LOC=E6;
+##estan cambiados
+#NET LEDs<0> LOC=L5;
+#NET LEDs<1> LOC=N2;
+#NET LEDs<2> LOC=M3;
+#NET LEDs<3> LOC=N1;
+#NET LEDs<4> LOC=T13;
+#NET LEDs<5> LOC=L15;
+#NET LEDs<6> LOC=J13;
+#NET LEDs<7> LOC=H15;
+#NET LEDs<8> LOC=J16;
+#NET LEDs<9> LOC=J14;
+#
+#
+#
+##estos son los buenos de veras
+#NET rx LOC=G5;#D15;#
+#NET tx LOC=J2;#D14;#
+
+
+
+#¿¿¿V4??? BELOW
+
+NET clk_in LOC=J16;
+net clk_in PERIOD = 10ns;
+#net reset_in LOC=H7;
+Net sw2 LOC=H7;
+#Net reset_in PULLUP;
+#Net reset_in IOSTANDARD = LVCMOS33;
+#Net reset_in TIG;
+#NET CTS LOC=G6;#D15;#
+#NET RTS LOC=F6;#D14;#
+#estan cambiados!!
+#NET Rx LOC=D6;
+#NET Tx LOC=E6;
+#estan cambiados
+NET LEDs<0> LOC=AF19;
+NET LEDs<1> LOC=AD5;
+NET LEDs<2> LOC=AD6;
+NET LEDs<3> LOC=AD7;
+NET LEDs<4> LOC=AB8;
+NET LEDs<5> LOC=AC7;
+NET LEDs<6> LOC=AC9;
+NET LEDs<7> LOC=AC10;
+
+
+
+#estos son los buenos de veras
+NET rx LOC=E6;#D15;#
+NET tx LOC=D6;#D14;#
+

@@ -113,20 +113,15 @@ begin
 		wait; --do not write again
 	end process;
 
-
-	ctrl: process
+	input: process
+	variable i: integer := 0;
+	variable PRIME: integer := 9973;
 	begin
 		rst <= '1';
 		wait for clk_period*4;
 		rst <= '0';
 		clk_en <= '1';
-		wait;
-	end process;
-
-	input: process
-	variable i: integer := 0;
-	variable PRIME: integer := 9973;
-	begin
+	
 		wait for clk_period*20;
 		
 		while i <= ROWS * COLS loop
@@ -134,9 +129,25 @@ begin
 			data_in_en <= '1';
 			wait for clk_period;
 			data_in_en <= '0';
-			wait for clk_period*10;
+			--wait for clk_period*10;
 			i := i + 1;
 		end loop;
+		
+--		rst <= '1';
+--		wait for clk_period*4;
+--		rst <= '0';
+	
+--		wait for clk_period*20;
+		
+--		i := 0;
+--		while i <= ROWS * COLS loop
+--			data_in <= std_logic_vector(to_unsigned((i*PRIME) mod (2**BITPLANES), BITPLANES));
+--			data_in_en <= '1';
+--			wait for clk_period;
+--			data_in_en <= '0';
+--			wait for clk_period*10;
+--			i := i + 1;
+--		end loop;
 		
 		wait;
 	

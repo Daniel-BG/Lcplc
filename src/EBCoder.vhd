@@ -104,7 +104,9 @@ architecture Behavioral of EBCoder is
 	signal raw_neighborhood: sign_neighborhood_t;
 	--stores the next significant state for the current coordinate. This will be
 	--passed to the neighborhood above
-	signal significance_state_next: significance_state_t;
+	signal significance_state_next, significance_state_curr: significance_state_t;
+	signal neighborhood: neighborhood_3x3_t;
+	signal run_length_neighborhood: sign_neighborhood_t;
 	
 	--flag that indicates if the current coordinate is being refined for the first
 	--time or not
@@ -134,8 +136,9 @@ architecture Behavioral of EBCoder is
 	signal row: natural range 0 to ROWS - 1;
 	signal col: natural range 0 to COLS - 1;
 	signal bitplane: natural range 0 to BITPLANES - 2; -- -2 since one is for sign, rest for magnitude, and we are only interested in sign here
-	signal pass: encoder_pass_t; --unsued as input
-	signal coord_gen_done: std_logic; --unused as input
+	signal pass: encoder_pass_t; 
+	signal coord_gen_done: std_logic;
+	signal first_cleanup_pass: std_logic;
 	
 	--MQCoder stuff
 	signal mqcoder_in: std_logic;
@@ -158,14 +161,27 @@ architecture Behavioral of EBCoder is
 	
 begin
 
+	
+	sign_filter: entity work.SignificanceNeighFilter
+		generic map (ROWS => ROWS, COLS => COLS)
+		port map (
+			raw_neighborhood => raw_neighborhood,
+			row => row, col => col, first_cleanup_pass_flag => first_cleanup_pass,
+			current_significance => significance_state_curr,
+			neighborhood => neighborhood,
+			run_length_neighborhood => run_length_neighborhood
+		);
+	
+
 	--context generator
 	--generates the different contexts using the neighborhood of the current sample
 	--plus other useful flags
 	context_gen: entity work.ContextGenerator
 		generic map (ROWS => ROWS, COLS => COLS)
 		port map (
-			raw_neighborhood => raw_neighborhood,
-			subband => subband, row => row, col => col, 
+			neighborhood => neighborhood,
+			run_length_neighborhood => run_length_neighborhood,
+			subband => subband,
 			first_refinement_in => first_refinement_flag_curr,
 			magnitude_refinement_context => magnitude_refinement_context, 
 			sign_bit_decoding_context => sign_bit_decoding_context, 
@@ -186,6 +202,8 @@ begin
 			row_out => row, col_out => col, bitplane_out => bitplane,
 			pass_out => pass, last_coord => coord_gen_done
 		);
+		
+	first_cleanup_pass <= '1' when bitplane = 0 and pass = CLEANUP else '0';
 		
 	--significance matrix storage
 	--stores significance states of all the block samples
@@ -342,7 +360,7 @@ begin
 		if (pass = CLEANUP and bitplane = 0) then
 			significance_state_next <= INSIGNIFICANT;
 		else
-			significance_state_next <= raw_neighborhood.curr_c; --otherwise maintain existent
+			significance_state_next <= significance_state_curr; --otherwise maintain existent
 		end if;
 		--default outputs
 		out_bytes <= mqcoder_bytes;
@@ -503,7 +521,7 @@ begin
 						state_next <= CODING_DEFAULT;
 						memory_shift_enable <= '1';
 						first_refinement_flag_next <= '0';
-						if (iscoded_flag_curr = '0' and raw_neighborhood.curr_c /= INSIGNIFICANT) then
+						if (iscoded_flag_curr = '0' and significance_state_curr /= INSIGNIFICANT) then
 							iscoded_flag_next <= '1';
 							mqcoder_enable <= '1';
 							mqcoder_in <= current_bit;

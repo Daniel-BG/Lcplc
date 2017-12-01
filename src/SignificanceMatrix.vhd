@@ -39,6 +39,7 @@ entity SignificanceMatrix is
 		--significance state to save in current memory cell
 		in_value: in significance_state_t;
 		--current neighborhood 
+		--it might contain invalid values. Be sure to filter it afterwards
 		out_value: out sign_neighborhood_t
 	);
 end SignificanceMatrix;
@@ -72,6 +73,7 @@ architecture Behavioral of SignificanceMatrix is
 	signal neigh: sign_neighborhood_full_t;
 	
 begin
+
 	--always output inner state
 	--previous strip values
 	out_value.prev_m1 <= neigh.prev_m1;

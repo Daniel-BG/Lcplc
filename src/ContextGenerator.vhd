@@ -35,28 +35,24 @@ entity ContextGenerator is
 		COLS: integer := 64
 	);
 	port(
-		--significance status of neighboring values
-		raw_neighborhood: in sign_neighborhood_t;
+		--already filtered neighborhoods
+		neighborhood: in neighborhood_3x3_t;
+		run_length_neighborhood: in sign_neighborhood_t;
 		--subband that this block is coding (LL, HL, LH, HH have 
 		--different contexts for the same neighbor configurations
 		subband: in subband_t;
-		--current row and column, used when on edges to set neighbors that do not
-		--exist to default values
-		row: in natural range 0 to ROWS - 1;
-		col: in natural range 0 to COLS - 1;
 		--true if this is the current sample's first refinement
 		first_refinement_in: in std_logic;
 		--contexts out
 		magnitude_refinement_context, sign_bit_decoding_context, significance_propagation_context: out context_label_t;
 		--flags out
 		sign_bit_xor: out std_logic;
+		--this might be up even if we are in the middle of a strip! use only when on the begining
 		is_strip_zero_context: out std_logic
 	);
 end ContextGenerator;
 
 architecture Behavioral of ContextGenerator is
-	--filtered neighborhood for easy usage
-	signal neighborhood: neighborhood_3x3_t;
 	--precalculated values for easier context calculation
 	signal horizontal_contribution, vertical_contribution: integer range -2 to 2;
 	signal sum_horizontal, sum_vertical: natural range 0 to 2;
@@ -64,78 +60,7 @@ architecture Behavioral of ContextGenerator is
 	
 begin
 
-	--from the input neighborhood (which includes tons of useless data)
-	--extract the exact 3x3 neighborhood of the current sample
-	extract_neighborhood: process(raw_neighborhood, row, col) 
-	begin
-		--assign top
-		if (row = 0) then
-			neighborhood.top <= INSIGNIFICANT;
-		elsif (row mod 4 = 0) then
-			neighborhood.top <= raw_neighborhood.prev_p3;
-		else
-			neighborhood.top <= raw_neighborhood.curr_m1;
-		end if;
-		
-		--assign top left
-		if (row = 0 or col = 0) then
-			neighborhood.top_left <= INSIGNIFICANT;
-		elsif (row mod 4 = 0) then
-			neighborhood.top_left <= raw_neighborhood.prev_m1;
-		else
-			neighborhood.top_left <= raw_neighborhood.curr_m5;
-		end if;
-		
-		--assign top right
-		if (row = 0 or col = COLS - 1) then
-			neighborhood.top_right <= INSIGNIFICANT;
-		elsif (row mod 4 = 0) then
-			neighborhood.top_right <= raw_neighborhood.prev_p7;
-		else
-			neighborhood.top_right <= raw_neighborhood.curr_p3;
-		end if;
-		
-		--assign right
-		if (col = COLS - 1) then
-			neighborhood.right <= INSIGNIFICANT;
-		else
-			neighborhood.right <= raw_neighborhood.curr_p4;
-		end if;
-		
-		--assign bottom right
-		if (col = COLS - 1 or row = ROWS - 1) then
-			neighborhood.bottom_right <= INSIGNIFICANT;
-		elsif (((row + 1) mod 4) = 0) then
-			neighborhood.bottom_right <= raw_neighborhood.next_p1;
-		else
-			neighborhood.bottom_right <= raw_neighborhood.curr_p5;
-		end if;
-		
-		--assign bottom
-		if (row = ROWS - 1) then
-			neighborhood.bottom <= INSIGNIFICANT;
-		elsif (((row + 1) mod 4) = 0) then
-			neighborhood.bottom <= raw_neighborhood.next_m3;
-		else
-			neighborhood.bottom <= raw_neighborhood.curr_p1;
-		end if;
-		
-		--assign bottom left
-		if (col = 0 or row = ROWS - 1) then
-			neighborhood.bottom_left <= INSIGNIFICANT;
-		elsif (((row + 1) mod 4) = 0) then
-			neighborhood.bottom_left <= raw_neighborhood.next_m7;
-		else
-			neighborhood.bottom_left <= raw_neighborhood.curr_m3;
-		end if;
-		
-		--assign left
-		if (col = 0) then
-			neighborhood.left <= INSIGNIFICANT;
-		else
-			neighborhood.left <= raw_neighborhood.curr_m4;
-		end if;
-	end process;
+
 	
 	--using the 3x3 neighborhood, generate the contributions and sums
 	generate_contributions_and_sums: process(neighborhood) 
@@ -356,89 +281,31 @@ begin
 		end case;
 	end process;
 	
-	
-	strip_zero_context: process(raw_neighborhood, row, col)
+	--this will assume a strip even if we are in the middle of one
+	strip_zero_context: process(run_length_neighborhood)
 		variable any_non_zero: boolean;
-		variable filtered_neighborhood: sign_neighborhood_t;
 	begin
 		any_non_zero := false;
-		
-		--by default assign same values, we will filter later
-		filtered_neighborhood.curr_m4 := raw_neighborhood.curr_m4;
-		filtered_neighborhood.curr_m3 := raw_neighborhood.curr_m3;
-		filtered_neighborhood.curr_m2 := raw_neighborhood.curr_m2;
-		filtered_neighborhood.curr_m1 := raw_neighborhood.curr_m1;
-		filtered_neighborhood.curr_c  := raw_neighborhood.curr_c;
-		filtered_neighborhood.curr_p1 := raw_neighborhood.curr_p1;
-		filtered_neighborhood.curr_p2 := raw_neighborhood.curr_p2;
-		filtered_neighborhood.curr_p3 := raw_neighborhood.curr_p3;
-		filtered_neighborhood.curr_p4 := raw_neighborhood.curr_p4;
-		filtered_neighborhood.curr_p5 := raw_neighborhood.curr_p5;
-		filtered_neighborhood.curr_p6 := raw_neighborhood.curr_p6;
-		filtered_neighborhood.curr_p7 := raw_neighborhood.curr_p7;
-		filtered_neighborhood.prev_m1 := raw_neighborhood.prev_m1;
-		filtered_neighborhood.prev_p3 := raw_neighborhood.prev_p3;
-		filtered_neighborhood.prev_p7 := raw_neighborhood.prev_p7;
-		filtered_neighborhood.next_m4 := raw_neighborhood.next_m4;
-		filtered_neighborhood.next_c  := raw_neighborhood.next_c;
-		filtered_neighborhood.next_p4 := raw_neighborhood.next_p4;
-		
-		--now if any is out of bounds, set as insignificant
-		if (col = 0) then
-			filtered_neighborhood.prev_m1 := INSIGNIFICANT;
-			filtered_neighborhood.curr_m1 := INSIGNIFICANT;
-			filtered_neighborhood.curr_m2 := INSIGNIFICANT;
-			filtered_neighborhood.curr_m3 := INSIGNIFICANT;
-			filtered_neighborhood.curr_m4 := INSIGNIFICANT;
-			filtered_neighborhood.next_m4 := INSIGNIFICANT;
-		end if;
-		
-		if (col = ROWS - 1) then
-			filtered_neighborhood.prev_p7 := INSIGNIFICANT;
-			filtered_neighborhood.curr_p4 := INSIGNIFICANT;
-			filtered_neighborhood.curr_p5 := INSIGNIFICANT;
-			filtered_neighborhood.curr_p6 := INSIGNIFICANT;
-			filtered_neighborhood.curr_p7 := INSIGNIFICANT;
-			filtered_neighborhood.next_p4 := INSIGNIFICANT;
-		end if;
-		
-		if (row = 0) then
-			filtered_neighborhood.prev_m1 := INSIGNIFICANT;
-			filtered_neighborhood.prev_p3 := INSIGNIFICANT;
-			filtered_neighborhood.prev_p7 := INSIGNIFICANT;
-		end if;
-		
-		if (row = COLS - 1) then
-			filtered_neighborhood.next_m4 := INSIGNIFICANT;
-			filtered_neighborhood.next_c  := INSIGNIFICANT;
-			filtered_neighborhood.next_p4 := INSIGNIFICANT;
-		end if;
-		
-		
 	
 		--this is basically a 6x3 rectangle in which all samples are checked for significance
 		--if all are insignificant, then the whole strip is
-		if (	filtered_neighborhood.curr_m4 /= INSIGNIFICANT or filtered_neighborhood.curr_m3 /= INSIGNIFICANT or
-				filtered_neighborhood.curr_m2 /= INSIGNIFICANT or filtered_neighborhood.curr_m1 /= INSIGNIFICANT or
-				filtered_neighborhood.curr_c  /= INSIGNIFICANT or filtered_neighborhood.curr_p1 /= INSIGNIFICANT or
-				filtered_neighborhood.curr_p2 /= INSIGNIFICANT or filtered_neighborhood.curr_p3 /= INSIGNIFICANT or
-				filtered_neighborhood.curr_p4 /= INSIGNIFICANT or filtered_neighborhood.curr_p5 /= INSIGNIFICANT or
-				filtered_neighborhood.curr_p6 /= INSIGNIFICANT or filtered_neighborhood.curr_p7 /= INSIGNIFICANT or
-				filtered_neighborhood.prev_m1 /= INSIGNIFICANT or filtered_neighborhood.prev_p3 /= INSIGNIFICANT or
-				filtered_neighborhood.prev_p7 /= INSIGNIFICANT or filtered_neighborhood.next_m4 /= INSIGNIFICANT or
-				filtered_neighborhood.next_c  /= INSIGNIFICANT or filtered_neighborhood.next_p4 /= INSIGNIFICANT) then
+		if (	run_length_neighborhood.curr_m4 /= INSIGNIFICANT or run_length_neighborhood.curr_m3 /= INSIGNIFICANT or
+				run_length_neighborhood.curr_m2 /= INSIGNIFICANT or run_length_neighborhood.curr_m1 /= INSIGNIFICANT or
+				run_length_neighborhood.curr_c  /= INSIGNIFICANT or run_length_neighborhood.curr_p1 /= INSIGNIFICANT or
+				run_length_neighborhood.curr_p2 /= INSIGNIFICANT or run_length_neighborhood.curr_p3 /= INSIGNIFICANT or
+				run_length_neighborhood.curr_p4 /= INSIGNIFICANT or run_length_neighborhood.curr_p5 /= INSIGNIFICANT or
+				run_length_neighborhood.curr_p6 /= INSIGNIFICANT or run_length_neighborhood.curr_p7 /= INSIGNIFICANT or
+				run_length_neighborhood.prev_m1 /= INSIGNIFICANT or run_length_neighborhood.prev_p3 /= INSIGNIFICANT or
+				run_length_neighborhood.prev_p7 /= INSIGNIFICANT or run_length_neighborhood.next_m4 /= INSIGNIFICANT or
+				run_length_neighborhood.next_c  /= INSIGNIFICANT or run_length_neighborhood.next_p4 /= INSIGNIFICANT) then
 			any_non_zero := true;
 		end if;
 	
-		if (row mod 4 /= 0) then
+		if (any_non_zero) then
 			is_strip_zero_context <= '0';
 		else
-			if (any_non_zero) then
-				is_strip_zero_context <= '0';
-			else
-				is_strip_zero_context <= '1';
-			end if;
-		end if;	
+			is_strip_zero_context <= '1';
+		end if;
 	end process;
 	
 	
