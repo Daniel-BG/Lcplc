@@ -42,7 +42,9 @@ entity MQCoder is
 		out_bytes: out std_logic_vector(23 downto 0);
 		--individually enable first, second and third byte. 
 		--By design out_en(2) implies out_en(1) implies out_en(0)	
-		out_enable: out std_logic_vector(2 downto 0) 	
+		out_enable: out std_logic_vector(2 downto 0);
+		--debug signals
+		out_debug: out std_logic_vector(7 downto 0)
 	);
 end MQCoder;
 
@@ -132,6 +134,9 @@ architecture Behavioral of MQCoder is
 	
 	
 begin
+
+
+	out_debug <= in_bit & std_logic_vector(to_unsigned(in_context, 7)); --normalized_lower_bound(7 downto 0));
 
 	--this process updates the coder. Usually shifting is done to the normalized lower bound
 	--until it goes over the normalized interval length. This can happen a bounded number of

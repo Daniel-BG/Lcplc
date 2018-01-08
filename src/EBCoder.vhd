@@ -45,11 +45,19 @@ entity EBCoder is
 		data_in: in std_logic_vector(BITPLANES - 1 downto 0);
 		data_in_en: in std_logic;
 		--active if the module has not processed the current block yet
-		busy: out std_logic;						
+		busy: out std_logic;				
 		--current output (valid only if out_enable is active)
 		out_bytes: out std_logic_vector(23 downto 0);	
 		--if set, the corresponding byte of out_bytes must be read in the next clk edge or it will be lost
-		valid: out std_logic_vector(2 downto 0)	
+		valid: out std_logic_vector(2 downto 0);
+		--debug signals
+		out_debug: out std_logic_Vector(7 downto 0);
+		arith_active: out std_logic	--1 if the arith coder is updating this cycle
+		----remove below for final version
+--		debug_enable: out std_logic;
+--		debug_context: out context_label_t;
+--		debug_bit: out std_logic
+		----remove above for final version
 	);
 end EBCoder;
 
@@ -106,7 +114,7 @@ architecture Behavioral of EBCoder is
 	--passed to the neighborhood above
 	signal significance_state_next, significance_state_curr: significance_state_t;
 	signal neighborhood: neighborhood_3x3_t;
-	signal run_length_neighborhood: sign_neighborhood_t;
+	signal run_length_neighborhood: run_length_neighborhood_t;
 	
 	--flag that indicates if the current coordinate is being refined for the first
 	--time or not
@@ -143,7 +151,7 @@ architecture Behavioral of EBCoder is
 	--MQCoder stuff
 	signal mqcoder_in: std_logic;
 	signal mqcoder_context_in: context_label_t; --unused as output
-	signal mqcoder_enable: std_logic;
+	signal mqcoder_enable, true_mqcoder_enable: std_logic;
 	signal mqcoder_end_coding: std_logic;
 	signal mqcoder_bytes: std_logic_vector(23 downto 0);
 	signal mqcoder_bytes_enable, out_enable: std_logic_vector(2 downto 0);
@@ -151,15 +159,26 @@ architecture Behavioral of EBCoder is
 	----shared and other stuff
 	--enable coordinate generation. this guides the coding process, and is used
 	--to advance it or not depending on the state
-	signal coordinate_gen_enable, coordinate_gen_force_disable: std_logic;
+	signal coordinate_gen_enable, true_coordinate_gen_enable, coordinate_gen_force_disable: std_logic;
 	--if set enables all memories and coordinate generator to continue shifting stuff
-	signal memory_shift_enable: std_logic; 
+	signal memory_shift_enable, true_memory_shift_enable: std_logic; 
 	--bits from the current sample and four ahead for run length coding
 	signal current_bit, next_p3_bit, next_p1_bit, next_p2_bit: std_logic; 
 	--sign bit of the current sample
 	signal current_sign_bit: std_logic;
 	
 begin
+
+
+--	debug_enable <= true_mqcoder_enable;
+--	debug_context <= mqcoder_context_in;
+--	debug_bit <= mqcoder_in;
+
+
+
+	arith_active <= true_mqcoder_enable;
+
+	true_memory_shift_enable <= '1' when memory_shift_enable = '1' and clk_en = '1' else '0';
 
 	
 	sign_filter: entity work.SignificanceNeighFilter
@@ -191,6 +210,7 @@ begin
 	
 	--coordinate generator
 	--generates the current position and passes through the block to guide the coding process
+	true_coordinate_gen_enable <= '1' when coordinate_gen_enable = '1' and clk_en = '1' else '0';
 	coordinate_gen: entity work.CoordinateGenerator
 		generic map (
 			ROWS => ROWS, 
@@ -198,7 +218,7 @@ begin
 			-- -1 since the first bitplane is the sign plane and is encoded differently
 			BITPLANES => BITPLANES - 1) 
 		port map (
-			clk => clk, rst => rst, clk_en => coordinate_gen_enable,
+			clk => clk, rst => rst, clk_en => true_coordinate_gen_enable,
 			row_out => row, col_out => col, bitplane_out => bitplane,
 			pass_out => pass, last_coord => coord_gen_done
 		);
@@ -210,7 +230,7 @@ begin
 	significance_storage: entity work.SignificanceMatrix
 		generic map(ROWS => ROWS, COLS => COLS)
 		port map (
-			clk => clk, rst => rst, clk_en => memory_shift_enable,
+			clk => clk, rst => rst, clk_en => true_memory_shift_enable,
 			in_value => significance_state_next,
 			out_value => raw_neighborhood
 		);
@@ -221,7 +241,7 @@ begin
 	first_refinement_flag_matrix: entity work.BooleanMatrix
 		generic map (SIZE => ROWS * COLS)
 		port map (
-			clk => clk, rst => rst, clk_en => memory_shift_enable,
+			clk => clk, rst => rst, clk_en => true_memory_shift_enable,
 			in_value => first_refinement_flag_next,
 			out_value => first_refinement_flag_curr_mem
 		);
@@ -233,7 +253,7 @@ begin
 	iscoded_flag_matrix: entity work.BooleanMatrixLookAhead
 		generic map (SIZE => ROWS * COLS, LOOKAHEAD => 3)
 		port map (
-			clk => clk, rst => rst, clk_en => memory_shift_enable,
+			clk => clk, rst => rst, clk_en => true_memory_shift_enable,
 			in_value => iscoded_flag_next,
 			out_values => iscoded_flag_strip_mem
 		);
@@ -246,26 +266,29 @@ begin
 	--aritmetic coder
 	--holds internal states with probabilities for each coding context.
 	--arithmetically codes the required bits, generating up to 3 bytes 
-	--at the same time (though usually this number will be zero or one)						
+	--at the same time (though usually this number will be zero or one)	
+	true_mqcoder_enable <= '1' when mqcoder_enable = '1' and clk_en = '1' else '0';					
 	arithcoder: entity work.MQCoder
 		port map (
-			clk => clk, rst => rst, clk_en => mqcoder_enable,
+			clk => clk, rst => rst, clk_en => true_mqcoder_enable,
 			in_bit => mqcoder_in,
 			end_coding_enable => mqcoder_end_coding,
 			in_context => mqcoder_context_in,
 			out_bytes => mqcoder_bytes,
-			out_enable => mqcoder_bytes_enable
+			out_enable => mqcoder_bytes_enable,
+			out_debug => out_debug
 		);
 		
 	--data block storage
 	--holds the data to be coded. 
+	
 	data_block: entity work.DataBlock
 		generic map (ROWS => ROWS, COLS => COLS, BIT_DEPTH => BITPLANES)
 		port map (
 			clk => clk, rst => rst, 
 			data_in => data_in,
 			data_in_en => data_in_en,
-			data_out_en => memory_shift_enable,
+			data_out_en => true_memory_shift_enable,
 			data_out => data_strip_raw,
 			data_out_available => data_available
 		);
@@ -337,7 +360,7 @@ begin
 			row, current_bit, significance_propagation_context, full_strip_uncoded,
 			is_strip_zero_context, magnitude_refinement_context, col,
 			current_sign_bit, sign_bit_decoding_context, sign_bit_xor,
-			first_refinement_flag_curr, coordinate_gen_force_disable, data_available, coord_gen_done) begin
+			first_refinement_flag_curr, coordinate_gen_force_disable, data_available, coord_gen_done, significance_state_curr) begin
 		--by default do not shift memories. Set if necessary
 		memory_shift_enable <= '0';
 		coordinate_gen_force_disable <= '0';

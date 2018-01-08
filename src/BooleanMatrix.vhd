@@ -55,6 +55,7 @@ begin
 	begin
 		if (rst = '1') then
 			index <= 0;
+			out_value <= '0';
 		elsif (rising_edge(clk) and clk_en = '1') then
 			out_value <= storage(index);
 			storage(index) <= in_value;

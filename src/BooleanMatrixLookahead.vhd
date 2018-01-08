@@ -65,6 +65,8 @@ begin
 	begin
 		if (rst = '1') then
 			index <= 0;
+			shiftreg <= (others => '0');
+			mem_out <= '0';
 		elsif (rising_edge(clk) and clk_en = '1') then
 			mem_out <= storage(index);
 			shiftreg <= shiftreg(LOOKAHEAD - 2 downto 0) & mem_out;

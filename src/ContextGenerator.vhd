@@ -37,7 +37,7 @@ entity ContextGenerator is
 	port(
 		--already filtered neighborhoods
 		neighborhood: in neighborhood_3x3_t;
-		run_length_neighborhood: in sign_neighborhood_t;
+		run_length_neighborhood: in run_length_neighborhood_t;
 		--subband that this block is coding (LL, HL, LH, HH have 
 		--different contexts for the same neighbor configurations
 		subband: in subband_t;

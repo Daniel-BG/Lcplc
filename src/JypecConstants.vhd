@@ -40,6 +40,12 @@ package JypecConstants is
 		next_m7, next_m4, next_m3, next_c, next_p1, next_p4: significance_state_t;
 	end record sign_neighborhood_t;
 	
+	type run_length_neighborhood_t is record
+		prev_m1, prev_p3, prev_p7: significance_state_t;
+		curr_m4, curr_m3, curr_m2, curr_m1, curr_c, curr_p1, curr_p2, curr_p3, curr_p4, curr_p5, curr_p6, curr_p7: significance_state_t;
+		next_m4, next_c, next_p4: significance_state_t;
+	end record run_length_neighborhood_t;
+	
 	type neighborhood_3x3_t is record
 		top_left, top, top_right, right, bottom_right, bottom, bottom_left, left: significance_state_t;
 	end record neighborhood_3x3_t;

@@ -45,7 +45,7 @@ entity SignificanceNeighFilter is
 		first_cleanup_pass_flag: in std_logic; 
 		current_significance: out significance_state_t;
 		neighborhood: out neighborhood_3x3_t;
-		run_length_neighborhood: out sign_neighborhood_t
+		run_length_neighborhood: out run_length_neighborhood_t
 	);
 --  Port ( );
 end SignificanceNeighFilter;
@@ -80,12 +80,16 @@ begin
 		end if;
 		
 		--assign top right
-		if (row = 0 or col = COLS - 1 or first_cleanup_pass_flag = '1') then
+		if (row = 0 or col = COLS - 1) then
 			neighborhood.top_right <= INSIGNIFICANT;
 		elsif (row mod 4 = 0) then
 			neighborhood.top_right <= raw_neighborhood.prev_p7;
 		else
-			neighborhood.top_right <= raw_neighborhood.curr_p3;
+			if (first_cleanup_pass_flag = '1') then
+				neighborhood.top_right <= INSIGNIFICANT;
+			else
+				neighborhood.top_right <= raw_neighborhood.curr_p3;
+			end if;
 		end if;
 		
 		--assign right
@@ -114,7 +118,7 @@ begin
 		end if;
 		
 		--assign bottom left
-		if (col = 0 or row = ROWS - 1) then
+		if (col = 0 or row = ROWS - 1 or (first_cleanup_pass_flag = '1' and ((row + 1) mod 4 = 0))) then
 			neighborhood.bottom_left <= INSIGNIFICANT;
 		elsif (((row + 1) mod 4) = 0) then
 			neighborhood.bottom_left <= raw_neighborhood.next_m7;
