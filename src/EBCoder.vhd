@@ -374,16 +374,16 @@ begin
 		--default to clearing if on cleanup
 		if (pass = CLEANUP) then
 			iscoded_flag_next <= '0'; --reset iscoded flag
-			first_refinement_flag_next <= '1'; --reset first refinement flag
 		else --maintain previous
 			iscoded_flag_next <= iscoded_flag_curr;
-			first_refinement_flag_next <= first_refinement_flag_curr;
 		end if;
 		--default to clearing if on first cleanup pass. will be overriden if coding sign
 		if (pass = CLEANUP and bitplane = 0) then
-			significance_state_next <= INSIGNIFICANT;
+			significance_state_next <= INSIGNIFICANT; --reset significance
+			first_refinement_flag_next <= '1'; --reset first refinement flag
 		else
 			significance_state_next <= significance_state_curr; --otherwise maintain existent
+			first_refinement_flag_next <= first_refinement_flag_curr; --maintain
 		end if;
 		--default outputs
 		out_bytes <= mqcoder_bytes;
@@ -523,7 +523,7 @@ begin
 							end if;
 						end if;
 					elsif (pass = SIGNIFICANCE) then
-						if (significance_propagation_context /= CONTEXT_ZERO) then
+						if (significance_state_curr = INSIGNIFICANT and significance_propagation_context /= CONTEXT_ZERO) then
 							mqcoder_enable <= '1';
 							mqcoder_in <= current_bit;
 							mqcoder_context_in <= significance_propagation_context;
@@ -543,8 +543,8 @@ begin
 					else --refinement
 						state_next <= CODING_DEFAULT;
 						memory_shift_enable <= '1';
-						first_refinement_flag_next <= '0';
 						if (iscoded_flag_curr = '0' and significance_state_curr /= INSIGNIFICANT) then
+							first_refinement_flag_next <= '0';
 							iscoded_flag_next <= '1';
 							mqcoder_enable <= '1';
 							mqcoder_in <= current_bit;
