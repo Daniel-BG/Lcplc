@@ -198,24 +198,6 @@ begin
 		
 		send(8192);
 		wait_for_clk(100000);
---		reset;
---		send(100);
---		wait_for_clk(100);
---		reset;
---		send(100);
---		wait_for_clk(100);
---		reset;
---		send(100);
---		wait_for_clk(100);
---		reset;
---		send(100);
---		wait_for_clk(100);
---		reset;
---		send(100);
---		wait_for_clk(100);
---		reset;
---		send(100);
---		wait_for_clk(100);
 		
 		finished <= true;
 		wait;
