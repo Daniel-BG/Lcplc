@@ -25,6 +25,60 @@ use IEEE.STD_LOGIC_1164.all;
 
 package JypecConstants is
 	type significance_state_t is (INSIGNIFICANT, SIGNIFICANT_POSITIVE, SIGNIFICANT_NEGATIVE);
+	
+	type significance_strip_t is record
+		ss_0: significance_state_t;
+		ss_1: significance_state_t;
+		ss_2: significance_state_t;
+		ss_3: significance_state_t;
+	end record;
+	
+	--constant lookup: array(significance_state_t) of std_logic_vector(1 downto 0) := (
+	--	INSIGNIFICANT  => "00",
+	--	SIGNIFICANT_POSITIVE => "01",
+	--	SIGNIFICANT_NEGATIVE => "10"
+	--);
+	
+	function significance_state_to_vector(input: significance_state_t) return std_logic_vector is
+	begin
+		if (input = INSIGNIFICANT) then
+			return "00";
+		elsif (input = SIGNIFICANT_POSITIVE) then
+			return "01";
+		else
+			return "10";
+		end if;
+	end significance_state_to_vector;
+	
+	function vector_to_significance_state(input: std_logic_vector(1 downto 0)) return significance_state_t is
+	begin
+		if (input = "00") then
+			return INSIGNIFICANT;
+		elsif (input = "01") then
+			return SIGNIFICANT_POSITIVE;
+		else
+			return SIGNIFICANT_NEGATIVE;
+		end if;
+	end vector_to_significance_state;
+	
+	function significance_strip_to_vector(input: significance_strip_t) return std_logic_vector is
+	begin
+		return 	significance_state_to_vector(input.ss_0) &
+					significance_state_to_vector(input.ss_1) &
+					significance_state_to_vector(input.ss_2) &
+					significance_state_to_vector(input.ss_3);
+	end significance_strip_to_vector;
+	
+	function vector_to_significance_strip(input: std_logic_vector(7 downto 0)) return significance_strip_t is
+		variable result: significance_strip_t;
+	begin
+		result.ss_0 := vector_to_significance_state(input(7 downto 6));
+		result.ss_1 := vector_to_significance_state(input(5 downto 4));
+		result.ss_2 := vector_to_significance_state(input(3 downto 2));
+		result.ss_3 := vector_to_significance_state(input(1 downto 0));
+		return result;
+	end vector_to_significance_strip;
+	
 	type subband_t is (LL, LH, HL, HH);
 	type encoder_pass_t is (CLEANUP, SIGNIFICANCE, REFINEMENT);
 	
