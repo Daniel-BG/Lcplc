@@ -68,7 +68,7 @@ begin
 		if rising_edge(clk) then
 			if (rst = '1') then
 				pointer <= 0;
-			else
+			elsif (clk_en = '1') then
 				memout <= mem(pointer);
 				if (pointer = WIDTH*STRIPS - 1) then
 					pointer <= 0;

@@ -131,5 +131,18 @@ package JypecConstants is
 	constant CONTEXT_RUN_LENGTH: context_label_t := 17;
 	constant CONTEXT_UNIFORM: context_label_t := 18;
 	
+	
+	--outputs for BPC (use 11 to reuse circuitry on outputs of different stages)
+	type BPC_out_contexts_t is array(0 to 10) of context_label_t;
+	type BPC_out_bits_t is array(0 to 10) of std_logic;
+	type BPC_out_valid_t is array(0 to 10) of std_logic;
+	
+	--custom types for ease of use
+	type neigh_strip is array (0 to 3) of neighborhood_3x3_t;
+	type bit_strip is array(0 to 3) of std_logic;
+	type context_strip is array(0 to 3) of context_label_t;
+	type significance_strip is array(0 to 3) of significance_state_t;
+	type significance_matrix is array(0 to 17) of significance_state_t;
+	
 end package;
 
