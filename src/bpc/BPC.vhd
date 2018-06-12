@@ -50,7 +50,8 @@ entity BPC is
 		--in REF only 4
 		--in CLEANUP up to 10
 		out_bits: out BPC_out_bits_t;
-		out_valid: out BPC_out_valid_t
+		out_valid: out BPC_out_valid_t;
+		out_done_next_cycle: out std_logic
 	);
 end BPC;
 
@@ -108,6 +109,7 @@ architecture Behavioral of BPC is
 	signal out_valid_significance, out_valid_refinement, out_valid_cleanup: BPC_out_valid_t;
 		
 begin
+	out_done_next_cycle <= last_coord;
 	--ALIASES
 	----------------------------------
 	--(0) (1) (2) ---(pm1)(pp3)(pp7)--
