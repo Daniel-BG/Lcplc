@@ -92,8 +92,8 @@ architecture Behavioral of BPC is
 	
 	--significance coded flags
 	signal significance_coded_flag: bit_strip;
-	signal significance_aquired_flag: bit_strip;
-	signal significance_aquired: significance_strip;
+	signal significance_aquired_flag_significance, significance_aquired_flag_cleanup: bit_strip;
+	signal significance_aquired_significance, significance_aquired_cleanup: significance_strip;
 	
 	--cleanup signals
 	signal all_bits_zero_flag: std_logic;
@@ -220,8 +220,20 @@ begin
 			neighborhood => full_neighborhood_matrix,
 			bits => magnitude_bit,
 			sign => sign_bit,
-			becomes_significant => significance_aquired_flag,
-			significance => significance_aquired
+			becomes_significant => significance_aquired_flag_significance, --maybe tell which ones are enabled? (e.g: significance => all, cleanup => from jth)
+			significance => significance_aquired_significance
+		);
+		
+	fast_sign_cleanup: entity work.BPC_fast_significance_cleanup
+		port map (
+			neighborhood => full_neighborhood_matrix,
+			bits => magnitude_bit,
+			sign => sign_bit,
+			first_nonzero => first_nonzero,
+			all_bits_zero => all_bits_zero_flag,
+			iscoded_flag => iscoded_flag_out,
+			becomes_significant => significance_aquired_flag_cleanup,
+			significance => significance_aquired_cleanup
 		);
 		
 	
@@ -254,38 +266,28 @@ begin
 				significance_propagation_context => significance_propagation_context(i),
 				sign_bit_xor => sign_bit_xor(i)
 			);
-			
---		next_sign_calc_i: entity work.BPC_next_significance_calc
---			port map(
---				curr_pass => curr_pass, 
---				curr_significance => full_neighborhood_matrix(4 + 3*i), 
---				curr_context => significance_propagation_context(i), 
---				curr_sign_bit => sign_bit(i),
---				next_significance => next_significance(i),
---				significance_coded_flag => significance_coded_flag(i)
---			);
-
---		significance_coded_flag(i) <= '1' when (curr_pass = SIGNIFICANCE and full_neighborhood_matrix(4+3*i) = INSIGNIFICANT  and significance_propagation_context = CONTEXT_ZERO)
---														or	(curr_pass = CLEANUP and (run_length_flag = '0' or (run_length_flag = '1' and all_bits_zero_flag = '0' and first_nonzero <= i)))
---												else '0';
 
 		--this flag means that significance coding is to be applied to the i-th sample. This DOES NOT mean the sample becomes significant
-		significance_coded_flag(i) <= '1' when (curr_pass = SIGNIFICANCE and significance_aquired_flag(i) = '1')
-														or	(curr_pass = CLEANUP and (run_length_flag = '0' or (run_length_flag = '1' and all_bits_zero_flag = '0' and first_nonzero <= i)))
+		significance_coded_flag(i) <= '1' when (curr_pass = SIGNIFICANCE and significance_aquired_flag_significance(i) = '1')
+														or	(curr_pass = CLEANUP and (run_length_flag = '0' or (run_length_flag = '1' and significance_aquired_flag_cleanup(i) = '1')))
 												else '0';
 			
-		--significance value of the i-th sample after the current cycle is done processing. This is also
-		--used for cascading significance down the strip
-		next_significance(i) <= significance_aquired(i);
-		--next_significance(i) <= full_neighborhood_matrix(4 + 3*i) when significance_coded_flag(i) = '0' or magnitude_bit(i) = '0' else
-		--								SIGNIFICANT_POSITIVE when sign_bit(i) = '0' else SIGNIFICANT_NEGATIVE;
+		--significance value of the i-th sample after the current cycle is done processing. 
+		--This is also used for cascading significance down the strip
+		--avoid updating when in refinement
+		next_significance(i) <= significance_aquired_significance(i) when curr_pass = SIGNIFICANCE else
+										full_neighborhood_matrix(4+3*i) when curr_pass = REFINEMENT else
+										significance_aquired_cleanup(i); 
 			
-		--flag indicating that the i-th sample is being coded, and no further passes should code it. CLEANUP pass resets this flag to recycle the flag matrix
+		--flag indicating that the i-th bit is being coded, and no further passes should code it. CLEANUP pass resets this flag to recycle the flag matrix
 		iscoded_flag_in(i) <= '1' when (curr_pass = SIGNIFICANCE and significance_coded_flag(i) = '1')
 										  or   (curr_pass = REFINEMENT and (iscoded_flag_out(i) = '1' or full_neighborhood_matrix(4+3*i) /= INSIGNIFICANT))
 										  else '0';
 		
-		first_refinement_vector_in(i) <= '1' when curr_pass = REFINEMENT and iscoded_flag_out(i) = '0' and full_neighborhood_matrix(4+3*i) /= INSIGNIFICANT else '0';
+		--flag indicating it is the first time this position is refined
+		first_refinement_vector_in(i) <= '1' when curr_pass = CLEANUP and curr_bitplane = BITPLANES - 1 else
+													'0' when curr_pass = REFINEMENT and full_neighborhood_matrix(4+3*i) /= INSIGNIFICANT and iscoded_flag_out(i) = '0' else
+													first_refinement_vector_out(i);
 	
 	end generate;
 	
@@ -333,44 +335,46 @@ begin
 	gen_output: for i in 0 to 3 generate
 		--SIGNIFICANCE
 			--magnitude
-			out_contexts_significance(i)	<= significance_propagation_context(i);
-			out_bits_significance(i) 	 	<= magnitude_bit(i);
-			out_valid_significance(i)	 	<= significance_coded_flag(i);
+			out_contexts_significance(i*2)	<= significance_propagation_context(i);
+			out_bits_significance(i*2) 	 	<= magnitude_bit(i);
+			out_valid_significance(i*2)	 	<= significance_coded_flag(i);
 			
 			--sign
-			out_contexts_significance(i+4)<= sign_bit_decoding_context(i);
-			out_bits_significance(i+4) 	<= sign_bit(i) xor sign_bit_xor(i);
-			out_valid_significance(i+4)	<= '1' when magnitude_bit(i) = '1' and significance_coded_flag(i) = '1' else '0';
+			out_contexts_significance(i*2+1)	<= sign_bit_decoding_context(i);
+			out_bits_significance(i*2+1) 		<= sign_bit(i) xor sign_bit_xor(i);
+			out_valid_significance(i*2+1)		<= '1' when magnitude_bit(i) = '1' and significance_coded_flag(i) = '1' else '0';
 			
 		--REFINEMENT
 			out_contexts_refinement(i)		<= magnitude_refinement_context(i);
 			out_bits_refinement(i)			<= magnitude_bit(i);
-			out_valid_refinement(i) 		<= '1' when iscoded_flag_out(i) = '0' and full_neighborhood_matrix(4+3*i) /= INSIGNIFICANT;
+			out_valid_refinement(i) 		<= '1' when iscoded_flag_out(i) = '0' and full_neighborhood_matrix(4+3*i) /= INSIGNIFICANT else '0';
 		
 		--CLEANUP
 			--magnitude
-			out_contexts_cleanup(i)	<= significance_propagation_context(i);
-			out_bits_cleanup(i) 	 	<= magnitude_bit(i);
-			out_valid_cleanup(i)		<= '1' when run_length_flag = '0' or (all_bits_zero_flag = '0' and first_nonzero <  i) else '0';
+			out_contexts_cleanup(3+i*2)	<= significance_propagation_context(i);
+			out_bits_cleanup(3+i*2) 	 	<= magnitude_bit(i);
+			out_valid_cleanup(3+i*2)		<= '0' when iscoded_flag_out(i) = '1' else
+														'1' when run_length_flag = '0' or (all_bits_zero_flag = '0' and first_nonzero <  i) else '0';
 			
 			--sign
-			out_contexts_cleanup(i+4)<= sign_bit_decoding_context(i);
-			out_bits_cleanup(i+4) 	<= sign_bit(i) xor sign_bit_xor(i);
-			out_valid_cleanup(i+4)	<= '1' when run_length_flag = '0' or (all_bits_zero_flag = '0' and first_nonzero <= i) else '0';		
+			out_contexts_cleanup(4+i*2)<= sign_bit_decoding_context(i);
+			out_bits_cleanup(4+i*2) 	<= sign_bit(i) xor sign_bit_xor(i);
+			out_valid_cleanup(4+i*2)	<= '0' when iscoded_flag_out(i) = '1' else
+													'1' when run_length_flag = '0' or (all_bits_zero_flag = '0' and first_nonzero <= i) else '0';		
 	end generate;
 	
 	--special flags
 		--run len
-		out_contexts_cleanup(8) <= CONTEXT_RUN_LENGTH;
-		out_bits_cleanup(8)		<= not all_bits_zero_flag;
-		out_valid_cleanup(8)		<= run_length_flag;
+		out_contexts_cleanup(0) <= CONTEXT_RUN_LENGTH;
+		out_bits_cleanup(0)		<= not all_bits_zero_flag;
+		out_valid_cleanup(0)		<= run_length_flag;
 		--position
-		out_contexts_cleanup(9) <= CONTEXT_UNIFORM;
-		out_bits_cleanup(9)		<= '1' when first_nonzero = 2 or first_nonzero = 3 else '0';
-		out_valid_cleanup(9)		<= '1' when run_length_flag = '1' and all_bits_zero_flag = '0' else '0';
-		out_contexts_cleanup(10)<= CONTEXT_UNIFORM;
-		out_bits_cleanup(10)		<= '1' when first_nonzero = 1 or first_nonzero = 3 else '0';
-		out_valid_cleanup(10)	<= run_length_flag and not all_bits_zero_flag;
+		out_contexts_cleanup(1) <= CONTEXT_UNIFORM;
+		out_bits_cleanup(1)		<= '1' when first_nonzero = 2 or first_nonzero = 3 else '0';
+		out_valid_cleanup(1)		<= '1' when run_length_flag = '1' and all_bits_zero_flag = '0' else '0';
+		out_contexts_cleanup(2)	<= CONTEXT_UNIFORM;
+		out_bits_cleanup(2)		<= '1' when first_nonzero = 1 or first_nonzero = 3 else '0';
+		out_valid_cleanup(2)		<= run_length_flag and not all_bits_zero_flag;
 		
 	--default values 
 	gen_default_significance: for i in 8 to 10 generate

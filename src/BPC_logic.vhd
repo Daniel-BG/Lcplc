@@ -50,7 +50,6 @@ entity BPC_logic is
 		input: in std_logic_vector((BITPLANES+1)*4 - 1 downto 0);
 		input_loc: in natural range 0 to COLS*STRIPS - 1;
 		input_en: in std_logic;
-		start: in std_logic;
 		--outputs
 		out_empty:	out std_logic; 
 		out_byte:	out std_logic_vector(7 downto 0); 
@@ -148,7 +147,7 @@ begin
 		);
 		
 	--BPC_core control process
-	BPC_core_control_comb: process(start, core_control_state_curr, BPC_core_done_next_cycle, BPC_fifo_full)
+	BPC_core_control_comb: process(clk_en, core_control_state_curr, BPC_core_done_next_cycle, BPC_fifo_full)
 	begin
 		core_control_state_next <= core_control_state_curr;
 		BPC_core_enable <= '0';
@@ -156,7 +155,7 @@ begin
 	
 		case core_control_state_curr is
 			when WAITING =>
-				if (start = '1') then
+				if (clk_en = '1') then
 					--generate next group of CxD pairs
 					BPC_core_enable <= '1';
 					core_control_state_next <= STREAM;
@@ -283,7 +282,7 @@ begin
 
 	
 	--should only be active when a space was available in FIFO_DATA and MQ_core_control_comb triggered an action
-	fifodata_in <= MQcoder_out_bytes & MQcoder_out_enable;
+	fifodata_in <= MQcoder_out_enable & MQcoder_out_bytes;
 	fifodata_wren <= MQcoder_out_enable(0) or MQcoder_out_enable(1);
 
 	--store arith coder output to serialize it
