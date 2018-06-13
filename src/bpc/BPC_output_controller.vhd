@@ -52,20 +52,40 @@ entity BPC_output_controller is
 end BPC_output_controller;
 
 architecture Behavioral of BPC_output_controller is
+	type serializer_state_t is (IDLE, EMIT_FIRST, STREAM);
+	signal state_curr, state_next: serializer_state_t;
 
-	signal counter, next_counter, next_counter_first, next_counter_after: natural range 0 to 11;
-	signal outputting: std_logic;
-	signal all_invalid: std_logic;
+	
+	signal counter, next_counter, first_counter, last_counter, following_counter: natural range 0 to 10;
 
 begin
 
-	all_invalid <= '1' when	in_valid(0) = '0' and in_valid(1) = '0' and in_valid(2) = '0' and in_valid(3) = '0' and 
-									in_valid(4) = '0' and in_valid(5) = '0' and in_valid(6) = '0' and in_valid(7) = '0' and 
-									in_valid(8) = '0' and in_valid(9) = '0' and in_valid(10) = '0' 
-								else '0';
+	first_counter <=		0 when in_valid(0) = '1' else
+								1 when in_valid(1) = '1' else
+								2 when in_valid(2) = '1' else
+								3 when in_valid(3) = '1' else
+								4 when in_valid(4) = '1' else
+								5 when in_valid(5) = '1' else
+								6 when in_valid(6) = '1' else
+								7 when in_valid(7) = '1' else
+								8 when in_valid(8) = '1' else
+								9 when in_valid(9) = '1' else
+								10;
+								
+	last_counter <=		10 when in_valid(10) = '1' else
+								9 when in_valid(9) = '1' else	
+								8 when in_valid(8) = '1' else	
+								7 when in_valid(7) = '1' else	
+								6 when in_valid(6) = '1' else	
+								5 when in_valid(5) = '1' else	
+								4 when in_valid(4) = '1' else	
+								3 when in_valid(3) = '1' else	
+								2 when in_valid(2) = '1' else	
+								1 when in_valid(1) = '1' else	
+								0;
 
 	--go to next valid byte
-	next_counter <=		1 when counter < 1 and in_valid(1) = '1' else
+	following_counter <=	1 when counter < 1 and in_valid(1) = '1' else
 								2 when counter < 2 and in_valid(2) = '1' else
 								3 when counter < 3 and in_valid(3) = '1' else
 								4 when counter < 4 and in_valid(4) = '1' else
@@ -75,63 +95,80 @@ begin
 								8 when counter < 8 and in_valid(8) = '1' else
 								9 when counter < 9 and in_valid(9) = '1' else
 								10;
-
-
-	serialize: process(clk, rst, clk_en)
+								
+	fsm_update: process(clk, rst, clk_en)
 	begin
 		if (rising_edge(clk)) then
-			--defaults
-			in_request <= '0';
-			out_context <= CONTEXT_ZERO;
-			out_symbol <= '0';
-			out_valid <= '0';
-			
-			--change state and output
 			if (rst = '1') then
 				counter <= 0;
-				outputting <= '0';
+				state_curr <= IDLE;
 			elsif (clk_en = '1') then
-				if (outputting = '0') then
-					--if data is available, change to outputting mode
-					if (in_available = '1') then
-						in_request <= '1';
-						outputting <= '1';
-					end if;
-				else
-					--try outputting if output queue is not full
-					if (out_full = '0') then
-						out_context <= in_contexts(counter);
-						out_symbol <= in_bits(counter);
-						out_valid <= in_valid(counter); --doesnt matter if we output an invalid one, it will just not be processed
-						--check if we have output all
-						if (counter = 10) then
-							counter <= 0;
-							outputting <= '0';
-							--we were gonna reset, might as well retrieve new data now
-							if (in_available = '1') then
-								in_request <= '1';
-								outputting <= '1';
-							end if;
-						else
-							counter <= next_counter;
-						end if;
-					end if;
-					--skip this batch if all invalid
-					if (all_invalid = '1') then
-						counter <= 0;
-						outputting <= '0';
-						--we were gonna reset, might as well retrieve new data now
-						if (in_available = '1') then
-							in_request <= '1';
-							outputting <= '1';
-						end if;
-					end if;
-				end if;
+				counter <= next_counter;
+				state_curr <= state_next;
 			end if;
 		end if;
-	
 	end process;
-
+												
+								
+	fsm_serialize: process(state_curr, in_available, first_counter, last_counter, following_counter, in_contexts, in_bits, in_valid, out_full)
+	begin
+		in_request <= '0';
+		state_next <= state_curr;
+		out_context <= CONTEXT_ZERO;
+		out_symbol <= '0';
+		out_valid <= '0';
+		next_counter <= 0;
+	
+		case state_curr is
+			when IDLE =>
+				if (in_available = '1' and out_full = '0') then
+					in_request <= '1';
+					state_next <= EMIT_FIRST;
+				end if;
+			when EMIT_FIRST =>
+				if (out_full = '0') then
+					out_context <= in_contexts(first_counter);
+					out_symbol <= in_bits(first_counter);
+					out_valid <= in_valid(first_counter);
+					--if only one symbol is present
+					if (first_counter = last_counter) then
+						--then directly ask for the next array if possible
+						--otherwise idle
+						if (in_available = '1') then
+							in_request <= '1';
+							state_next <= EMIT_FIRST;
+						else
+							state_next <= IDLE;
+						end if;
+					else
+						--stream the next symbols
+						state_next <= STREAM;
+						next_counter <= first_counter;
+					end if;
+				end if;
+			when STREAM =>
+				if (out_full = '0') then
+					out_context <= in_contexts(following_counter);
+					out_symbol <= in_bits(following_counter);
+					out_valid <= in_valid(following_counter);
+					--if only one symbol is present
+					if (following_counter = last_counter) then
+						--then directly ask for the next array if possible
+						--otherwise idle
+						if (in_available = '1') then
+							in_request <= '1';
+							state_next <= EMIT_FIRST;
+						else
+							state_next <= IDLE;
+						end if;
+					else
+						--stream the next symbols
+						state_next <= STREAM;
+						next_counter <= following_counter;
+					end if;
+				end if;
+		end case;
+	end process;
 
 end Behavioral;
 

@@ -147,7 +147,7 @@ begin
 		);
 		
 	--BPC_core control process
-	BPC_core_control_comb: process(clk_en, core_control_state_curr, BPC_core_done_next_cycle, BPC_fifo_full)
+	BPC_core_control_comb: process(clk_en, core_control_state_curr, BPC_core_done_next_cycle, BPC_fifo_full, BPC_core_out_valid)
 	begin
 		core_control_state_next <= core_control_state_curr;
 		BPC_core_enable <= '0';
@@ -162,8 +162,12 @@ begin
 				end if;
 			when STREAM =>
 				if (BPC_fifo_full = '0') then
-					--write previous
-					BPC_fifo_wr_en <= '1';
+					--write previous (only if there is something meaningful)
+					--TODO: this might be better latched (it adds ~300ns to critical path)
+					--so basically latch the outputs of BPC and wait a cycle before sending it to the BPC fifo
+					if (BPC_core_out_valid /= "00000000000") then
+						BPC_fifo_wr_en <= '1';
+					end if;
 					--generate next
 					BPC_core_enable <= '1';
 					if (BPC_core_done_next_cycle = '1') then
