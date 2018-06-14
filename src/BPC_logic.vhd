@@ -171,7 +171,7 @@ begin
 					--generate next
 					BPC_core_enable <= '1';
 					if (BPC_core_done_next_cycle = '1') then
-						core_control_state_next <= ENDING;
+						core_control_state_next <= FINISHED;
 					end if;
 				end if;
 			when ENDING =>
@@ -248,6 +248,8 @@ begin
 					MQcoder_control_state_next <= DATA_READY;
 				elsif core_control_state_curr = FINISHED then
 					if MQcoder_counter_curr = MQCODER_COUNT - 1 then
+						MQCoder_clk_en <= '1';
+						MQcoder_end_coding_en <= '1';
 						MQcoder_control_state_next <= PIPE_FLUSHED;
 					else
 						MQcoder_counter_next <= MQcoder_counter_curr + 1;
@@ -264,8 +266,15 @@ begin
 					end if;
 				end if;
 			when PIPE_FLUSHED =>
-				MQcoder_end_coding_en <= '1';
-				MQcoder_control_state_next <= FINISHED;
+				--basically waiting for the MQCODER pipeline to flush out
+				if MQcoder_counter_curr = 0 then
+					MQcoder_counter_next <= MQcoder_counter_curr + 1;
+					MQCoder_clk_en <= '1';
+				elsif MQcoder_counter_curr = MQCODER_COUNT - 1 then
+					MQcoder_control_state_next <= FINISHED;
+				else
+					MQcoder_counter_next <= MQcoder_counter_curr + 1;
+				end if;
 			when FINISHED =>
 				--nothing to do
 		end case;

@@ -29,7 +29,10 @@ use work.JypecConstants.all;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+use STD.textio.all;
+use ieee.std_logic_textio.all;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx primitives in this code.
@@ -37,6 +40,9 @@ use work.JypecConstants.all;
 --use UNISIM.VComponents.all;
 
 entity BPC_output_controller is
+	generic (
+		DEBUG: boolean := true
+	);
 	port (
 		clk, rst, clk_en: in std_logic;
 		in_contexts: in BPC_out_contexts_t;
@@ -57,8 +63,20 @@ architecture Behavioral of BPC_output_controller is
 
 	
 	signal counter, next_counter, first_counter, last_counter, following_counter: natural range 0 to 10;
+	
+	signal out_context_i: context_label_t;
+	signal out_symbol_i: std_logic;
+	signal out_valid_i: std_logic;
+	
+	--debug purposes
+	file out_file : text;
+	constant out_file_name: string := "out_CXD.bin";
 
 begin
+
+	out_symbol <= out_symbol_i;
+	out_context <= out_context_i;
+	out_valid <= out_valid_i;
 
 	first_counter <=		0 when in_valid(0) = '1' else
 								1 when in_valid(1) = '1' else
@@ -114,9 +132,9 @@ begin
 	begin
 		in_request <= '0';
 		state_next <= state_curr;
-		out_context <= CONTEXT_ZERO;
-		out_symbol <= '0';
-		out_valid <= '0';
+		out_context_i <= CONTEXT_ZERO;
+		out_symbol_i <= '0';
+		out_valid_i <= '0';
 		next_counter <= 0;
 	
 		case state_curr is
@@ -127,9 +145,9 @@ begin
 				end if;
 			when EMIT_FIRST =>
 				if (out_full = '0') then
-					out_context <= in_contexts(first_counter);
-					out_symbol <= in_bits(first_counter);
-					out_valid <= in_valid(first_counter);
+					out_context_i <= in_contexts(first_counter);
+					out_symbol_i <= in_bits(first_counter);
+					out_valid_i <= in_valid(first_counter);
 					--if only one symbol is present
 					if (first_counter = last_counter) then
 						--then directly ask for the next array if possible
@@ -148,9 +166,9 @@ begin
 				end if;
 			when STREAM =>
 				if (out_full = '0') then
-					out_context <= in_contexts(following_counter);
-					out_symbol <= in_bits(following_counter);
-					out_valid <= in_valid(following_counter);
+					out_context_i <= in_contexts(following_counter);
+					out_symbol_i <= in_bits(following_counter);
+					out_valid_i <= in_valid(following_counter);
 					--if only one symbol is present
 					if (following_counter = last_counter) then
 						--then directly ask for the next array if possible
@@ -169,6 +187,26 @@ begin
 				end if;
 		end case;
 	end process;
+	
+	gen_debug: if DEBUG generate
+		debug_process: process
+			variable out_line: line;
+		begin
+			file_open(out_file, out_file_name, write_mode);
+			--write until finished
+			while true loop
+				wait until rising_edge(clk);
+				if (out_valid_i = '1') then
+					write(out_line, out_context_i, right, 2);
+					write(out_line, " ", right, 1);
+					write(out_line, out_symbol_i, right, 1);
+					writeline(out_file, out_line);
+				end if;
+			end loop;
+		end process;
+	end generate;
+	
+
 
 end Behavioral;
 

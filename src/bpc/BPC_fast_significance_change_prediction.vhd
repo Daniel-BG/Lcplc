@@ -32,6 +32,7 @@ entity BPC_fast_significance_change_prediction is
 		bits, sign: in bit_strip;
 		--flags out
 		becomes_significant: out bit_strip;
+		is_significance_coded: out bit_strip;
 		--significance out
 		significance: out significance_strip
 	);
@@ -41,7 +42,7 @@ architecture Behavioral of BPC_fast_significance_change_prediction is
 
 	signal any_neigh_significant: bit_strip;
 
-	signal i_becomes_significant: bit_strip;
+	signal i_becomes_significant, is_significance_coded_i: bit_strip;
 	
 	signal i_significance: significance_strip;
 
@@ -49,6 +50,7 @@ begin
 
 	becomes_significant <= i_becomes_significant;
 	significance <= i_significance;
+	is_significance_coded <= is_significance_coded_i;
 
 	any_neigh_significant(0) <= '1' when 	
 									neighborhood(0) /= INSIGNIFICANT or 
@@ -61,6 +63,7 @@ begin
 									neighborhood(8) /= INSIGNIFICANT
 									else '0';
 	
+	is_significance_coded_i(0) <= '1' when any_neigh_significant(0) = '1' and neighborhood(4) = INSIGNIFICANT else '0';
 	i_becomes_significant(0) <= '1' when any_neigh_significant(0) = '1' and neighborhood(4) = INSIGNIFICANT and bits(0) = '1' else '0';
 	i_significance(0) <= neighborhood(4) when i_becomes_significant(0) = '0' else
 							SIGNIFICANT_POSITIVE when sign(0) = '0' else
@@ -77,7 +80,8 @@ begin
 									neighborhood(10) /= INSIGNIFICANT or
 									neighborhood(11) /= INSIGNIFICANT
 									else '0';
-															
+							
+	is_significance_coded_i(1) <= '1' when any_neigh_significant(1) = '1' and neighborhood(7) = INSIGNIFICANT else '0';
 	i_becomes_significant(1) <= '1' when any_neigh_significant(1) = '1' and neighborhood(7) = INSIGNIFICANT and bits(1) = '1' else '0';
 	i_significance(1) <= neighborhood(7) when i_becomes_significant(1) = '0' else
 							SIGNIFICANT_POSITIVE when sign(1) = '0' else
@@ -94,6 +98,7 @@ begin
 									neighborhood(13) /= INSIGNIFICANT
 									else '0';
 								
+	is_significance_coded_i(2) <= '1' when any_neigh_significant(2) = '1' and neighborhood(10) = INSIGNIFICANT else '0';
 	i_becomes_significant(2) <= '1' when any_neigh_significant(2) = '1' and neighborhood(10) = INSIGNIFICANT and bits(2) = '1' else '0';
 	i_significance(2) <= neighborhood(10) when i_becomes_significant(2) = '0' else
 							SIGNIFICANT_POSITIVE when sign(2) = '0' else
@@ -110,6 +115,7 @@ begin
 									neighborhood(17) /= INSIGNIFICANT
 									else '0';
 								
+	is_significance_coded_i(3) <= '1' when any_neigh_significant(3) = '1' and neighborhood(13) = INSIGNIFICANT else '0';
 	i_becomes_significant(3) <= '1' when any_neigh_significant(3) = '1' and neighborhood(13) = INSIGNIFICANT and bits(3) = '1' else '0';
 	i_significance(3) <= neighborhood(13) when i_becomes_significant(3) = '0' else
 							SIGNIFICANT_POSITIVE when sign(3) = '0' else

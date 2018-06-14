@@ -75,8 +75,6 @@ architecture Behavioral of BPC_significance_storage is
 			 strip_curr_m1, strip_curr_c, strip_curr_p1,
 			 strip_next_m1, strip_next_c, strip_next_p1: significance_strip_t;
 			 
-	signal next_input_main, next_input_curr, next_input_prev: std_logic_vector(7 downto 0);
-	
 begin
 
 	--always output inner state

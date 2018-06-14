@@ -150,6 +150,7 @@ begin
 			end if;
 		end loop;
 		report "Output file written!!!";
+		file_close(out_file);
 		wait; --do not write again
 	end process;
 

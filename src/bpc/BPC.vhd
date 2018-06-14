@@ -59,6 +59,10 @@ architecture Behavioral of BPC is
 	--constants
 	constant subband: subband_t := LL;
 	
+	--metasignals
+	signal enabled, clk_en_except_first: std_logic;
+	
+	
 	--sample signals
 	signal s0, s1, s2, s3: std_logic_vector(BITPLANES downto 0); --one extra for sign
 	signal sign_bit, magnitude_bit: bit_strip;
@@ -84,7 +88,7 @@ architecture Behavioral of BPC is
 	signal first_cleanup_pass_flag: std_logic;
 	
 	--iscoded signals
-	signal iscoded_flag_out, iscoded_flag_in: std_logic_vector(3 downto 0);
+	signal iscoded_flag_raw, iscoded_flag_out, iscoded_flag_in: std_logic_vector(3 downto 0);
 	
 	--first refinement signals
 	signal first_refinement_vector_in: std_logic_vector(3 downto 0);
@@ -92,7 +96,7 @@ architecture Behavioral of BPC is
 	
 	--significance coded flags
 	signal significance_coded_flag: bit_strip;
-	signal significance_aquired_flag_significance, significance_aquired_flag_cleanup: bit_strip;
+	signal significance_coded_flag_significance, significance_aquired_flag_significance, significance_aquired_flag_cleanup: bit_strip;
 	signal significance_aquired_significance, significance_aquired_cleanup: significance_strip;
 	
 	--cleanup signals
@@ -110,6 +114,19 @@ architecture Behavioral of BPC is
 		
 begin
 	out_done_next_cycle <= last_coord;
+	
+	delay_clk_en: process(clk, clk_en, rst)
+	begin
+		if rising_edge(clk) then
+			if (rst = '1') then
+				enabled <= '0';
+			elsif (clk_en = '1') then
+				enabled <= '1';
+			end if;
+		end if;
+	end process;
+	clk_en_except_first <= '0' when enabled = '0' else clk_en;
+	
 	--ALIASES
 	----------------------------------
 	--(0) (1) (2) ---(pm1)(pp3)(pp7)--
@@ -124,7 +141,7 @@ begin
 	full_neighborhood_matrix(2)	<= full_neighborhood.prev_p7;
 	full_neighborhood_matrix(3)	<= full_neighborhood.curr_m4;
 	full_neighborhood_matrix(4)	<= full_neighborhood.curr_c;
-	full_neighborhood_matrix(5)	<= full_neighborhood.curr_p5;
+	full_neighborhood_matrix(5)	<= full_neighborhood.curr_p4;
 	full_neighborhood_matrix(6)	<= full_neighborhood.curr_m3;
 	full_neighborhood_matrix(7)	<= full_neighborhood.curr_p1;
 	full_neighborhood_matrix(8)	<= full_neighborhood.curr_p5;
@@ -143,10 +160,10 @@ begin
 	sign_bit(1) <= s1(BITPLANES);
 	sign_bit(2) <= s2(BITPLANES);
 	sign_bit(3) <= s3(BITPLANES);
-	magnitude_bit(0) <= shift_left(unsigned(s0), curr_bitplane + 1)(BITPLANES - 1);
-	magnitude_bit(1) <= shift_left(unsigned(s1), curr_bitplane + 1)(BITPLANES - 1);
-	magnitude_bit(2) <= shift_left(unsigned(s2), curr_bitplane + 1)(BITPLANES - 1);
-	magnitude_bit(3) <= shift_left(unsigned(s3), curr_bitplane + 1)(BITPLANES - 1);
+	magnitude_bit(0) <= shift_left(unsigned(s0), curr_bitplane + 1)(BITPLANES);
+	magnitude_bit(1) <= shift_left(unsigned(s1), curr_bitplane + 1)(BITPLANES);
+	magnitude_bit(2) <= shift_left(unsigned(s2), curr_bitplane + 1)(BITPLANES);
+	magnitude_bit(3) <= shift_left(unsigned(s3), curr_bitplane + 1)(BITPLANES);
 	
 	sample_mem: entity work.BPC_mem
 	generic map (WIDTH => COLS, STRIPS => STRIPS, BIT_DEPTH => BITPLANES + 1)
@@ -163,7 +180,7 @@ begin
 			STRIPS => STRIPS, COLS => COLS, BITPLANES => BITPLANES
 		)
 		port map(
-			clk => clk, rst => rst, clk_en => clk_en,
+			clk => clk, rst => rst, clk_en => clk_en_except_first,
 			strip_out => curr_strip,
 			col_out => curr_col,
 			bitplane_out => curr_bitplane,
@@ -204,7 +221,7 @@ begin
 		port map (
 			clk => clk, rst => rst, clk_en => clk_en,
 			in_value => iscoded_flag_in,
-			out_value => iscoded_flag_out
+			out_value => iscoded_flag_raw
 		);	
 		
 	first_refinement_flag_matrix: entity work.BPC_flag_matrix
@@ -220,6 +237,7 @@ begin
 			neighborhood => full_neighborhood_matrix,
 			bits => magnitude_bit,
 			sign => sign_bit,
+			is_significance_coded => significance_coded_flag_significance,
 			becomes_significant => significance_aquired_flag_significance, --maybe tell which ones are enabled? (e.g: significance => all, cleanup => from jth)
 			significance => significance_aquired_significance
 		);
@@ -239,6 +257,8 @@ begin
 	
 	--SIGNIFICANCE AND REFINEMENT PASSES CALCULATIONS
 	gen_context_formation: for i in 0 to 3 generate
+		--iscoded 
+		iscoded_flag_out(i) <= '0' when curr_bitplane = 0 else iscoded_flag_raw(i);
 		--top case is cascaded and cannot be directly connected
 		first_case: if i = 0 generate
 			neighborhood(0).top	<= full_neighborhood.prev_p3;
@@ -267,8 +287,8 @@ begin
 				sign_bit_xor => sign_bit_xor(i)
 			);
 
-		--this flag means that significance coding is to be applied to the i-th sample. This DOES NOT mean the sample becomes significant
-		significance_coded_flag(i) <= '1' when (curr_pass = SIGNIFICANCE and significance_aquired_flag_significance(i) = '1')
+		--this flag means that significance coding is to be applied to the i-th sample. This DOES mean the sample becomes significant
+		significance_coded_flag(i) <= '1' when (curr_pass = SIGNIFICANCE and significance_coded_flag_significance(i) = '1')
 														or	(curr_pass = CLEANUP and (run_length_flag = '0' or (run_length_flag = '1' and significance_aquired_flag_cleanup(i) = '1')))
 												else '0';
 			
@@ -285,7 +305,7 @@ begin
 										  else '0';
 		
 		--flag indicating it is the first time this position is refined
-		first_refinement_vector_in(i) <= '1' when curr_pass = CLEANUP and curr_bitplane = BITPLANES - 1 else
+		first_refinement_vector_in(i) <= '1' when curr_pass = CLEANUP and curr_bitplane = 0 else
 													'0' when curr_pass = REFINEMENT and full_neighborhood_matrix(4+3*i) /= INSIGNIFICANT and iscoded_flag_out(i) = '0' else
 													first_refinement_vector_out(i);
 	
@@ -337,12 +357,12 @@ begin
 			--magnitude
 			out_contexts_significance(i*2)	<= significance_propagation_context(i);
 			out_bits_significance(i*2) 	 	<= magnitude_bit(i);
-			out_valid_significance(i*2)	 	<= significance_coded_flag(i);
+			out_valid_significance(i*2)	 	<= significance_coded_flag_significance(i);
 			
 			--sign
 			out_contexts_significance(i*2+1)	<= sign_bit_decoding_context(i);
 			out_bits_significance(i*2+1) 		<= sign_bit(i) xor sign_bit_xor(i);
-			out_valid_significance(i*2+1)		<= '1' when magnitude_bit(i) = '1' and significance_coded_flag(i) = '1' else '0';
+			out_valid_significance(i*2+1)		<= '1' when magnitude_bit(i) = '1' and significance_coded_flag_significance(i) = '1' else '0';
 			
 		--REFINEMENT
 			out_contexts_refinement(i)		<= magnitude_refinement_context(i);
@@ -359,7 +379,7 @@ begin
 			--sign
 			out_contexts_cleanup(4+i*2)<= sign_bit_decoding_context(i);
 			out_bits_cleanup(4+i*2) 	<= sign_bit(i) xor sign_bit_xor(i);
-			out_valid_cleanup(4+i*2)	<= '0' when iscoded_flag_out(i) = '1' else
+			out_valid_cleanup(4+i*2)	<= '0' when iscoded_flag_out(i) = '1' or magnitude_bit(i) = '0' else --can probably be simplified
 													'1' when run_length_flag = '0' or (all_bits_zero_flag = '0' and first_nonzero <= i) else '0';		
 	end generate;
 	
