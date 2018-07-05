@@ -113,7 +113,6 @@ architecture Behavioral of BPC is
 	signal out_valid_significance, out_valid_refinement, out_valid_cleanup: BPC_out_valid_t;
 		
 begin
-	out_done_next_cycle <= last_coord;
 	
 	delay_clk_en: process(clk, clk_en, rst)
 	begin
@@ -419,6 +418,9 @@ begin
 	out_valid <=	out_valid_significance when curr_pass = SIGNIFICANCE else
 						out_valid_refinement when curr_pass = REFINEMENT else
 						out_valid_cleanup;
+	
+	--DONE_NEXT
+	out_done_next_cycle <= last_coord;
 	
 end Behavioral;
 

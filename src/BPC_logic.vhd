@@ -41,8 +41,10 @@ entity BPC_logic is
 		--number of elements in inner queues
 		BPC_OUT_QUEUE_SIZE: integer := 32;
 		BPC_CXD_QUEUE_SIZE: integer := 32;
-		BPC_MQO_QUEUE_SIZE: integer := 32;
-		BPC_BYT_QUEUE_SIZE: integer := 32
+		--BPC_MQO_QUEUE_SIZE: integer := 32;
+		--BPC_BYT_QUEUE_SIZE: integer := 32;
+		BOUND_UPDATE_FIFO_DEPTH: positive := 32;
+		OUT_FIFO_DEPTH: positive := 32
 	);
 	port (
 		clk, rst, clk_en: in std_logic;
@@ -59,16 +61,24 @@ entity BPC_logic is
 end BPC_logic;
 
 architecture Behavioral of BPC_logic is
+	--BPC_LOGIC control
+	type logic_control_state_t is (IDLE, BPC_CORE_PROCESSING, BPC_CORE_FLUSHING, 
+											BPC_SERIALIZER_PROCESSING, BPC_SERIALIZER_FLUSHING, ENDING_MQ, 
+											FLUSHING_LAST_BYTES, BLOCK_FINISHED);
+	signal logic_control_state_curr, logic_control_state_next: logic_control_state_t;
+
 	--BPC core control
 	type core_control_state_t is (WAITING, STREAM, ENDING, FINISHED);
 	signal core_control_state_curr, core_control_state_next: core_control_state_t;
 	signal BPC_core_enable: std_logic;
+	signal BPC_core_done: std_logic;
 
 	--BPC_core signals
-	signal BPC_core_out_contexts: BPC_out_contexts_t;
-	signal BPC_core_out_bits: BPC_out_bits_t;
-	signal BPC_core_out_valid: BPC_out_valid_t;
-	signal BPC_core_done_next_cycle: std_logic;
+	signal BPC_core_out_contexts, BPC_core_out_contexts_latched: BPC_out_contexts_t;
+	signal BPC_core_out_bits, BPC_core_out_bits_latched: BPC_out_bits_t;
+	signal BPC_core_out_valid, BPC_core_out_valid_latched: BPC_out_valid_t;
+	signal BPC_core_done_next_cycle, BPC_core_done_next_cycle_latched: std_logic;
+	signal BPC_fifo_wr_en_latched: std_logic;
 
 	--BPC_fifo signals
 	signal BPC_fifo_empty, BPC_fifo_full: std_logic;
@@ -82,6 +92,7 @@ architecture Behavioral of BPC_logic is
 	signal BPC_serial_out_context: context_label_t;
 	signal BPC_serial_out_valid: std_logic;
 	signal BPC_serial_in_available: std_logic;
+	signal BPC_serial_idle: std_logic;
 	--CXD queue signals
 	signal CXD_queue_full, CXD_queue_empty, CXD_queue_rd_en: std_logic;
 	signal CXD_queue_out_context: context_label_t;
@@ -89,12 +100,13 @@ architecture Behavioral of BPC_logic is
 	
 	--arith coder control
 	type MQcoder_control_state_t is (IDLE, DATA_READY, PIPE_FLUSHED, FINISHED);
-	signal MQcoder_control_state_next, MQcoder_control_state_curr: MQcoder_control_state_t;
+	--signal MQcoder_control_state_next, MQcoder_control_state_curr: MQcoder_control_state_t;
 	constant MQCODER_COUNT: integer := 4;
 	signal MQcoder_clk_en, MQcoder_end_coding_en: std_logic;
 	signal MQcoder_out_bytes: std_logic_vector(15 downto 0);
 	signal MQcoder_out_enable: std_logic_vector(1 downto 0);
-	signal MQcoder_counter_next, MQcoder_counter_curr: natural range 0 to MQCODER_COUNT - 1;
+	--signal MQcoder_counter_next, MQcoder_counter_curr: natural range 0 to MQCODER_COUNT - 1;
+	signal MQcoder_finished: std_logic;
 	
 	--FIFO FOR RAW arit coded rata
 	signal fifodata_wren, fifodata_readen, fifodata_empty, fifodata_full: std_logic;
@@ -102,31 +114,89 @@ architecture Behavioral of BPC_logic is
 	
 	--controlling raw fifo to serialized fifo
 	type output_control_t is (IDLE, OUTPUT_ONE, OUTPUT_TWO);
-	signal out_control_state_curr, out_control_state_next: output_control_t;
+	--signal out_control_state_curr, out_control_state_next: output_control_t;
 	signal output_data_curr, output_data_next: std_logic_vector(15 downto 0);
 	signal output_data_valid_curr, output_data_valid_next: std_logic_vector(1 downto 0);
 	signal outputting: std_logic;
 	
 		
 	--FIFO FOR byte by byte output
-	signal fifoout_wren, fifoout_full, fifoout_readen, fifoout_empty: std_logic;
-	signal fifoout_in, fifoout_out: std_logic_vector(7 downto 0);
+	signal out_empty_in: std_logic;
+	
 
 begin
+	out_empty <= out_empty_in;
+	--signals for flushing the pipeline
+	--BPC_core_done
+	--BPC_fifo_empty
+	--BPC_serial_idle
+	--CXD_queue_empty
+
+	--FULL LOGIC CONTROL
+	logic_state_update: process(logic_control_state_curr, clk_en, BPC_core_done, 
+				BPC_fifo_empty, BPC_serial_idle, CXD_queue_empty, MQcoder_finished,
+				out_empty_in)
+	begin
+		logic_control_state_next <= logic_control_state_curr;
+		done <= '0';
+		MQcoder_end_coding_en <= '0';
+		
+		case logic_control_state_curr is
+			when IDLE =>
+				if clk_en = '1' then
+					logic_control_state_next <= BPC_CORE_PROCESSING;
+				end if;
+			when BPC_CORE_PROCESSING =>
+				if BPC_core_done = '1' then
+					logic_control_state_next <= BPC_CORE_FLUSHING;
+				end if;
+			when BPC_CORE_FLUSHING =>
+				if BPC_fifo_empty = '1' then
+					logic_control_state_next <= BPC_SERIALIZER_PROCESSING;
+				end if;
+			when BPC_SERIALIZER_PROCESSING =>
+				if BPC_serial_idle = '1' then
+					logic_control_state_next <= BPC_SERIALIZER_FLUSHING;
+				end if;
+			when BPC_SERIALIZER_FLUSHING =>
+				if CXD_queue_empty = '1' then
+					logic_control_state_next <= ENDING_MQ;
+				end if;
+			when ENDING_MQ =>
+				MQcoder_end_coding_en <= '1';
+				if MQcoder_finished = '1' then
+					logic_control_state_next <= FLUSHING_LAST_BYTES;
+				end if;
+			--todo insert oxfffe marker
+			when FLUSHING_LAST_BYTES =>
+				if out_empty_in = '1' then
+					logic_control_state_next <= BLOCK_FINISHED;
+				end if;
+			when BLOCK_FINISHED =>
+				done <= '1';
+		end case;
+	end process;
+
+	
+
+
+
 
 	state_update: process(clk, rst, clk_en, core_control_state_next)
 	begin
 		if (rising_edge(clk)) then
 			if (rst = '1') then
 				core_control_state_curr <= WAITING;
-				MQcoder_control_state_curr <= IDLE;
-				out_Control_state_curr <= IDLE;
-				MQcoder_counter_curr <= 0;
+				--MQcoder_control_state_curr <= IDLE;
+				--out_Control_state_curr <= IDLE;
+				--MQcoder_counter_curr <= 0;
+				logic_control_state_curr <= IDLE;
 			elsif (clk_en = '1') then
 				core_control_state_curr <= core_control_state_next;
-				MQcoder_control_state_curr <= MQcoder_control_state_next;
-				out_Control_state_curr <= out_control_state_next;
-				MQcoder_counter_curr <= MQcoder_counter_next;
+				--MQcoder_control_state_curr <= MQcoder_control_state_next;
+				--out_Control_state_curr <= out_control_state_next;
+				--MQcoder_counter_curr <= MQcoder_counter_next;
+				logic_control_state_curr <= logic_control_state_next;
 			end if;
 		end if;
 	end process;
@@ -152,6 +222,7 @@ begin
 		core_control_state_next <= core_control_state_curr;
 		BPC_core_enable <= '0';
 		BPC_fifo_wr_en <= '0';
+		BPC_core_done <= '0';
 	
 		case core_control_state_curr is
 			when WAITING =>
@@ -180,19 +251,36 @@ begin
 					core_control_state_next <= FINISHED;
 				end if;
 			when FINISHED =>
+				BPC_core_done <= '1';
 				--nothing to do. stay until reset
 		end case;
 	end process;
+	
+	
+	latch_bpc_fifo_input: process(clk, rst)
+	begin
+		if (rising_edge(clk)) then
+			if (rst = '1') then
+				BPC_fifo_wr_en_latched <= '0';
+			else
+				BPC_core_out_contexts_latched <= BPC_core_out_contexts;
+				BPC_core_out_bits_latched <= BPC_core_out_bits;
+				BPC_core_out_valid_latched <= BPC_core_out_valid;
+				BPC_core_done_next_cycle_latched <= BPC_core_done_next_cycle;
+				BPC_fifo_wr_en_latched <= BPC_fifo_wr_en;
+			end if;
+		end if;
+	end process;	
 		
 	BPC_fifo: entity work.BPC_core_fifo
 		generic map (QUEUE_SIZE => BPC_OUT_QUEUE_SIZE)
 		port map (
 			clk => clk, rst => rst,
 			--inputs
-			wr_en => BPC_fifo_wr_en,
-			in_contexts => BPC_core_out_contexts,
-			in_bits => BPC_core_out_bits,
-			in_valid => BPC_core_out_valid,
+			wr_en => BPC_fifo_wr_en_latched,
+			in_contexts => BPC_core_out_contexts_latched,
+			in_bits => BPC_core_out_bits_latched,
+			in_valid => BPC_core_out_valid_latched,
 			--outputs
 			rd_en => BPC_fifo_rd_en,
 			out_contexts => BPC_fifo_out_contexts,
@@ -207,7 +295,7 @@ begin
 		
 	BPC_output_serializer: entity work.BPC_output_controller
 		port map (
-			clk => clk, rst => rst, clk_en => '1',
+			clk => clk, rst => rst, --enabled by out_full
 			in_contexts => BPC_fifo_out_contexts,
 			in_bits => BPC_fifo_out_bits,
 			in_valid => BPC_fifo_out_valid,
@@ -216,7 +304,8 @@ begin
 			in_request => BPC_fifo_rd_en,
 			out_context => BPC_serial_out_context,
 			out_symbol => BPC_serial_out_bit,
-			out_valid => BPC_serial_out_valid
+			out_valid => BPC_serial_out_valid,
+			out_idle => BPC_serial_idle
 		);
 		
 		
@@ -231,157 +320,106 @@ begin
 			out_context => CXD_queue_out_context,
 			out_bit => CXD_queue_out_bit
 		);
+		
+--	MQcoder_control: process
+--	
+--	begin
+--		case MQcoder_control_state_curr is
+--			when IDLE => 
+--				if CXD_queue_empty = '0' then
+--					CXD_queue_rd_en <= '1';
+--					MQcoder_control_state_next <= DATA_READY;
+--				
+--			when DATA_READY =>
+--			
+--			when FINISHED =>
+--			
+--		end case;
+--	
+--	end process;
 
 	--TODO add some kind of control here for the end_coding_en as it could be fired before ready
-	MQcoder_control: process(MQcoder_control_state_curr, CXD_queue_empty, core_control_state_curr, fifodata_full, mqcoder_counter_curr)
-	begin
-		CXD_queue_rd_en <= '0';
-		MQcoder_control_state_next <= MQcoder_control_state_curr;
-		MQcoder_clk_en <= '0';
-		MQcoder_end_coding_en <= '0';
-		MQcoder_counter_next <= 0;
-		
-		case MQcoder_control_state_curr is
-			when IDLE =>
-				if CXD_queue_empty = '0' then
-					CXD_queue_rd_en <= '1';
-					MQcoder_control_state_next <= DATA_READY;
-				elsif core_control_state_curr = FINISHED then
-					if MQcoder_counter_curr = MQCODER_COUNT - 1 then
-						MQCoder_clk_en <= '1';
-						MQcoder_end_coding_en <= '1';
-						MQcoder_control_state_next <= PIPE_FLUSHED;
-					else
-						MQcoder_counter_next <= MQcoder_counter_curr + 1;
-					end if;
-				end if;
-			when DATA_READY =>
-				if (fifodata_full = '0') then
-					MQCoder_clk_en <= '1';
-					if CXD_queue_empty = '0' then
-						CXD_queue_rd_en <= '1';
-						MQcoder_control_state_next <= DATA_READY;
-					else
-						MQcoder_control_state_next <= IDLE;
-					end if;
-				end if;
-			when PIPE_FLUSHED =>
-				--basically waiting for the MQCODER pipeline to flush out
-				if MQcoder_counter_curr = 0 then
-					MQcoder_counter_next <= MQcoder_counter_curr + 1;
-					MQCoder_clk_en <= '1';
-				elsif MQcoder_counter_curr = MQCODER_COUNT - 1 then
-					MQcoder_control_state_next <= FINISHED;
-				else
-					MQcoder_counter_next <= MQcoder_counter_curr + 1;
-				end if;
-			when FINISHED =>
-				--nothing to do
-		end case;
-	end process;
+--	MQcoder_control: process(MQcoder_control_state_curr, CXD_queue_empty, core_control_state_curr, fifodata_full, mqcoder_counter_curr)
+--	begin
+--		CXD_queue_rd_en <= '0';
+--		MQcoder_control_state_next <= MQcoder_control_state_curr;
+--		MQcoder_clk_en <= '0';
+--		MQcoder_end_coding_en <= '0';
+--		MQcoder_counter_next <= 0;
+--		
+--		case MQcoder_control_state_curr is
+--			when IDLE =>
+--				if CXD_queue_empty = '0' then
+--					CXD_queue_rd_en <= '1';
+--					MQcoder_control_state_next <= DATA_READY;
+--				elsif core_control_state_curr = FINISHED then
+--					if MQcoder_counter_curr = MQCODER_COUNT - 1 then
+--						MQCoder_clk_en <= '1';
+--						MQcoder_end_coding_en <= '1';
+--						MQcoder_control_state_next <= PIPE_FLUSHED;
+--					else
+--						MQcoder_counter_next <= MQcoder_counter_curr + 1;
+--					end if;
+--				end if;
+--			when DATA_READY =>
+--				if (fifodata_full = '0') then
+--					MQCoder_clk_en <= '1';
+--					if CXD_queue_empty = '0' then
+--						CXD_queue_rd_en <= '1';
+--						MQcoder_control_state_next <= DATA_READY;
+--					else
+--						MQcoder_control_state_next <= IDLE;
+--					end if;
+--				end if;
+--			when PIPE_FLUSHED =>
+--				--basically waiting for the MQCODER pipeline to flush out
+--				if MQcoder_counter_curr = 0 then
+--					MQcoder_counter_next <= MQcoder_counter_curr + 1;
+--					MQCoder_clk_en <= '1';
+--				elsif MQcoder_counter_curr = MQCODER_COUNT - 1 then
+--					MQcoder_control_state_next <= FINISHED;
+--				else
+--					MQcoder_counter_next <= MQcoder_counter_curr + 1;
+--				end if;
+--			when FINISHED =>
+--				--nothing to do
+--		end case;
+--	end process;
 	
 		
-	coder: entity work.MQCoder_fast
-		port map(
-			clk => clk, rst => rst,
-			clk_en => MQcoder_clk_en,
-			in_bit => CXD_queue_out_bit,
-			end_coding_enable => MQcoder_end_coding_en,
-			in_context => CXD_queue_out_context,
-			out_bytes => MQcoder_out_bytes,
-			out_enable => MQcoder_out_enable
-		);
+--	coder: entity work.MQCoder_fast
+--		port map(
+--			clk => clk, rst => rst,
+--			clk_en => MQcoder_clk_en,
+--			in_bit => CXD_queue_out_bit,
+--			end_coding_enable => MQcoder_end_coding_en,
+--			in_context => CXD_queue_out_context,
+--			out_bytes => MQcoder_out_bytes,
+--			out_enable => MQcoder_out_enable
+--		);
 
-
-	
-	--should only be active when a space was available in FIFO_DATA and MQ_core_control_comb triggered an action
-	fifodata_in <= MQcoder_out_enable & MQcoder_out_bytes;
-	fifodata_wren <= MQcoder_out_enable(0) or MQcoder_out_enable(1);
-
-	--store arith coder output to serialize it
-	FIFO_DATA: entity work.STD_FIFO
-		generic map (DATA_WIDTH => 18, FIFO_DEPTH => BPC_MQO_QUEUE_SIZE)
+	coder: entity work.MQCoder_piped
+		generic map (
+			BOUND_UPDATE_FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH,
+			OUT_FIFO_DEPTH => OUT_FIFO_DEPTH
+		)
 		port map (
 			clk => clk,
 			rst => rst,
-			WriteEn	=> fifodata_wren,
-			datain	=> fifodata_in,
-			ReadEn	=> fifodata_readen,
-			dataout	=> fifodata_out,
-			Empty		=> fifodata_empty,
-			Full		=> fifodata_full
+			in_bit => CXD_queue_out_bit,
+			end_coding_enable => MQcoder_end_coding_en,
+			in_context => CXD_queue_out_context,
+			in_empty => CXD_queue_empty,
+			in_request => CXD_queue_rd_en,
+			fifo_ob_readen => out_readen,
+			fifo_ob_out => out_byte,
+			fifo_ob_empty => out_empty_in,
+			mq_finished => MQcoder_finished
 		);
 		
-	--coder output control
-	take_out: process (out_control_state_curr, fifodata_empty, fifodata_out, fifoout_full)
-	begin
-		out_control_state_next <= out_control_state_curr;
-		fifodata_readen <= '0';
-		fifoout_wren <= '0';
-		fifoout_in <= (others => '0');
-	
-		case (out_control_state_curr) is
-			when IDLE =>
-				if (fifodata_empty = '0') then
-					out_control_state_next <= OUTPUT_ONE;
-					fifodata_readen <= '1';
-				end if;
-			when OUTPUT_ONE =>
-				if (fifodata_out(17) = '1') then
-					if (fifoout_full = '0') then
-						fifoout_wren <= '1';
-						fifoout_in <= fifodata_out(15 downto 8);
-						out_control_state_next <= OUTPUT_TWO;
-					end if;
-				else
-					out_control_state_next <= OUTPUT_TWO;
-				end if;
-			when OUTPUT_TWO =>
-				if (fifodata_out(16) = '1') then
-					if (fifoout_full = '0') then
-						fifoout_wren <= '1';
-						fifoout_in <= fifodata_out(7 downto 0);
-						if (fifodata_empty = '0') then
-							out_control_state_next <= OUTPUT_ONE;
-							fifodata_readen <= '1';
-						else
-							out_control_state_next <= IDLE;
-						end if;
-					end if;
-				else
-					if (fifodata_empty = '0') then
-						out_control_state_next <= OUTPUT_ONE;
-						fifodata_readen <= '1';
-					else
-						out_control_state_next <= IDLE;
-					end if;
-				end if;
-		end case;
-	end process;
+		
 
-	
-	--FIFO for storing the data that has to be sent back
-	FIFO_OUT: entity work.STD_FIFO
-		generic map (
-			DATA_WIDTH => 8, FIFO_DEPTH => BPC_BYT_QUEUE_SIZE
-		)
-		port map (
-			clk => clk, rst => rst,
-			WriteEn	=> fifoout_wren,
-			datain	=> fifoout_in,
-			ReadEn	=> fifoout_readen,
-			dataout	=> fifoout_out,
-			Empty		=> fifoout_empty,
-			Full		=> fifoout_full
-		);
 		
-	
-	--Map final outputs
-	out_empty <= fifoout_empty;
-	out_byte <= fifoout_out;
-	fifoout_readen <= out_readen; 
-	--done when there is nothing left in queues and control units are idle
-	done <= '1' when out_control_state_curr = IDLE and MQcoder_control_state_curr = FINISHED and fifoout_empty = '1' and fifodata_empty = '1' else '0';	
 		
 end Behavioral;
 

@@ -26,6 +26,10 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.JypecConstants.all;
 
+use STD.textio.all;
+use ieee.std_logic_textio.all;
+
+
 
 --MQCODER entity. No generics, can keep coding forever
 entity MQCoder is
@@ -133,6 +137,16 @@ architecture Behavioral of MQCoder is
 	signal bytes_generated_plus_one: bytes_generated_t; 
 	
 	
+	--debug purposes
+	signal probability_watcher: std_logic_vector(15 downto 0);
+	signal hit_watcher: std_logic;
+	signal num_shifts_watcher: std_logic_vector(3 downto 0);
+	
+	file out_file, out_file_prob : text;
+	constant out_file_name: string := "out_CXD_old.bin";
+	constant out_file_name_prob: string := "out_probhit_old.bin";
+	
+	
 begin
 
 
@@ -219,9 +233,12 @@ begin
 					original_prediction := '1';
 				end if;
 			end if;
-			--adjust interval
 			
+			--adjust interval			
+			probability_watcher <= (others => '0');-----------------------
 			if (in_bit = original_prediction) then
+				probability_watcher <= std_logic_vector(to_unsigned(normalized_probability, 16));-----------------------
+				hit_watcher <= '1';-----------------
 				next_normalized_lower_bound := next_normalized_lower_bound + normalized_probability;
 				--only three posibilities. Nothing, renorm once or renorm twice
 				if (next_normalized_interval(15) = '1') then
@@ -235,9 +252,11 @@ begin
 					next_normalized_interval := next_normalized_interval(13 downto 0) & "00";
 				end if;
 			else
+				hit_watcher <= '0'; ------------------------
 				next_normalized_interval := to_unsigned(SHIFTED_P_ESTIMATE(current_table.state), 16);
 				number_of_shifts := P_ESTIMATE_SHIFT(current_table.state);
 			end if;
+			num_shifts_watcher <= std_logic_vector(to_unsigned(number_of_shifts, 4)); ---------------------
 			
 			--change state
 			if (number_of_shifts /= 0) then
@@ -365,6 +384,42 @@ begin
 			out_enable <= next_output_enable;
 		end if;
 	end process update_mqcoder;
+	
+	
+
+	debug_process: process
+		variable out_line: line;
+	begin
+		file_open(out_file, out_file_name, write_mode);
+		--write until finished
+		while true loop
+			wait until rising_edge(clk);
+			if (clk_en = '1') then
+				write(out_line, in_context, right, 2);
+				write(out_line, " ", right, 1);
+				write(out_line, in_bit, right, 1);
+				writeline(out_file, out_line);
+			end if;
+		end loop;
+	end process;
+	
+	debug_process_prob: process
+		variable out_line: line;
+	begin
+		file_open(out_file_prob, out_file_name_prob, write_mode);
+		--write until finished
+		while true loop
+			wait until rising_edge(clk);
+			if (clk_en = '1' and (hit_watcher = '1' or num_shifts_watcher /= "0000") and hit_watcher /= 'U') then
+				write(out_line, probability_watcher, right, 16);
+				write(out_line, " ", right, 1);
+				write(out_line, num_shifts_watcher, right, 4);
+				write(out_line, " ", right, 1);
+				write(out_line, hit_watcher, right, 1);
+				writeline(out_file_prob, out_line);
+			end if;
+		end loop;
+	end process;
 
 
 end Behavioral;

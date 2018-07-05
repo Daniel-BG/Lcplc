@@ -68,20 +68,38 @@ begin
 	end generate;
 
 
-	--map to standard fifo queue	
-	INNER_FIFO: entity work.STD_FIFO
+	INNER_FIFO: entity work.LOOKAHEAD_FIFO
 		generic map (
-			DATA_WIDTH => 77, FIFO_DEPTH => QUEUE_SIZE
+			DATA_WIDTH => 77, FIFO_DEPTH => QUEUE_SIZE, LOOK_AHEAD => 1
 		)
 		port map (
 			clk => clk, rst => rst,
-			WriteEn	=> wr_en,
-			datain	=> in_fifo,
-			ReadEn	=> rd_en,
-			dataout	=> out_fifo,
-			Empty		=> empty,
-			Full		=> full
+			wren => wr_en,
+			datain => in_fifo,
+			readen => rd_en,
+			dataout => out_fifo,
+			empty => empty,
+			full => open,
+			lah_empty => open,
+			lah_full => full
 		);
+	
+
+
+	--map to standard fifo queue	
+--	INNER_FIFO: entity work.STD_FIFO
+--		generic map (
+--			DATA_WIDTH => 77, FIFO_DEPTH => QUEUE_SIZE
+--		)
+--		port map (
+--			clk => clk, rst => rst,
+--			WriteEn	=> wr_en,
+--			datain	=> in_fifo,
+--			ReadEn	=> rd_en,
+--			dataout	=> out_fifo,
+--			Empty		=> empty,
+--			Full		=> full
+--		);
 
 end Behavioral;
 

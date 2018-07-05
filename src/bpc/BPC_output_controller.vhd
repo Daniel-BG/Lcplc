@@ -41,10 +41,10 @@ use ieee.std_logic_textio.all;
 
 entity BPC_output_controller is
 	generic (
-		DEBUG: boolean := true
+		DEBUG: boolean := false
 	);
 	port (
-		clk, rst, clk_en: in std_logic;
+		clk, rst: in std_logic;
 		in_contexts: in BPC_out_contexts_t;
 		in_bits: in BPC_out_bits_t;
 		in_valid: in BPC_out_valid_t;
@@ -53,7 +53,8 @@ entity BPC_output_controller is
 		in_request: out std_logic;
 		out_context: out context_label_t;
 		out_symbol: out std_logic;
-		out_valid: out std_logic
+		out_valid: out std_logic;
+		out_idle: out std_logic			--indicate if this module is doing any processing or if it is idle
 	);
 end BPC_output_controller;
 
@@ -70,13 +71,14 @@ architecture Behavioral of BPC_output_controller is
 	
 	--debug purposes
 	file out_file : text;
-	constant out_file_name: string := "out_CXD.bin";
+	constant out_file_name: string := "out_CXD_bpc.bin";
 
 begin
 
 	out_symbol <= out_symbol_i;
 	out_context <= out_context_i;
 	out_valid <= out_valid_i;
+	out_idle <= '1' when state_curr = IDLE else '0';
 
 	first_counter <=		0 when in_valid(0) = '1' else
 								1 when in_valid(1) = '1' else
@@ -114,13 +116,13 @@ begin
 								9 when counter < 9 and in_valid(9) = '1' else
 								10;
 								
-	fsm_update: process(clk, rst, clk_en)
+	fsm_update: process(clk, rst)
 	begin
 		if (rising_edge(clk)) then
 			if (rst = '1') then
 				counter <= 0;
 				state_curr <= IDLE;
-			elsif (clk_en = '1') then
+			else
 				counter <= next_counter;
 				state_curr <= state_next;
 			end if;
@@ -128,17 +130,19 @@ begin
 	end process;
 												
 								
-	fsm_serialize: process(state_curr, in_available, first_counter, last_counter, following_counter, in_contexts, in_bits, in_valid, out_full)
+	fsm_serialize: process(state_curr, in_available, first_counter, last_counter, 
+		following_counter, in_contexts, in_bits, in_valid, out_full, counter)
 	begin
 		in_request <= '0';
 		state_next <= state_curr;
 		out_context_i <= CONTEXT_ZERO;
 		out_symbol_i <= '0';
 		out_valid_i <= '0';
-		next_counter <= 0;
+		next_counter <= counter;
 	
 		case state_curr is
 			when IDLE =>
+				next_counter <= 0;
 				if (in_available = '1' and out_full = '0') then
 					in_request <= '1';
 					state_next <= EMIT_FIRST;

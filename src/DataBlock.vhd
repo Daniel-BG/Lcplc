@@ -67,7 +67,7 @@ architecture Behavioral of DataBlock is
 	--------------------------------------------------------------------
 	
 	
-	signal memory: mem_t := gen_rom;
+	signal memory: mem_t;-- := gen_rom;
 	
 	signal index_out, index_in: natural range 0 to ROWS * COLS - 1;
 	signal all_input: std_logic;

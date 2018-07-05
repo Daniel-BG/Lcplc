@@ -48,7 +48,7 @@ architecture Behavioral of tb_logic is
 	signal busy: std_logic;
 	
 	type data_file_t is file of character;
-	file out_file : data_file_t open write_mode is "out_test.bin";
+	file out_file : data_file_t open write_mode is "out_test_mine.bin";
 
 
 begin
@@ -93,11 +93,11 @@ begin
 		--code that repeats
 		procedure send(quantity : in integer) is begin
 			i := 0;
-			while i <= quantity loop
-				fifoin_in <= std_logic_vector(to_unsigned(((i*PRIME) / (2**8)) mod (2**8), 8));
+			while i < quantity loop
+				fifoin_in <= std_logic_vector(to_unsigned(((i*PRIME) / (2**8)) rem (2**8), 8));
 				fifoin_wren <= '1';
 				wait for clk_period;
-				fifoin_in <= std_logic_vector(to_unsigned((i*PRIME) mod (2**8), 8));
+				fifoin_in <= std_logic_vector(to_unsigned((i*PRIME) rem (2**8), 8));
 				wait for clk_period;
 				fifoin_wren <= '0';
 				wait for clk_period*2;
@@ -122,7 +122,7 @@ begin
 	
 		wait for clk_period*20;
 		
-		send(8192);
+		send(4096);
 		wait_for_clk(100000);
 		
 		wait;
