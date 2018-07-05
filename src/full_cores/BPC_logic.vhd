@@ -44,7 +44,8 @@ entity BPC_logic is
 		--BPC_MQO_QUEUE_SIZE: integer := 32;
 		--BPC_BYT_QUEUE_SIZE: integer := 32;
 		BOUND_UPDATE_FIFO_DEPTH: positive := 32;
-		OUT_FIFO_DEPTH: positive := 32
+		OUT_FIFO_DEPTH: positive := 32;
+		FULLY_PIPELINE: boolean := false
 	);
 	port (
 		clk, rst, clk_en: in std_logic;
@@ -321,102 +322,50 @@ begin
 			out_bit => CXD_queue_out_bit
 		);
 		
---	MQcoder_control: process
---	
---	begin
---		case MQcoder_control_state_curr is
---			when IDLE => 
---				if CXD_queue_empty = '0' then
---					CXD_queue_rd_en <= '1';
---					MQcoder_control_state_next <= DATA_READY;
---				
---			when DATA_READY =>
---			
---			when FINISHED =>
---			
---		end case;
---	
---	end process;
-
-	--TODO add some kind of control here for the end_coding_en as it could be fired before ready
---	MQcoder_control: process(MQcoder_control_state_curr, CXD_queue_empty, core_control_state_curr, fifodata_full, mqcoder_counter_curr)
---	begin
---		CXD_queue_rd_en <= '0';
---		MQcoder_control_state_next <= MQcoder_control_state_curr;
---		MQcoder_clk_en <= '0';
---		MQcoder_end_coding_en <= '0';
---		MQcoder_counter_next <= 0;
---		
---		case MQcoder_control_state_curr is
---			when IDLE =>
---				if CXD_queue_empty = '0' then
---					CXD_queue_rd_en <= '1';
---					MQcoder_control_state_next <= DATA_READY;
---				elsif core_control_state_curr = FINISHED then
---					if MQcoder_counter_curr = MQCODER_COUNT - 1 then
---						MQCoder_clk_en <= '1';
---						MQcoder_end_coding_en <= '1';
---						MQcoder_control_state_next <= PIPE_FLUSHED;
---					else
---						MQcoder_counter_next <= MQcoder_counter_curr + 1;
---					end if;
---				end if;
---			when DATA_READY =>
---				if (fifodata_full = '0') then
---					MQCoder_clk_en <= '1';
---					if CXD_queue_empty = '0' then
---						CXD_queue_rd_en <= '1';
---						MQcoder_control_state_next <= DATA_READY;
---					else
---						MQcoder_control_state_next <= IDLE;
---					end if;
---				end if;
---			when PIPE_FLUSHED =>
---				--basically waiting for the MQCODER pipeline to flush out
---				if MQcoder_counter_curr = 0 then
---					MQcoder_counter_next <= MQcoder_counter_curr + 1;
---					MQCoder_clk_en <= '1';
---				elsif MQcoder_counter_curr = MQCODER_COUNT - 1 then
---					MQcoder_control_state_next <= FINISHED;
---				else
---					MQcoder_counter_next <= MQcoder_counter_curr + 1;
---				end if;
---			when FINISHED =>
---				--nothing to do
---		end case;
---	end process;
+		
+	--generate MQ coder
 	
-		
---	coder: entity work.MQCoder_fast
---		port map(
---			clk => clk, rst => rst,
---			clk_en => MQcoder_clk_en,
---			in_bit => CXD_queue_out_bit,
---			end_coding_enable => MQcoder_end_coding_en,
---			in_context => CXD_queue_out_context,
---			out_bytes => MQcoder_out_bytes,
---			out_enable => MQcoder_out_enable
---		);
+	gen_fully_pipelined_coder: if FULLY_PIPELINE generate
+		coder: entity work.MQCoder_piped
+			generic map (
+				BOUND_UPDATE_FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH,
+				OUT_FIFO_DEPTH => OUT_FIFO_DEPTH
+			)
+			port map (
+				clk => clk,
+				rst => rst,
+				in_bit => CXD_queue_out_bit,
+				end_coding_enable => MQcoder_end_coding_en,
+				in_context => CXD_queue_out_context,
+				in_empty => CXD_queue_empty,
+				in_request => CXD_queue_rd_en,
+				fifo_ob_readen => out_readen,
+				fifo_ob_out => out_byte,
+				fifo_ob_empty => out_empty_in,
+				mq_finished => MQcoder_finished
+			);
+	end generate;
 
-	coder: entity work.MQCoder_piped
-		generic map (
-			BOUND_UPDATE_FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH,
-			OUT_FIFO_DEPTH => OUT_FIFO_DEPTH
-		)
-		port map (
-			clk => clk,
-			rst => rst,
-			in_bit => CXD_queue_out_bit,
-			end_coding_enable => MQcoder_end_coding_en,
-			in_context => CXD_queue_out_context,
-			in_empty => CXD_queue_empty,
-			in_request => CXD_queue_rd_en,
-			fifo_ob_readen => out_readen,
-			fifo_ob_out => out_byte,
-			fifo_ob_empty => out_empty_in,
-			mq_finished => MQcoder_finished
-		);
-		
+	gen_paralellized_output_coder: if not FULLY_PIPELINE generate
+		coder: entity work.MQCoder_piped_parallelout
+			generic map(
+				MQOUT_FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH,
+				BYTEOUT_FIFO_DEPTH => OUT_FIFO_DEPTH
+			)
+			port map (
+				clk => clk,
+				rst => rst,
+				in_bit => CXD_queue_out_bit,
+				end_coding_enable => MQcoder_end_coding_en,
+				in_context => CXD_queue_out_context,
+				in_empty => CXD_queue_empty,
+				in_request => CXD_queue_rd_en,
+				fifo_ob_readen => out_readen,
+				fifo_ob_out => out_byte,
+				fifo_ob_empty => out_empty_in,
+				mq_finished => MQcoder_finished
+			);
+	end generate;
 		
 
 		

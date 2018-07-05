@@ -69,6 +69,13 @@ ARCHITECTURE behavior OF tb_comparison_old_new IS
 	signal bpc_out_byte: std_logic_vector(7 downto 0);
 	signal bpc_out_readen: std_logic;
 	signal bpc_done: std_logic;
+	
+	--uut3 signals
+	signal par_bpc_clk_en: std_logic;
+	signal par_bpc_out_empty: std_logic;
+	signal par_bpc_out_byte: std_logic_vector(7 downto 0);
+	signal par_bpc_out_readen: std_logic;
+	signal par_bpc_done: std_logic;
 
 
 	
@@ -101,12 +108,12 @@ BEGIN
 			STRIPS => ROWS / 4,
 			COLS => COLS,
 			BITPLANES => BITPLANES-1,
-
 			--number of elements in inner queues
 			BPC_OUT_QUEUE_SIZE => 512,
 			BPC_CXD_QUEUE_SIZE => 32,
 			BOUND_UPDATE_FIFO_DEPTH => 32,
-			OUT_FIFO_DEPTH => 8
+			OUT_FIFO_DEPTH => 8,
+			FULLY_PIPELINE => true
 		)
 		port map (
 			clk => clk , rst => rst, clk_en => bpc_clk_en,
@@ -118,6 +125,31 @@ BEGIN
 			out_readen => bpc_out_readen,
 			done => bpc_done
 		);
+		
+		
+	uut3: entity work.BPC_logic
+		generic map (
+			STRIPS => ROWS / 4,
+			COLS => COLS,
+			BITPLANES => BITPLANES-1,
+			--number of elements in inner queues
+			BPC_OUT_QUEUE_SIZE => 512,
+			BPC_CXD_QUEUE_SIZE => 32,
+			BOUND_UPDATE_FIFO_DEPTH => 32,
+			OUT_FIFO_DEPTH => 8,
+			FULLY_PIPELINE => false
+		)
+		port map (
+			clk => clk , rst => rst, clk_en => par_bpc_clk_en,
+			input => bpc_input,
+			input_loc => bpc_input_loc,
+			input_en => bpc_input_en,
+			out_empty => par_bpc_out_empty,
+			out_byte => par_bpc_out_byte,
+			out_readen => par_bpc_out_readen,
+			done => par_bpc_done
+		);
+
 
 
 
@@ -183,6 +215,7 @@ BEGIN
 		bpc_input_loc <= 0;
 		bpc_input_en <= '0';
 		bpc_clk_en <= '0';
+		par_bpc_clk_en <= '0';
 		rst <= '1';
       wait for 100 ns;	
 		--disable reset and send blocks
@@ -194,6 +227,7 @@ BEGIN
 		--ready to process
 		
 		bpc_clk_en <= '1';
+		par_bpc_clk_en <= '1';
 		
 		
       wait;
@@ -205,30 +239,31 @@ BEGIN
 		variable first_read_cnt: integer := 0;
 		variable out_cnt: integer := 0;
 	begin
---		fifoout_readen <= '1';
---		bpc_out_readen <= '1';
---		wait;
-		while true loop
-			wait for clk_period;
-			if (first_read_cnt /= 0) then
-				if (bpc_out_empty = '0') then
-					bpc_out_readen <= '1';
-					wait for clk_period;
-					bpc_out_readen <= '0';
-					first_read_cnt := first_read_cnt - 1;
-				end if;
-			else
-				if (bpc_out_empty = '0' and fifoout_empty = '0') then
-					fifoout_readen <= '1';
-					bpc_out_readen <= '1';
-					wait for clk_period;
-					fifoout_readen <= '0';
-					bpc_out_readen <= '0';
-					assert bpc_out_byte = fifoout_out report "DIFFERENCE: " & integer'image(out_cnt) severity warning;
-					out_cnt := out_cnt + 1;
-				end if;
-			end if;
-		end loop;
+		fifoout_readen <= '1';
+		bpc_out_readen <= '1';
+		par_bpc_out_readen <= '1';
+		wait;
+--		while true loop
+--			wait for clk_period;
+--			if (first_read_cnt /= 0) then
+--				if (bpc_out_empty = '0') then
+--					bpc_out_readen <= '1';
+--					wait for clk_period;
+--					bpc_out_readen <= '0';
+--					first_read_cnt := first_read_cnt - 1;
+--				end if;
+--			else
+--				if (bpc_out_empty = '0' and fifoout_empty = '0') then
+--					fifoout_readen <= '1';
+--					bpc_out_readen <= '1';
+--					wait for clk_period;
+--					fifoout_readen <= '0';
+--					bpc_out_readen <= '0';
+--					assert bpc_out_byte = fifoout_out report "DIFFERENCE: " & integer'image(out_cnt) severity warning;
+--					out_cnt := out_cnt + 1;
+--				end if;
+--			end if;
+--		end loop;
 	
 	end process;
 

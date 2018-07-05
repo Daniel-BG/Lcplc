@@ -175,9 +175,6 @@ begin
 			when IU_FINISHED =>
 				iu_finished_flag <= '1';
 		end case;
-
-	
-
 	end process;
 	
 	mq_iu_enable <= '1' when state_mq_iu_curr = REQUESTED else '0';
