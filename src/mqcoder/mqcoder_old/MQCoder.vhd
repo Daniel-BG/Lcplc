@@ -33,6 +33,9 @@ use ieee.std_logic_textio.all;
 
 --MQCODER entity. No generics, can keep coding forever
 entity MQCoder is
+	generic (
+		DEBUG: boolean := false
+	);
 	port(
 		--control signals
 		clk, rst, clk_en: in std_logic;
@@ -386,90 +389,41 @@ begin
 	end process update_mqcoder;
 	
 	
-
-	debug_process: process
-		variable out_line: line;
-	begin
-		file_open(out_file, out_file_name, write_mode);
-		--write until finished
-		while true loop
-			wait until rising_edge(clk);
-			if (clk_en = '1') then
-				write(out_line, in_context, right, 2);
-				write(out_line, " ", right, 1);
-				write(out_line, in_bit, right, 1);
-				writeline(out_file, out_line);
-			end if;
-		end loop;
-	end process;
-	
-	debug_process_prob: process
-		variable out_line: line;
-	begin
-		file_open(out_file_prob, out_file_name_prob, write_mode);
-		--write until finished
-		while true loop
-			wait until rising_edge(clk);
-			if (clk_en = '1' and (hit_watcher = '1' or num_shifts_watcher /= "0000") and hit_watcher /= 'U') then
-				write(out_line, probability_watcher, right, 16);
-				write(out_line, " ", right, 1);
-				write(out_line, num_shifts_watcher, right, 4);
-				write(out_line, " ", right, 1);
-				write(out_line, hit_watcher, right, 1);
-				writeline(out_file_prob, out_line);
-			end if;
-		end loop;
-	end process;
+	gen_debug: if DEBUG generate
+		debug_process: process
+			variable out_line: line;
+		begin
+			file_open(out_file, out_file_name, write_mode);
+			--write until finished
+			while true loop
+				wait until rising_edge(clk);
+				if (clk_en = '1') then
+					write(out_line, in_context, right, 2);
+					write(out_line, " ", right, 1);
+					write(out_line, in_bit, right, 1);
+					writeline(out_file, out_line);
+				end if;
+			end loop;
+		end process;
+		
+		debug_process_prob: process
+			variable out_line: line;
+		begin
+			file_open(out_file_prob, out_file_name_prob, write_mode);
+			--write until finished
+			while true loop
+				wait until rising_edge(clk);
+				if (clk_en = '1' and (hit_watcher = '1' or num_shifts_watcher /= "0000") and hit_watcher /= 'U') then
+					write(out_line, probability_watcher, right, 16);
+					write(out_line, " ", right, 1);
+					write(out_line, num_shifts_watcher, right, 4);
+					write(out_line, " ", right, 1);
+					write(out_line, hit_watcher, right, 1);
+					writeline(out_file_prob, out_line);
+				end if;
+			end loop;
+		end process;
+	end generate;
 
 
 end Behavioral;
-
-
-
---code below is how it was defined at first before optimizations took place, contains a for loop of 14 iterations instead of the 3 required now
-
---			--renormalization shift
---			for i in 0 to 14 loop --need to set for the max possible number of iterations
---				--if finished, stop doing stuff
---				if (next_normalized_interval < 32768) then
---					exit;
---				end if;
---				--do stuff
---				next_normalized_interval := next_normalized_interval(14 downto 0) & '0';
---				next_normalized_lower_bound := next_normalized_lower_bound(26 downto 0) & '0'; 
---				next_countdown_timer := next_countdown_timer - 1;
---				if (next_countdown_timer = 0) then
---					full_byte := '1';
---					if (next_temp_byte_buffer = "11111111") then
---						full_byte := '0';
---					else
---						next_temp_byte_buffer := next_temp_byte_buffer + ("0000000" & next_normalized_lower_bound(27));
---						next_normalized_lower_bound := '0' & next_normalized_lower_bound(26 downto 0);
---						if (next_temp_byte_buffer = "11111111") then
---							full_byte := '0';
---						end if;
---					end if;
---					if (next_bytes_generated /= 0) then
---						if (first_byte_output = '0') then
---							first_byte_output := '1';
---							next_output_bytes(7 downto 0) := std_logic_vector(next_temp_byte_buffer);
---						else
---							second_byte_output := '1';
---							next_output_bytes(15 downto 8) := next_output_bytes(7 downto 0);
---							next_output_bytes(7 downto 0) := std_logic_vector(next_temp_byte_buffer);
---						end if;
---						--output tempByteBuffer
---					end if;
---					next_bytes_generated := next_bytes_generated + 1;
---					--updateafterbyte
---					if (full_byte = '1') then
---						next_temp_byte_buffer := next_normalized_lower_bound(26 downto 19);
---						next_normalized_lower_bound := next_normalized_lower_bound(27) & "00000000" & next_normalized_lower_bound(18 downto 0);
---						next_countdown_timer := 8;
---					else
---						next_temp_byte_buffer := next_normalized_lower_bound(27 downto 20);
---						next_normalized_lower_bound := "00000000" & next_normalized_lower_bound(19 downto 0);
---						next_countdown_timer := 7;
---					end if;
---				end if; 
---			end loop;

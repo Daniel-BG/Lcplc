@@ -54,7 +54,7 @@ entity BPC_logic is
 		BPC_CXD_QUEUE_SIZE: integer := 32;
 		BOUND_UPDATE_FIFO_DEPTH: positive := 32;
 		OUT_FIFO_DEPTH: positive := 32;
-		FULLY_PIPELINE: boolean := false
+		FULLY_PIPELINE: boolean := true
 	);
 	port (
 		clk, rst, clk_en: in std_logic;

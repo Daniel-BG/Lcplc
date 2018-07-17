@@ -75,6 +75,8 @@ architecture Behavioral of BPC_output_controller is
 
 begin
 
+	--do not latch the output (in critical path) 
+	--because some other path becomes critical with a higher timing
 	out_symbol <= out_symbol_i;
 	out_context <= out_context_i;
 	out_valid <= out_valid_i;
