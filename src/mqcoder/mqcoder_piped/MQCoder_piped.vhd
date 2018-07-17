@@ -57,24 +57,42 @@ end MQCoder_piped;
 
 architecture Behavioral of MQCoder_piped is
 	--mq state
-	type MQ_STATE_T is (IDLE, WORKING, FLUSHING_IU_FIFO, TERMINATE_SEGMENT, FINISHED);
+	type MQ_STATE_T is (IDLE, WORKING, FLUSHING_IU_RAW_FIFO, FLUSHING_IU_FUSED_FIFO, TERMINATE_SEGMENT, FINISHED);
 	signal state_mq_curr, state_mq_next: mq_state_t;
 	signal end_bound_update: std_logic;
 	
-	--interval update fifo signals
+	
+	--interval update fifo constants
 	constant FIFO_IU_DATA_WIDTH: integer := 1 + 16 + 4;
-	signal fifo_iu_wren: std_logic;
-	signal fifo_iu_in: std_logic_vector(FIFO_IU_DATA_WIDTH - 1 downto 0);
-	signal fifo_iu_readen: std_logic;
-	signal fifo_iu_out: std_logic_Vector(FIFO_IU_DATA_WIDTH - 1 downto 0);
-	signal fifo_iu_empty: std_logic;
-	signal fifo_iu_lah_full: std_logic;
 	
-	signal fifo_iu_in_end, fifo_iu_out_end: std_logic;
-	signal fifo_iu_in_hit, fifo_iu_out_hit: std_logic;
-	signal fifo_iu_in_prob, fifo_iu_out_prob: unsigned(15 downto 0);
-	signal fifo_iu_in_shift, fifo_iu_out_shift: unsigned(3 downto 0);
+	--interval update fifo signals (raw)
+	signal fifo_iu_raw_wren: std_logic;
+	signal fifo_iu_raw_in: std_logic_vector(FIFO_IU_DATA_WIDTH - 1 downto 0);
+	signal fifo_iu_raw_readen: std_logic;
+	signal fifo_iu_raw_out: std_logic_Vector(FIFO_IU_DATA_WIDTH - 1 downto 0);
+	signal fifo_iu_raw_empty: std_logic;
+	signal fifo_iu_raw_lah_full: std_logic;
 	
+	signal fifo_iu_raw_in_end, fifo_iu_raw_out_end: std_logic;
+	signal fifo_iu_raw_in_hit, fifo_iu_raw_out_hit: std_logic;
+	signal fifo_iu_raw_in_prob, fifo_iu_raw_out_prob: unsigned(15 downto 0);
+	signal fifo_iu_raw_in_shift, fifo_iu_raw_out_shift: unsigned(3 downto 0);
+	
+	--fuser
+	signal fuser_no_more_data, fuser_finished: std_logic;
+	
+	--interval update fifo signals (fused)
+	signal fifo_iu_fused_wren: std_logic;
+	signal fifo_iu_fused_in: std_logic_vector(FIFO_IU_DATA_WIDTH - 1 downto 0);
+	signal fifo_iu_fused_readen: std_logic;
+	signal fifo_iu_fused_out: std_logic_Vector(FIFO_IU_DATA_WIDTH - 1 downto 0);
+	signal fifo_iu_fused_empty: std_logic;
+	signal fifo_iu_fused_full: std_logic;
+	
+	signal fifo_iu_fused_in_end, fifo_iu_fused_out_end: std_logic;
+	signal fifo_iu_fused_in_hit, fifo_iu_fused_out_hit: std_logic;
+	signal fifo_iu_fused_in_prob, fifo_iu_fused_out_prob: unsigned(15 downto 0);
+	signal fifo_iu_fused_in_shift, fifo_iu_fused_out_shift: unsigned(3 downto 0);
 	
 	
 	--mq interval update control
@@ -94,11 +112,12 @@ architecture Behavioral of MQCoder_piped is
 	
 begin
 
-	state_control: process(state_mq_curr, in_empty, iu_finished_flag, fifo_iu_empty, bound_update_idle, bound_update_finished)
+	state_control: process(state_mq_curr, in_empty, iu_finished_flag, fifo_iu_fused_empty, fifo_iu_raw_empty, bound_update_idle, bound_update_finished, fuser_finished)
 	begin
 		end_bound_update <= '0';
 		mq_finished <= '0';
 		state_mq_next <= state_mq_curr;
+		fuser_no_more_data <= '0';
 		
 		case state_mq_curr is
 			when IDLE =>
@@ -107,11 +126,16 @@ begin
 				end if;
 			when WORKING =>
 				if iu_finished_flag = '1' then
-					state_mq_next <= FLUSHING_IU_FIFO;
+					state_mq_next <= FLUSHING_IU_RAW_FIFO;
 				end if;
-			when FLUSHING_IU_FIFO =>
+			when FLUSHING_IU_RAW_FIFO =>
 				--ensure that the bound update has finished normal operation before enabling end_bound_update
-				if fifo_iu_empty = '1' and bound_update_idle = '1' then
+				if fifo_iu_raw_empty = '1' and bound_update_idle = '1' then
+					state_mq_next <= FLUSHING_IU_FUSED_FIFO;
+				end if;
+			when FLUSHING_IU_FUSED_FIFO =>
+				fuser_no_more_data <= '1';
+				if fuser_finished = '1' and fifo_iu_fused_empty = '1' then
 					state_mq_next <= TERMINATE_SEGMENT;
 				end if;
 			--enable end coding for one cycle.
@@ -141,7 +165,7 @@ begin
 		end if;
 	end process;
 
-	interval_update_ctrl: process(in_empty, fifo_iu_lah_full, state_mq_iu_curr, end_coding_enable)
+	interval_update_ctrl: process(in_empty, fifo_iu_raw_lah_full, state_mq_iu_curr, end_coding_enable)
 	begin	
 		--dont request anything by default, go back to idle state
 		in_request <= '0';
@@ -151,7 +175,7 @@ begin
 		case state_mq_iu_curr is
 			when IDLE =>
 				--if fifo is almost full to the lookahead value just wait on reading more
-				if (in_empty = '0' and fifo_iu_lah_full = '0') then
+				if (in_empty = '0' and fifo_iu_raw_lah_full = '0') then
 					in_request <= '1';
 					state_mq_iu_next <= REQUESTED;
 				end if;
@@ -162,7 +186,7 @@ begin
 				
 			when REQUESTED =>
 				--if fifo is almost full to the lookahead value just wait on reading more
-				if (in_empty = '0' and fifo_iu_lah_full = '0') then
+				if (in_empty = '0' and fifo_iu_raw_lah_full = '0') then
 					in_request <= '1';
 				else
 					state_mq_iu_next <= IDLE;
@@ -184,18 +208,18 @@ begin
 			clk => clk, rst => rst, clk_en => mq_iu_enable,
 			in_bit => in_bit, 
 			in_context => in_context,
-			out_hit => fifo_iu_in_hit,
-			out_prob => fifo_iu_in_prob,
-			out_shift => fifo_iu_in_shift,
-			out_enable => fifo_iu_wren		
+			out_hit => fifo_iu_raw_in_hit,
+			out_prob => fifo_iu_raw_in_prob,
+			out_shift => fifo_iu_raw_in_shift,
+			out_enable => fifo_iu_raw_wren		
 		);
 		
-	fifo_iu_in <= fifo_iu_in_hit & std_logic_vector(fifo_iu_in_prob & fifo_iu_in_shift);
+	--FIFO IU RAW CONNECTIONS AND MODULE
+	fifo_iu_raw_in <= fifo_iu_raw_in_hit & std_logic_vector(fifo_iu_raw_in_prob & fifo_iu_raw_in_shift);
+
+	assert BOUND_UPDATE_FIFO_DEPTH >= 4 report "A depth of 4 is needed for the IU FIFO" severity failure;	
 	
-	
-	assert BOUND_UPDATE_FIFO_DEPTH >= 4 report "A depth of 4 is needed for the IU FIFO" severity failure;
-		
-	interval_update_fifo: entity work.LOOKAHEAD_FIFO
+	interval_update_fifo_raw: entity work.LOOKAHEAD_FIFO
 		generic map (
 			DATA_WIDTH => 1 + 16 + 4,
 			FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH,
@@ -204,22 +228,70 @@ begin
 		port map (
 			clk => clk, 
 			rst => rst,
-			wren => fifo_iu_wren,
-			datain => fifo_iu_in,
-			readen => fifo_iu_readen,
-			dataout => fifo_iu_out,
-			empty => fifo_iu_empty,
+			wren => fifo_iu_raw_wren,
+			datain => fifo_iu_raw_in,
+			readen => fifo_iu_raw_readen,
+			dataout => fifo_iu_raw_out,
+			empty => fifo_iu_raw_empty,
 			full => open,
 			lah_empty => open,
-			lah_full => fifo_iu_lah_full
+			lah_full => fifo_iu_raw_lah_full
 		);
-		
-		
+
+	fifo_iu_raw_out_hit <= fifo_iu_raw_out(FIFO_IU_DATA_WIDTH - 1);
+	fifo_iu_raw_out_prob <= unsigned(fifo_iu_raw_out(FIFO_IU_DATA_WIDTH - 2 downto FIFO_IU_DATA_WIDTH - 17));
+	fifo_iu_raw_out_shift <= unsigned(fifo_iu_raw_out(FIFO_IU_DATA_WIDTH - 18 downto 0));
+	----------------------------------------
 	
+	
+	--FUSING MODULE
+	fuser: entity work.interval_update_fuser
+		port map (
+			clk => clk, rst => rst,
+			in_empty => fifo_iu_raw_empty,
+			in_readen => fifo_iu_raw_readen,
+			in_hit => fifo_iu_raw_out_hit,
+			in_prob => fifo_iu_raw_out_prob,
+			in_shift => fifo_iu_raw_out_shift,
+			out_full => fifo_iu_fused_full,
+			out_wren => fifo_iu_fused_wren,
+			out_hit => fifo_iu_fused_in_hit,
+			out_prob => fifo_iu_fused_in_prob,
+			out_shift => fifo_iu_fused_in_shift,
+			no_more_data => fuser_no_more_data,
+			out_finished => fuser_finished
+		);
+	---------------
+	
+	
+	
+	--FIFO IU FUSED CONNECTIONS AND MODULE
+	fifo_iu_fused_in <= fifo_iu_fused_in_hit & std_logic_vector(fifo_iu_fused_in_prob & fifo_iu_fused_in_shift);
 		
-	fifo_iu_out_hit <= fifo_iu_out(FIFO_IU_DATA_WIDTH - 1);
-	fifo_iu_out_prob <= unsigned(fifo_iu_out(FIFO_IU_DATA_WIDTH - 2 downto FIFO_IU_DATA_WIDTH - 17));
-	fifo_iu_out_shift <= unsigned(fifo_iu_out(FIFO_IU_DATA_WIDTH - 18 downto 0));
+	interval_update_fifo_fused: entity work.LOOKAHEAD_FIFO
+		generic map (
+			DATA_WIDTH => 1 + 16 + 4,
+			FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH,
+			LOOK_AHEAD => 0
+		)
+		port map (
+			clk => clk, 
+			rst => rst,
+			wren => fifo_iu_fused_wren,
+			datain => fifo_iu_fused_in,
+			readen => fifo_iu_fused_readen,
+			dataout => fifo_iu_fused_out,
+			empty => fifo_iu_fused_empty,
+			full => fifo_iu_fused_full,
+			lah_empty => open,
+			lah_full => open
+		);		
+		
+	fifo_iu_fused_out_hit <= fifo_iu_fused_out(FIFO_IU_DATA_WIDTH - 1);
+	fifo_iu_fused_out_prob <= unsigned(fifo_iu_fused_out(FIFO_IU_DATA_WIDTH - 2 downto FIFO_IU_DATA_WIDTH - 17));
+	fifo_iu_fused_out_shift <= unsigned(fifo_iu_fused_out(FIFO_IU_DATA_WIDTH - 18 downto 0));
+	----------------------------------------
+		
 		
 	bound_update: entity work.MQ_bound_update
 		generic map (
@@ -230,11 +302,11 @@ begin
 			clk => clk, rst => rst,
 			--inputs
 			end_coding_enable => end_bound_update,
-			fifonorm_empty => fifo_iu_empty,
-			fifonorm_readen => fifo_iu_readen,
-			fifonorm_out_hit => fifo_iu_out_hit,
-			fifonorm_out_prob => fifo_iu_out_prob,
-			fifonorm_out_shift => fifo_iu_out_shift,
+			fifonorm_empty => fifo_iu_fused_empty,
+			fifonorm_readen => fifo_iu_fused_readen,
+			fifonorm_out_hit => fifo_iu_fused_out_hit,
+			fifonorm_out_prob => fifo_iu_fused_out_prob,
+			fifonorm_out_shift => fifo_iu_fused_out_shift,
 			--outputs
 			fifo_ob_readen => fifo_ob_readen,
 			fifo_ob_out => fifo_ob_out,
