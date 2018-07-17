@@ -109,7 +109,7 @@ BEGIN
 			COLS => COLS,
 			BITPLANES => BITPLANES-1,
 			--number of elements in inner queues
-			BPC_OUT_QUEUE_SIZE => 512,
+			BPC_OUT_QUEUE_SIZE => 1024,
 			BPC_CXD_QUEUE_SIZE => 32,
 			BOUND_UPDATE_FIFO_DEPTH => 32,
 			OUT_FIFO_DEPTH => 8,
@@ -126,29 +126,29 @@ BEGIN
 			done => bpc_done
 		);
 		
-		
-	uut3: entity work.BPC_logic
-		generic map (
-			STRIPS => ROWS / 4,
-			COLS => COLS,
-			BITPLANES => BITPLANES-1,
-			--number of elements in inner queues
-			BPC_OUT_QUEUE_SIZE => 512,
-			BPC_CXD_QUEUE_SIZE => 32,
-			BOUND_UPDATE_FIFO_DEPTH => 32,
-			OUT_FIFO_DEPTH => 8,
-			FULLY_PIPELINE => false
-		)
-		port map (
-			clk => clk , rst => rst, clk_en => par_bpc_clk_en,
-			input => bpc_input,
-			input_loc => bpc_input_loc,
-			input_en => bpc_input_en,
-			out_empty => par_bpc_out_empty,
-			out_byte => par_bpc_out_byte,
-			out_readen => par_bpc_out_readen,
-			done => par_bpc_done
-		);
+--		
+--	uut3: entity work.BPC_logic
+--		generic map (
+--			STRIPS => ROWS / 4,
+--			COLS => COLS,
+--			BITPLANES => BITPLANES-1,
+--			--number of elements in inner queues
+--			BPC_OUT_QUEUE_SIZE => 512,
+--			BPC_CXD_QUEUE_SIZE => 32,
+--			BOUND_UPDATE_FIFO_DEPTH => 32,
+--			OUT_FIFO_DEPTH => 8,
+--			FULLY_PIPELINE => false
+--		)
+--		port map (
+--			clk => clk , rst => rst, clk_en => par_bpc_clk_en,
+--			input => bpc_input,
+--			input_loc => bpc_input_loc,
+--			input_en => bpc_input_en,
+--			out_empty => par_bpc_out_empty,
+--			out_byte => par_bpc_out_byte,
+--			out_readen => par_bpc_out_readen,
+--			done => par_bpc_done
+--		);
 
 
 

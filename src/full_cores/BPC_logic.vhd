@@ -39,10 +39,19 @@ entity BPC_logic is
 		--number of bitplanes (excluding sign plane)
 		BITPLANES: integer := 15;
 		--number of elements in inner queues
+		--BPC out is the most important since it receives data in bursts.
+		--when it is receiving data, processing can't keep up since it has
+		--when it is not, processing empties it. 
+		--As a rule of thumb, 1024 is enough and 512 is almost enough (only 
+		--stalls the pipeline rarely)
+		--the others will only back up if the bytes are not read fast enough.
+		--as long as they are, they can be kept at a minimum:
+		--		cxd queue: 2 (never over 1)
+		--		bound update: 4 (never goes over 2)
+		--		out fifo: 2 (never goes over 1 as long as a byte is read every cycle
+		--			(though usually one is produced only every 4-10 cycles)
 		BPC_OUT_QUEUE_SIZE: integer := 32;
 		BPC_CXD_QUEUE_SIZE: integer := 32;
-		--BPC_MQO_QUEUE_SIZE: integer := 32;
-		--BPC_BYT_QUEUE_SIZE: integer := 32;
 		BOUND_UPDATE_FIFO_DEPTH: positive := 32;
 		OUT_FIFO_DEPTH: positive := 32;
 		FULLY_PIPELINE: boolean := false

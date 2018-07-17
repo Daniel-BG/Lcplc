@@ -60,19 +60,24 @@ begin
 
 
 	--map to standard fifo queue	
-	INNER_FIFO: entity work.STD_FIFO
+	INNER_FIFO: entity work.LOOKAHEAD_FIFO
 		generic map (
-			DATA_WIDTH => 6, FIFO_DEPTH => QUEUE_SIZE
+			DATA_WIDTH => 6,
+			FIFO_DEPTH => QUEUE_SIZE,
+			LOOK_AHEAD => 0
 		)
 		port map (
-			clk => clk, rst => rst,
-			WriteEn	=> wr_en,
-			datain	=> in_fifo,
-			ReadEn	=> rd_en,
-			dataout	=> out_fifo,
-			Empty		=> empty,
-			Full		=> full
-		);
+			clk => clk, 
+			rst => rst,
+			wren => wr_en,
+			datain => in_fifo,
+			readen => rd_en,
+			dataout => out_fifo,
+			empty => empty,
+			full => full,
+			lah_empty => open,
+			lah_full => open
+		);		
 
 end Behavioral;
 

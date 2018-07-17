@@ -222,7 +222,8 @@ begin
 	interval_update_fifo_raw: entity work.LOOKAHEAD_FIFO
 		generic map (
 			DATA_WIDTH => 1 + 16 + 4,
-			FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH,
+			FIFO_DEPTH => 8, --this is never filling up so the minimum possible 
+								  --(the output fused queue is the one tasked with controlling the flow)
 			LOOK_AHEAD => 3
 		)
 		port map (
