@@ -50,8 +50,13 @@ architecture Behavioral of FIFO_FORWARD is
 	signal head, tail: natural range 0 to FIFO_DEPTH - 1;
 	signal occupancy: natural range 0 to FIFO_DEPTH;
 	
-	signal in_empty, in_full: std_logic;
+	signal in_empty, in_full, next_in_full: std_logic;
+	
+	signal buf_datain, buf_mem: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal buf_flag_mem: boolean;
 begin
+
+	dataout <= buf_mem when buf_flag_mem else buf_datain;
 
 	--direct mappings
 	empty <= in_empty;
@@ -62,9 +67,22 @@ begin
 							or wren = '1' 		--is not empty because of new data that can pass through
 					else '0'; 					--it is indeed empty
 					
-	in_full <= '1' when occupancy = FIFO_DEPTH else '0';
-	
-	
+					
+	next_in_full <= '1' when
+		(occupancy = FIFO_DEPTH and (readen = '0' or (readen = '1' and wren = '1'))) or
+		(occupancy = FIFO_DEPTH - 1 and wren = '1' and readen = '0')
+		else '0';
+		
+	update_flags: process(clk, rst)
+	begin
+		if (rising_edge(clk)) then
+			if rst = '1' then
+				in_full <= '0';
+			else
+				in_full <= next_in_full;
+			end if;
+		end if;
+	end process;
 
 
 	main_proc: process(clk, rst, wren, readen, in_empty, tail, head, in_full, occupancy)
@@ -74,9 +92,14 @@ begin
 				head <= 0;
 				tail <= 0;
 				occupancy <= 0;
+				buf_flag_mem <= false;
+				buf_mem <= (others => '0');
+				buf_datain <= (others => '0');
 			else			
+				buf_mem <= memory(tail);
+				buf_datain <= datain;
 				if (wren = '1' and readen = '1' and not in_empty = '1') then
-					dataout <= memory(tail);
+					buf_flag_mem <= true;
 					if (tail = FIFO_DEPTH - 1) then
 						tail <= 0;
 					else
@@ -97,15 +120,14 @@ begin
 						head <= head + 1;
 					end if;
 				elsif (readen = '1' and not in_empty = '1') then 
-					
 					if occupancy = 0 then
 						--pass_through case, reading with nothing in memory
 						--so read from input which is valid since
 						--in_empty = '0' and occupancy = 0
-						dataout <= datain;
+						buf_flag_mem <= false;
 					else
 						occupancy <= occupancy - 1;
-						dataout <= memory(tail);
+						buf_flag_mem <= true;
 						if (tail = FIFO_DEPTH - 1) then
 							tail <= 0;
 						else
