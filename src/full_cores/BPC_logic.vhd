@@ -266,7 +266,7 @@ begin
 		end case;
 	end process;
 	
-	
+	--really important latching, improves speed by 1.25x
 	latch_bpc_fifo_input: process(clk, rst)
 	begin
 		if (rising_edge(clk)) then

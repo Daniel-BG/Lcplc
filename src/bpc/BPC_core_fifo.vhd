@@ -67,7 +67,9 @@ begin
 		out_contexts(i) <= to_integer(unsigned(out_fifo(6+7*i downto 2+7*i)));
 	end generate;
 
-
+	--this queue must be lookahead, if not values are lost
+	--this is because the input is latched in order to improve timing, and
+	--so we need an extra space for the last latched value when near full
 	INNER_FIFO: entity work.LOOKAHEAD_FIFO
 		generic map (
 			DATA_WIDTH => 77, FIFO_DEPTH => QUEUE_SIZE, LOOK_AHEAD => 1

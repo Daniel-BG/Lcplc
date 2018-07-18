@@ -76,14 +76,8 @@ architecture Behavioral of MQ_interval_update is
 	signal num_shifts : unsigned(3 downto 0);
 	signal num_shifts_retardada : unsigned(3 downto 0);
 	
-	signal t : unsigned(4+1 downto 0);
-	signal next_t : unsigned(4+1 downto 0);
-	signal t_menos_num_shifts : unsigned(5+1 downto 0);	
-	
 	signal clk_en_segunda_etapa, clk_en_tercera_etapa: std_logic;
 	signal in_bit_retardado : std_logic;
-	
-	signal ultimo_byte_enviado_FF : std_logic;
 	
 	signal prob_retardada : probability_t;
 

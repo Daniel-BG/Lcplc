@@ -269,11 +269,10 @@ begin
 	--FIFO IU FUSED CONNECTIONS AND MODULE
 	fifo_iu_fused_in <= fifo_iu_fused_in_hit & std_logic_vector(fifo_iu_fused_in_prob & fifo_iu_fused_in_shift);
 		
-	interval_update_fifo_fused: entity work.LOOKAHEAD_FIFO
+	interval_update_fifo_fused: entity work.FIFO
 		generic map (
 			DATA_WIDTH => 1 + 16 + 4,
-			FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH,
-			LOOK_AHEAD => 0
+			FIFO_DEPTH => BOUND_UPDATE_FIFO_DEPTH
 		)
 		port map (
 			clk => clk, 
@@ -283,9 +282,7 @@ begin
 			readen => fifo_iu_fused_readen,
 			dataout => fifo_iu_fused_out,
 			empty => fifo_iu_fused_empty,
-			full => fifo_iu_fused_full,
-			lah_empty => open,
-			lah_full => open
+			full => fifo_iu_fused_full
 		);		
 		
 	fifo_iu_fused_out_hit <= fifo_iu_fused_out(FIFO_IU_DATA_WIDTH - 1);
@@ -315,7 +312,6 @@ begin
 			bound_update_finished => bound_update_finished,
 			bound_update_idle => bound_update_idle
 		);
-
 
 
 end Behavioral;
