@@ -38,7 +38,7 @@ entity TRANSACTION_LIMITER is
 	Port (
 		--metacontrol signals
 		clk, rst: in std_logic;
-		enable: in std_logic;
+		clear: in std_logic;
 		--control signals
 		saturated: out std_logic;
 		--axi bus controls (data goes directly, only control signals are dealt with here)
@@ -61,16 +61,16 @@ begin
 	--saturated output
 	saturated <= saturated_local;
 	--mask signals when counter is saturated
-	output_valid <= input_valid when saturated_local = '0' and enable = '1' else '0';
-	input_ready  <= output_ready when saturated_local = '0' and enable = '1' else '0';
+	output_valid <= input_valid when saturated_local = '0' else '0';
+	input_ready  <= output_ready when saturated_local = '0' else '0';
 
 	seq: process(clk, rst)
 	begin
 		if rising_edge(clk) then
-			if rst = '1' then
+			if rst = '1' or clear = '1' then
 				counter <= 0;
 				saturated_local <= '0';
-			elsif enable = '1' then
+			else
 				if saturated_local = '0' and input_valid = '1' and output_ready = '1' then
 					counter <= counter_next;
 					saturated_local <= saturated_local_next;

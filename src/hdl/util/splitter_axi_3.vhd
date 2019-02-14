@@ -36,6 +36,7 @@ entity SPLITTER_AXI_3 is
 		DATA_WIDTH: positive := 32
 	);
 	Port (
+		clk, rst		: in 	std_logic;
 		--to input axi port
 		input_valid		: in	STD_LOGIC;
 		input_data		: in	STD_LOGIC_VECTOR (DATA_WIDTH - 1 downto 0);
@@ -56,20 +57,21 @@ end SPLITTER_AXI_3;
 architecture Behavioral of SPLITTER_AXI_3 is
 	signal output_valid_inner: std_logic_vector(2 downto 0);
 	signal output_ready_inner: std_logic_vector(2 downto 0);
-	signal output_data_inner: std_logic_vector(DATA_WIDTH*3-1 downto 0);
+	signal output_data_inner: std_logic_vector(DATA_WIDTH-1 downto 0);
 begin
 
 	output_0_valid <= output_valid_inner(0);
 	output_1_valid <= output_valid_inner(1);										 
 	output_2_valid <= output_valid_inner(2);
 	output_ready_inner <= output_2_ready & output_1_ready & output_0_ready;
-	output_0_data      <= output_data_inner(DATA_WIDTH - 1 downto 0);
-	output_1_data      <= output_data_inner(DATA_WIDTH*2 - 1 downto DATA_WIDTH);
-	output_2_data      <= output_data_inner(DATA_WIDTH*3 - 1 downto DATA_WIDTH*2);
+	output_0_data      <= output_data_inner;
+	output_1_data      <= output_data_inner;
+	output_2_data      <= output_data_inner;
 
 	generic_axi_splitter: entity work.splitter_axi
 		Generic map ( DATA_WIDTH => DATA_WIDTH, OUTPUT_PORTS => 3)
 		Port map (
+			clk => clk, rst => rst,
 			input_valid => input_valid,
 			input_data => input_data,
 			input_ready => input_ready,

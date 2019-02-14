@@ -36,7 +36,7 @@ entity NTHBANDMODULE is
 		DATA_WIDTH: positive := 16;
 		ALPHA_WIDTH: positive := 10;
 		BLOCK_SIZE_LOG: positive := 8;
-		KJ_WIDTH: positive := 6;
+		ACC_LOG: positive := 5;
 		UPSHIFT: positive := 1;
 		DOWNSHIFT: positive := 1
 	);
@@ -67,10 +67,10 @@ entity NTHBANDMODULE is
 		--predictions will be sent as xhat if the block is skipped
 		merr_ready		: in std_logic;
 		merr_valid		: out std_logic;
-		merr_data		: out std_logic_vector(DATA_WIDTH downto 0);
+		merr_data		: out std_logic_vector(DATA_WIDTH + 2 downto 0);
 		kj_ready		: in std_logic;
 		kj_valid		: out std_logic;
-		kj_data			: out std_logic_vector(KJ_WIDTH - 1 downto 0);
+		kj_data			: out std_logic_vector(ACC_LOG - 1 downto 0);
 		xtilde_valid	: out std_logic;
 		xtilde_ready	: in std_logic;
 		xtilde_data		: out std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -85,47 +85,53 @@ end NTHBANDMODULE;
 
 architecture Behavioral of NTHBANDMODULE is
 	constant PREDICTION_WIDTH: integer := DATA_WIDTH + 3;
-
-	type nthband_prediction_state_t is (WAIT_PARAMS, CALCULATING);
-	signal prediction_state_curr, prediction_state_next: nthband_prediction_state_t;
 	
-	--buffers for means and alphas
-	signal xmean_buffer, xmean_buffer_next, xhatmean_buffer, xhatmean_buffer_next: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal alpha_buffer, alpha_buffer_next: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
-	
-	--prediction input limit
-	signal pred_in_lim_enable, pred_in_lim_saturated: std_logic;
-	signal pred_in_lim_out_valid, pred_in_lim_out_ready: std_logic;
+	--input repeaters
+	signal xmean_rep_ready, xmean_rep_valid, xhatmean_rep_ready, xhatmean_rep_valid, alpha_rep_ready, alpha_rep_valid: std_logic;
+	signal xmean_rep_data, xhatmean_rep_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal alpha_rep_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 	
 	--prediction stage 0
+	signal prediction_stage_0_joint_valid, prediction_stage_0_joint_ready: std_logic;
+	signal prediction_stage_0_joint_data_0, prediction_stage_0_joint_data_1: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	
 	signal prediction_stage_0_input_a, prediction_stage_0_input_b: std_logic_vector(DATA_WIDTH downto 0);
 	signal prediction_stage_0_data: std_logic_vector(DATA_WIDTH downto 0);
 	signal prediction_stage_0_out_valid, prediction_stage_0_out_ready: std_logic;
 	
 	--prediction stage 1
+	signal prediction_stage_1_joint_valid, prediction_stage_1_joint_ready: std_logic;
+	signal prediction_stage_1_joint_data_0: std_logic_vector (DATA_WIDTH  downto 0);
+	signal prediction_stage_1_joint_data_1: std_logic_vector (ALPHA_WIDTH - 1 downto 0);
+	
 	signal prediction_stage_1_input_b: std_logic_vector(DATA_WIDTH downto 0);
-	signal prediction_stage_1_data: std_logic_vector(33 downto 0);
+	signal prediction_stage_1_data: std_logic_vector(DATA_WIDTH*2+1 downto 0);
 	signal prediction_stage_1_out_valid, prediction_stage_1_out_ready: std_logic;
 	
 	--prediction stage 2
-	signal prediction_stage_2_input_a, prediction_stage_2_input_b: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal prediction_stage_2_joint_valid, prediction_stage_2_joint_ready: std_logic;
+	signal prediction_stage_2_joint_data_0: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal prediction_stage_2_joint_data_1: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	
+	signal prediction_stage_2_input_b: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	signal prediction_stage_2_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	signal prediction_stage_2_out_valid, prediction_stage_2_out_ready: std_logic;
+	
 	
 	--prediction splitter into 3: 
 		--(0) first one goes to output prediction (in case we skip coding)
 		--(1) second one goes on to error calculation
 		--(2) third one is saved for calculating xhatout
-	constant SPLITTER_PORTS: positive := 3;
-	constant XTILDE_INDEX			 : natural := 0;
-	constant XHATOUT_CALC_FIFO_INDEX : natural := 1;
-	constant UNQUANT_ERROR_JOIN_INDEX: natural := 2;
-	signal prediction_splitter_valid: std_logic_vector(SPLITTER_PORTS-1 downto 0);
-	signal prediction_splitter_data: std_logic_vector(PREDICTION_WIDTH*SPLITTER_PORTS - 1 downto 0);
-	signal prediction_splitter_ready: std_logic_vector(SPLITTER_PORTS-1 downto 0);
+	signal prediction_splitter_valid_0, prediction_splitter_valid_1, prediction_splitter_valid_2: std_logic;
+	signal prediction_splitter_ready_0, prediction_splitter_ready_1, prediction_splitter_ready_2: std_logic;
+	signal prediction_splitter_data_0, prediction_splitter_data_1, prediction_splitter_data_2: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+		
+	
+	--clamp for x tilde
+	signal xtilde_clamped_raw_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
 	--fifo for xhatout calculation later (after quantizing/dequantizing the error)
-	constant XHATOUT_CALC_FIFO_DEPTH: positive := 3; --as much as the quantizing and dequantizing take
+	constant XHATOUT_CALC_FIFO_DEPTH: positive := 16; --as much as the quantizing and dequantizing take
 	signal xhatout_calc_fifo_ready, xhatout_calc_fifo_valid: std_logic;
 	signal xhatout_calc_fifo_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
@@ -136,6 +142,7 @@ architecture Behavioral of NTHBANDMODULE is
 	signal unquant_error_join_output_data_1: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
 	--unquant error calculation
+	signal unquant_error_calc_input_0: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	signal unquant_error_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	signal unquant_error_valid, unquant_error_ready: std_logic;
 	
@@ -151,86 +158,125 @@ architecture Behavioral of NTHBANDMODULE is
 	signal error_quant_ready, error_quant_valid: std_logic;
 	signal error_quant_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
+	--error quantizer splitter
+	signal error_quant_splitter_valid_0, error_quant_splitter_ready_0, error_quant_splitter_valid_1, error_quant_splitter_ready_1: std_logic;
+	signal error_quant_splitter_data_0, error_quant_splitter_data_1: std_logic_vector(PREDICTION_WIDTH - 1 downto 0); 
+	
 	--error dequantizer
 	signal error_unquant_ready, error_unquant_valid: std_logic;
 	signal error_unquant_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	
+	--error dequantizer splitter
+	signal error_unquant_splitter_valid_0, error_unquant_splitter_ready_0, error_unquant_splitter_valid_1, error_unquant_splitter_ready_1: std_logic; 
+	signal error_unquant_splitter_data_0, error_unquant_splitter_data_1: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	
+	--joiner for prediction + dequantized error
+	signal decoded_joiner_valid, decoded_joiner_ready: std_logic;
+	signal decoded_joiner_data_0, decoded_joiner_data_1: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	
+	--xhatout raw calc
+	signal xhatout_raw_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal xhatout_raw_valid, xhatout_raw_ready: std_logic;
+	
+	--xhatout clamp
+	signal xhatout_raw_data_out: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	
+	--error mapper
+	signal mapped_error_data_raw:	std_logic_vector (PREDICTION_WIDTH downto 0);
+	
+	--error sliding accumulator
+	signal error_acc_cnt: std_logic_vector(ACC_LOG downto 0);
+	signal error_acc_data: std_logic_vector(PREDICTION_WIDTH + ACC_LOG - 1 downto 0);
+	signal error_acc_valid, error_acc_ready: std_logic;
+	
+	--kj filter
+	signal kj_unfiltered_data: std_logic_vector(ACC_LOG - 1 downto 0);
+	signal kj_unfiltered_valid, kj_unfiltered_ready: std_logic;
+	
 					
 begin
 
-	seq: process(clk, rst) 
-	begin
-		if rising_edge(clk) then
-			if rst = '1' then
-				prediction_state_curr <= WAIT_PARAMS;
-				alpha_buffer <= (others => '0');
-				xmean_buffer <= (others => '0');
-				xhatmean_buffer <= (others => '0');
-			else
-				prediction_state_curr <= prediction_state_next;
-				alpha_buffer <= alpha_buffer_next;
-				xmean_buffer <= xmean_buffer_next;
-				xhatmean_buffer <= xhatmean_buffer_next;
-			end if;
-		end if;
-	end process;
 	
-	comb: process(
-		prediction_state_curr, 
-		xmean_valid, xhatmean_valid, alpha_valid)
-	begin
-		--readys
-		xmean_ready <= '0';
-		xhatmean_ready <= '0';
-		alpha_ready <= '0';
-		--buffers
-		alpha_buffer_next <= alpha_buffer;
-		xmean_buffer_next <= xmean_buffer;
-		xhatmean_buffer_next <= xhatmean_buffer;
-		--state
-		prediction_state_next <= prediction_state_curr;
-		--control
-		pred_in_lim_enable <= '0';
-		
-		
-		
-		if prediction_state_curr = WAIT_PARAMS then
-			if xmean_valid = '1' and xhatmean_valid = '1' and alpha_valid = '1' then
-				xmean_ready <= '1';
-				xhatmean_ready <= '1';
-				alpha_ready <= '1';
-				alpha_buffer_next <= alpha_data;
-				xmean_buffer_next <= xmean_data;
-				xhatmean_buffer_next <= xhatmean_data;
-				prediction_state_next <= CALCULATING;
-			end if;
-		elsif prediction_state_curr = CALCULATING then
-			pred_in_lim_enable <= '1';
-		end if;
-	end process;
+	
 
-
-	--connects xhat input with substraction
-	prediction_input_limit: entity work.TRANSACTION_LIMITER
+	-------------------
+	--INPUT REPEATERS--
+	-------------------
+	
+	xmean_repeater: entity work.DATA_REPEATER_AXI
 		Generic map (
-			NUMBER_OF_TRANSACTIONS => 2**BLOCK_SIZE_LOG
-		)	
+			DATA_WIDTH => DATA_WIDTH,
+			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
+		)
 		Port map (
 			clk => clk, rst => rst,
-			enable => pred_in_lim_enable,
-			saturated => pred_in_lim_saturated,
-			input_valid => xhat_valid,
-			input_ready => xhat_ready,
-			output_valid => pred_in_lim_out_valid,
-			output_ready => pred_in_lim_out_ready
+			input_ready => xmean_ready,
+			input_valid => xmean_valid,
+			input_data  => xmean_data,
+			output_ready=> xmean_rep_ready,
+			output_valid=> xmean_rep_valid,
+			output_data => xmean_rep_data
 		);
+
+	xhatmean_repeater: entity work.DATA_REPEATER_AXI
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => xhatmean_ready,
+			input_valid => xhatmean_valid,
+			input_data  => xhatmean_data,
+			output_ready=> xhatmean_rep_ready,
+			output_valid=> xhatmean_rep_valid,
+			output_data => xhatmean_rep_data
+		);
+		
+	alpha_repeater: entity work.DATA_REPEATER_AXI
+		Generic map (
+			DATA_WIDTH => ALPHA_WIDTH,
+			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => alpha_ready,
+			input_valid => alpha_valid,
+			input_data  => alpha_data,
+			output_ready=> alpha_rep_ready,
+			output_valid=> alpha_rep_valid,
+			output_data => alpha_rep_data
+		);
+		
 		
 	--------------
 	--PREDICTION--
 	--------------
 	
 	--first stage
-	prediction_stage_0_input_a <= '0' & xhat_data;
-	prediction_stage_0_input_b <= '0' & xhatmean_buffer;
+	prediction_stage_0_joiner: entity work.JOINER_AXI_2
+		generic map (
+			DATA_WIDTH_0 => DATA_WIDTH,
+			DATA_WIDTH_1 => DATA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid_0 => xhat_valid,
+			input_ready_0 => xhat_ready,
+			input_data_0  => xhat_data,
+			input_valid_1 => xhatmean_rep_valid,
+			input_ready_1 => xhatmean_rep_ready,
+			input_data_1  => xhatmean_rep_data,
+			--to output axi ports
+			output_valid  => prediction_stage_0_joint_valid,
+			output_ready  => prediction_stage_0_joint_ready,
+			output_data_0 => prediction_stage_0_joint_data_0,
+			output_data_1 => prediction_stage_0_joint_data_1
+		);
+	
+	
+	prediction_stage_0_input_a <= '0' & prediction_stage_0_joint_data_0;
+	prediction_stage_0_input_b <= '0' & prediction_stage_0_joint_data_1;
 	
 	prediction_stage_0: entity work.OP_AXI
 		Generic Map (
@@ -242,15 +288,35 @@ begin
 			clk => clk, rst => rst,
 			input_a => prediction_stage_0_input_a, 
 			input_b => prediction_stage_0_input_b,
-			input_valid => pred_in_lim_out_valid,
-			input_ready => pred_in_lim_out_ready,
+			input_valid => prediction_stage_0_joint_valid,
+			input_ready => prediction_stage_0_joint_ready,
 			output => prediction_stage_0_data,
 			output_valid => prediction_stage_0_out_valid,
 			output_ready => prediction_stage_0_out_ready
 		);
 		
 	--second stage
-	prediction_stage_1_input_b <= (DATA_WIDTH downto ALPHA_WIDTH => '0') & alpha_buffer;
+	prediction_stage_1_joiner: entity work.JOINER_AXI_2
+		generic map (
+			DATA_WIDTH_0 => DATA_WIDTH + 1,
+			DATA_WIDTH_1 => ALPHA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid_0 => prediction_stage_0_out_valid,
+			input_ready_0 => prediction_stage_0_out_ready,
+			input_data_0  => prediction_stage_0_data,
+			input_valid_1 => alpha_rep_valid,
+			input_ready_1 => alpha_rep_ready,
+			input_data_1  => alpha_rep_data,
+			--to output axi ports
+			output_valid  => prediction_stage_1_joint_valid,
+			output_ready  => prediction_stage_1_joint_ready,
+			output_data_0 => prediction_stage_1_joint_data_0,
+			output_data_1 => prediction_stage_1_joint_data_1
+		);
+	
+	prediction_stage_1_input_b <= (DATA_WIDTH downto ALPHA_WIDTH => '0') & prediction_stage_1_joint_data_1;
 	
 	prediction_stage_1: entity work.MULT_AXI
 		Generic map (
@@ -258,18 +324,38 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_a => prediction_stage_0_data,
+			input_a => prediction_stage_1_joint_data_0,
 			input_b => prediction_stage_1_input_b,
-			input_valid => prediction_stage_0_out_valid,
-			input_ready => prediction_stage_0_out_ready,
+			input_valid => prediction_stage_1_joint_valid,
+			input_ready => prediction_stage_1_joint_ready,
 			output => prediction_stage_1_data,
 			output_valid => prediction_stage_1_out_valid,
 			output_ready => prediction_stage_1_out_ready
 		);
 	
 	--third stage
-	prediction_stage_2_input_a <= "000" & xmean_buffer; --to make it up to data-width + 3
-	prediction_stage_2_input_b <= prediction_stage_1_data(prediction_stage_1_data'high) & prediction_stage_1_data;
+	prediction_stage_2_joiner: entity work.JOINER_AXI_2
+		generic map (
+			DATA_WIDTH_0 => PREDICTION_WIDTH,
+			DATA_WIDTH_1 => DATA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid_0 => prediction_stage_1_out_valid,
+			input_ready_0 => prediction_stage_1_out_ready,
+			input_data_0  => prediction_stage_1_data(PREDICTION_WIDTH + ALPHA_WIDTH - 2 downto ALPHA_WIDTH - 1),
+			input_valid_1 => xmean_rep_valid,
+			input_ready_1 => xmean_rep_ready,
+			input_data_1  => xmean_rep_data,
+			--to output axi ports
+			output_valid  => prediction_stage_2_joint_valid,
+			output_ready  => prediction_stage_2_joint_ready,
+			output_data_0 => prediction_stage_2_joint_data_0,
+			output_data_1 => prediction_stage_2_joint_data_1
+		);
+		
+		
+	prediction_stage_2_input_b <= "000" & prediction_stage_2_joint_data_1; --to make it up to data-width + 3
 	
 	prediction_stage_2: entity work.OP_AXI
 		Generic Map (
@@ -279,33 +365,55 @@ begin
 		)
 		Port Map (
 			clk => clk, rst => rst,
-			input_a => prediction_stage_2_input_a, 
+			input_a => prediction_stage_2_joint_data_0, 
 			input_b => prediction_stage_2_input_b,
-			input_valid => prediction_stage_1_out_valid,
-			input_ready => prediction_stage_1_out_ready,
+			input_valid => prediction_stage_2_joint_valid,
+			input_ready => prediction_stage_2_joint_ready,
 			output => prediction_stage_2_data,
 			output_valid => prediction_stage_2_out_valid,
 			output_ready => prediction_stage_2_out_ready
 		);
 
 	--prediction splitter (to output queue and to error calculation)
-	prediction_splitter: entity work.SPLITTER_AXI
+	prediction_splitter: entity work.SPLITTER_AXI_3
 		Generic map (
-			DATA_WIDTH => PREDICTION_WIDTH,
-			OUTPUT_PORTS => 3
+			DATA_WIDTH => PREDICTION_WIDTH
 		)
 		Port map (
+			clk => clk, rst => rst,
+			--to input axi port
 			input_valid => prediction_stage_2_out_valid,
+			input_data  => prediction_stage_2_data,
 			input_ready => prediction_stage_2_out_ready,
-			input_data => prediction_stage_2_data,
-			output_valid => prediction_splitter_valid,
-			output_data => prediction_splitter_data,
-			output_ready => prediction_splitter_ready
+			--to output axi ports
+			output_0_valid => prediction_splitter_valid_0,
+			output_0_data  => prediction_splitter_data_0,
+			output_0_ready => prediction_splitter_ready_0,
+			output_1_valid => prediction_splitter_valid_1,
+			output_1_data  => prediction_splitter_data_1,
+			output_1_ready => prediction_splitter_ready_1,
+			output_2_valid => prediction_splitter_valid_2,
+			output_2_data  => prediction_splitter_data_2,
+			output_2_ready => prediction_splitter_ready_2
 		);
-		
-	prediction_splitter_ready(XTILDE_INDEX) <= xtilde_ready;
-	xtilde_valid <= prediction_splitter_valid(XTILDE_INDEX);
-	xtilde_data	 <= prediction_splitter_data(PREDICTION_WIDTH*(XTILDE_INDEX+1) - 1 downto PREDICTION_WIDTH*XTILDE_INDEX);
+	
+	clamp_xtildeout: entity work.INTERVAL_CLAMPER
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH,
+			IS_SIGNED => true,
+			LOWER_LIMIT => 0,
+			UPPER_LIMIT => 2**DATA_WIDTH - 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_data  => prediction_splitter_data_0,
+			input_valid => prediction_splitter_valid_0,
+			input_ready => prediction_splitter_ready_0,
+			output => xtilde_clamped_raw_data,
+			output_valid => xtilde_valid,
+			output_ready => xtilde_ready
+		);
+	xtilde_data <= xtilde_clamped_raw_data(DATA_WIDTH - 1 downto 0);
 	
 	--fifo to xhatout calculation
 	xhatout_calc_fifo: entity work.FIFO_AXI
@@ -315,9 +423,9 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			in_valid => prediction_splitter_valid(XHATOUT_CALC_FIFO_INDEX),
-			in_ready => prediction_splitter_ready(XHATOUT_CALC_FIFO_INDEX),
-			in_data  => prediction_splitter_data(PREDICTION_WIDTH*(XHATOUT_CALC_FIFO_INDEX+1) - 1 downto PREDICTION_WIDTH*XHATOUT_CALC_FIFO_INDEX),
+			in_valid => prediction_splitter_valid_1,
+			in_ready => prediction_splitter_ready_1,
+			in_data  => prediction_splitter_data_1,
 			out_ready => xhatout_calc_fifo_ready,
 			out_valid => xhatout_calc_fifo_valid,
 			out_data  => xhatout_calc_fifo_data
@@ -326,24 +434,26 @@ begin
 	
 	
 	--error calculation
-	unquant_error_join: entity work.JOINER_AXI 	
+	unquant_error_join: entity work.JOINER_AXI_2 	
 		Generic map (
 			DATA_WIDTH_0 => DATA_WIDTH,
 			DATA_WIDTH_1 => PREDICTION_WIDTH
 		)
 		Port map (
+			clk => clk, rst => rst,
 			input_valid_0 => x_valid,
 			input_ready_0 => x_ready,
 			input_data_0  => x_data,
-			input_valid_1 => prediction_splitter_valid(UNQUANT_ERROR_JOIN_INDEX),
-			input_ready_1 => prediction_splitter_ready(UNQUANT_ERROR_JOIN_INDEX),
-			input_data_1  => prediction_splitter_data(PREDICTION_WIDTH*(UNQUANT_ERROR_JOIN_INDEX+1) - 1 downto PREDICTION_WIDTH*UNQUANT_ERROR_JOIN_INDEX),
+			input_valid_1 => prediction_splitter_valid_2,
+			input_ready_1 => prediction_splitter_ready_2,
+			input_data_1  => prediction_splitter_data_2,
 			output_valid  => unquant_error_join_output_valid,
 			output_ready  => unquant_error_join_output_ready,
 			output_data_0 => unquant_error_join_output_data_0,
 			output_data_1 => unquant_error_join_output_data_1
 		);
 	
+	unquant_error_calc_input_0 <= (PREDICTION_WIDTH -1 downto DATA_WIDTH => '0') & unquant_error_join_output_data_0;
 	unquant_error_calc: entity work.OP_AXI
 		Generic Map (
 			DATA_WIDTH => PREDICTION_WIDTH,
@@ -352,7 +462,7 @@ begin
 		)
 		Port Map (
 			clk => clk, rst => rst,
-			input_a => unquant_error_join_output_data_0, 
+			input_a => unquant_error_calc_input_0, 
 			input_b => unquant_error_join_output_data_1,
 			input_valid => unquant_error_join_output_valid,
 			input_ready => unquant_error_join_output_ready,
@@ -367,6 +477,7 @@ begin
 			DATA_WIDTH => PREDICTION_WIDTH
 		)
 		Port map (
+			clk => clk, rst => rst,
 			input_valid => unquant_error_valid,
 			input_ready => unquant_error_ready,
 			input_data => unquant_error_data,
@@ -428,6 +539,27 @@ begin
 			output => error_quant_data
 		);
 		
+	--splitter for quantized error 
+		--one goes to error mapping
+		--one goes to dequantizing and decoding for next layer
+	quantized_error_splitter: entity work.SPLITTER_AXI_2
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid => error_quant_valid,
+			input_ready => error_quant_ready,
+			input_data => error_quant_data,
+			output_0_valid => error_quant_splitter_valid_0,
+			output_0_data => error_quant_splitter_data_0,
+			output_0_ready => error_quant_splitter_ready_0,
+			output_1_valid => error_quant_splitter_valid_1,
+			output_1_data => error_quant_splitter_data_1,
+			output_1_ready => error_quant_splitter_ready_1
+		);
+	
+	--error dequantizer
 	error_dequantizer: entity work.BINARY_DEQUANTIZER
 		Generic map (
 			UPSHIFT => UPSHIFT,
@@ -436,14 +568,159 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_ready => error_quant_ready,
-			input_valid => error_quant_valid,
-			input => error_quant_data,
+			input_ready => error_quant_splitter_ready_0,
+			input_valid => error_quant_splitter_valid_0,
+			input => error_quant_splitter_data_0,
 			output_ready => error_unquant_ready,
 			output_valid => error_unquant_valid,
 			output => error_unquant_data
 		);
 		
+	--splitter for error dequantizer
+		--one going to the decoded block calculation
+		--other one going to the sliding accumulator
+	unquantized_error_splitter: entity work.SPLITTER_AXI_2
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid => error_unquant_valid,
+			input_ready => error_unquant_ready,
+			input_data => error_unquant_data,
+			output_0_valid => error_unquant_splitter_valid_0,
+			output_0_data => error_unquant_splitter_data_0,
+			output_0_ready => error_unquant_splitter_ready_0,
+			output_1_valid => error_unquant_splitter_valid_1,
+			output_1_data => error_unquant_splitter_data_1,
+			output_1_ready => error_unquant_splitter_ready_1
+		);
+	
+		
+	--joiner for xhatout calc
+	decoded_reconstruct: entity work.JOINER_AXI_2
+		Generic map (
+			DATA_WIDTH_0 => PREDICTION_WIDTH, 
+			DATA_WIDTH_1 => PREDICTION_WIDTH)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid_0 => xhatout_calc_fifo_valid,
+			input_ready_0 => xhatout_calc_fifo_ready,
+			input_data_0  => xhatout_calc_fifo_data,
+			input_valid_1 => error_unquant_splitter_valid_0,
+			input_ready_1 => error_unquant_splitter_ready_0,
+			input_data_1  => error_unquant_splitter_data_0,
+			output_valid  => decoded_joiner_valid,
+			output_ready  => decoded_joiner_ready,
+			output_data_0 => decoded_joiner_data_0,
+			output_data_1 => decoded_joiner_data_1
+		);
+		
+	--decoded block out for next layer calculation
+	xhatout_calc: entity work.OP_AXI
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH,
+			IS_ADD => true,
+			IS_SIGNED => true
+		)
+		Port map(
+			clk => clk, rst => rst,
+			input_a => decoded_joiner_data_0,
+			input_b => decoded_joiner_data_1,
+			input_valid => decoded_joiner_valid,
+			input_ready => decoded_joiner_ready,
+			output => xhatout_raw_data,
+			output_valid => xhatout_raw_valid,
+			output_ready => xhatout_raw_ready
+		);
+		
+	--clamp decoded block to real interval
+	clamp_xhatout: entity work.INTERVAL_CLAMPER
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH,
+			IS_SIGNED => true,
+			LOWER_LIMIT => 0,
+			UPPER_LIMIT => 2**DATA_WIDTH - 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_data  => xhatout_raw_data,
+			input_valid => xhatout_raw_valid,
+			input_ready => xhatout_raw_ready,
+			output => xhatout_raw_data_out,
+			output_valid => xhatout_valid,
+			output_ready => xhatout_ready
+		);
+	xhatout_data <= xhatout_raw_data_out(DATA_WIDTH - 1 downto 0);
+		
+	--error mapper
+	error_mapper: entity work.ERROR_MAPPER
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => error_quant_splitter_ready_1,
+			input_valid => error_quant_splitter_valid_1,
+			input => error_quant_splitter_data_1,
+			output_ready => merr_ready,
+			output_valid => merr_valid,
+			output => mapped_error_data_raw
+		);
+	--no need for last bit since that can only be set when the error value is -2^n and that is not possible here
+	merr_data <= mapped_error_data_raw(PREDICTION_WIDTH - 1 downto 0); 
+	
+	--sliding accumulator for kj finding
+	error_acc: entity work.SLIDING_ACCUMULATOR
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH,
+			ACC_LOG => ACC_LOG
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input => error_unquant_splitter_data_1, 
+			input_valid => error_unquant_splitter_valid_1,
+			input_ready => error_unquant_splitter_ready_1,
+			output_cnt => error_acc_cnt, 
+			output_data => error_acc_data,
+			output_valid => error_acc_valid,
+			output_ready => error_acc_ready
+		);
+		
+	--kj calculation
+	kj_calculator: entity work.KJCALC_AXI
+		Generic map (
+			ACC_LOG => ACC_LOG,
+			DATA_WIDTH => PREDICTION_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			rj => error_acc_data,
+			j  => error_acc_cnt,
+			input_valid => error_acc_valid,
+			input_ready => error_acc_ready,
+			kj => kj_unfiltered_data,
+			output_valid => kj_unfiltered_valid,
+			output_ready => kj_unfiltered_ready
+		);
+		
+	--kj filtering (there is one more kj produced than necessary)
+	kj_filtering: entity work.FILTER_AXI
+		Generic map (
+			DATA_WIDTH => ACC_LOG,
+			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG - 1,
+			INVALID_TRANSACTIONS => 1,
+			START_VALID => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready	=> kj_unfiltered_ready,
+			input_valid	=> kj_unfiltered_valid,
+			input_data	=> kj_unfiltered_data,
+			output_ready=> kj_ready,
+			output_valid=> kj_valid,
+			output_data	=> kj_data
+		);
 
 
 end Behavioral;

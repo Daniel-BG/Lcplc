@@ -37,60 +37,75 @@ entity SPLITTER_AXI is
 		OUTPUT_PORTS: positive := 2
 	);
 	Port (
+		clk, rst		: in 	std_logic;
 		--to input axi port
 		input_valid		: in	STD_LOGIC;
 		input_data		: in	STD_LOGIC_VECTOR (DATA_WIDTH - 1 downto 0);
 		input_ready		: out	STD_LOGIC;
 		--to output axi ports
 		output_valid	: out 	STD_LOGIC_VECTOR(OUTPUT_PORTS - 1 downto 0);
-		output_data		: out 	STD_LOGIC_VECTOR(DATA_WIDTH*OUTPUT_PORTS - 1 downto 0);
+		output_data		: out 	STD_LOGIC_VECTOR(DATA_WIDTH - 1 downto 0);
 		output_ready	: in 	STD_LOGIC_VECTOR(OUTPUT_PORTS - 1 downto 0)
 	);
 end SPLITTER_AXI;
 
-architecture Behavioral of SPLITTER_AXI is
-	signal all_ready: std_logic;
+architecture Behavioral of SPLITTER_AXI is	
+	--buffers
+	signal buf0, buf1: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	
+	--buffer flags
+	signal buf0_full: std_logic;
+	signal buf1_full: std_logic_vector(OUTPUT_PORTS - 1 downto 0);
+	signal buf1_full_next: std_logic_vector(OUTPUT_PORTS - 1 downto 0);
+	
+	--inner signals
+	signal inner_in_ready: std_logic;
+	signal inner_out_valid: std_logic_vector(OUTPUT_PORTS - 1 downto 0);
 begin
-	gen_output: for i in 1 to OUTPUT_PORTS generate
-		output_data(DATA_WIDTH*i - 1 downto DATA_WIDTH*(i-1)) <= input_data;
-		output_valid(i-1) <= all_ready;
+	output_data <= buf1;
+
+	inner_in_ready	<= not buf0_full;
+	inner_out_valid	<=     buf1_full;
+	input_ready		<= inner_in_ready;
+	output_valid	<= inner_out_valid;
+	
+	gen_next_full_flag: for i in OUTPUT_PORTS - 1 downto 0 generate
+		buf1_full_next(i) <= '0' when buf1_full(i) = '0' or (inner_out_valid(i) = '1' and output_ready(i) = '1') else '1'; 
 	end generate;
 	
-	all_ready <= '1' when output_ready = (output_ready'range => '1') and input_valid = '1' else '0';
+	seq: process(clk, rst)
+	begin
+		if rising_edge(clk) then
+			if rst = '1' then
+				buf0_full <= '0';
+				buf1_full <= (others => '0');
+				buf0 	  <= (others => '0');
+				buf1 	  <= (others => '0');
+			else
+				--is writing a value, now decide where
+				if inner_in_ready = '1' and input_valid = '1' then
+					if buf1_full_next = (buf1_full_next'range => '0') then
+						buf1 <= input_data;
+						buf1_full <= (buf1_full'range => '1');
+					else
+						buf0 <= input_data;
+						buf0_full <= '1';
+						buf1_full <= buf1_full_next;
+					end if;
+				--not writing anything
+				else 
+					if buf1_full_next = (buf1_full_next'range => '0') then
+						--shift value
+						buf0_full <= '0';
+						buf1_full <= (buf1_full'range => buf0_full);
+					else
+						buf1_full <= buf1_full_next; --maybe reading some values, maybe not
+					end if;
+				end if;
+			end if;
+		end if;
+	end process;
 	
-	input_ready    <= all_ready;
-
+	
+	
 end Behavioral;
-
-
-
---entity SPLITTER_AXI is
---	Generic (
---		DATA_WIDTH: positive := 32;
---		OUTPUT_PORTS: positive := 2
---	);
---	Port (
---		--to input axi port
---		input_valid		: in	STD_LOGIC;
---		input_data		: in	STD_LOGIC_VECTOR (DATA_WIDTH - 1 downto 0);
---		input_ready		: out	STD_LOGIC;
---		--to output axi ports
---		output_valid	: out 	STD_LOGIC_VECTOR(OUTPUT_PORTS - 1 downto 0);
---		output_data		: out 	STD_LOGIC_VECTOR(DATA_WIDTH*OUTPUT_PORTS - 1 downto 0);
---		output_ready	: in 	STD_LOGIC_VECTOR(OUTPUT_PORTS - 1 downto 0)
---	);
---end SPLITTER_AXI;
-
---architecture Behavioral of SPLITTER_AXI is
---	signal all_ready: std_logic;
---begin
---	gen_output: for i in 1 to OUTPUT_PORTS generate
---		output_data(DATA_WIDTH*i - 1 downto DATA_WIDTH*(i-1)) <= input_data;
---		output_valid(i-1) <= all_ready;
---	end generate;
-	
---	all_ready <= '1' when output_ready = (output_ready'range => '1') and input_valid = '1' else '0';
-	
---	input_ready    <= all_ready;
-
---end Behavioral;
