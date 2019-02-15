@@ -62,6 +62,8 @@ begin
 	input_ready_0 <= output_ready when read_from_zero else '0';
 	input_ready_1 <= output_ready when not read_from_zero else '0';
 	output_valid  <= input_valid_0 when read_from_zero else input_valid_1;
+	
+	output_data   <= input_data_0 when read_from_zero else input_data_1; 
 
 	seq: process(clk)
 	begin

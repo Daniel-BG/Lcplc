@@ -39,23 +39,21 @@ entity CODER is
 	);
 	Port (
 		--inputs
-		xhat_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xhat_ready	: out	std_logic;
-		xhat_valid	: in	std_logic;
 		ehat_data	: in	std_logic_vector(DATA_WIDTH + 2 downto 0);
 		ehat_ready	: out	std_logic;
 		ehat_valid	: in 	std_logic;
 		kj_data		: in 	std_logic_vector(ACC_LOG - 1 downto 0);
 		kj_ready	: out	std_logic;
 		kj_valid	: in 	std_logic;
-		xtilde_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xtilde_ready: out	std_logic;
-		xtilde_valid: in	std_logic;
 		d_data		: in	std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0);
 		d_ready		: out	std_logic;
-		d_valid		: in 	std_logic
+		d_valid		: in 	std_logic;
 		--outputs
 		--??????
+		vector_data	: out	std_logic_vector(2**ACC_LOG - 1 downto 0);
+		vector_amount: out	std_logic_vector(ACC_LOG downto 0); --max value is 2**ACC_LOG which takes ACC_LOG + 1 bits
+		vector_valid: out	std_logic;
+		vector_ready: in 	std_logic
 	);
 end CODER;
 

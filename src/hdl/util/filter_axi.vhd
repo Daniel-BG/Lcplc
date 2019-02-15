@@ -31,7 +31,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
-entity filter_axi is
+entity FILTER_AXI is
 	Generic (
 		DATA_WIDTH: integer := 32;
 		VALID_TRANSACTIONS: integer := 255;
@@ -47,9 +47,9 @@ entity filter_axi is
 		output_valid:	out	std_logic;
 		output_data:	out	std_logic_vector(DATA_WIDTH - 1 downto 0)
 	);
-end filter_axi;
+end FILTER_AXI;
 
-architecture Behavioral of filter_axi is
+architecture Behavioral of FILTER_AXI is
 	type filter_state_t is (VALID, INVALID);
 	signal state_curr, state_next, state_first: filter_state_t;
 
