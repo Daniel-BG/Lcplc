@@ -45,21 +45,24 @@ entity CODER is
 		kj_data		: in 	std_logic_vector(ACC_LOG - 1 downto 0);
 		kj_ready	: out	std_logic;
 		kj_valid	: in 	std_logic;
-		d_data		: in	std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0);
-		d_ready		: out	std_logic;
-		d_valid		: in 	std_logic;
+		d_flag_data	: in	std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0);
+		d_flag_ready: out	std_logic;
+		d_flag_valid: in 	std_logic;
 		--outputs
 		--??????
-		vector_data	: out	std_logic_vector(2**ACC_LOG - 1 downto 0);
-		vector_amount: out	std_logic_vector(ACC_LOG downto 0); --max value is 2**ACC_LOG which takes ACC_LOG + 1 bits
-		vector_valid: out	std_logic;
-		vector_ready: in 	std_logic
+		output_data	: out	std_logic_vector(2**ACC_LOG - 1 downto 0);
+		output_valid: out	std_logic;
+		output_ready: in 	std_logic
 	);
 end CODER;
 
 architecture Behavioral of CODER is
 
 begin
+
+
+	--D flag generator
+	
 
 
 end Behavioral;

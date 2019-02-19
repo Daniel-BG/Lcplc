@@ -46,9 +46,9 @@ entity NEXT_XHAT_PRECALC is
 		xtilde_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xtilde_ready	: out	std_logic;
 		xtilde_valid	: in	std_logic;
-		d_data			: in	std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0);
-		d_ready			: out	std_logic;
-		d_valid			: in 	std_logic;
+		d_flag_data_raw	: in	std_logic;
+		d_flag_ready	: out	std_logic;
+		d_flag_valid	: in 	std_logic;
 		xhatout_data	: out	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xhatout_ready	: in	std_logic;
 		xhatout_valid	: out	std_logic;
@@ -83,10 +83,7 @@ architecture Behavioral of NEXT_XHAT_PRECALC is
 	signal xtildemean_valid, xtildemean_ready: std_logic;
 
 	--flag gen
-	signal d_flag_thres: std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0); 
-	signal d_flag_data_raw: std_logic;
 	signal d_flag_data: std_logic_vector(0 downto 0);
-	signal d_flag_valid, d_flag_ready: std_logic;
 	
 	--flag splitter
 	signal d_flag_0_valid, d_flag_0_ready, d_flag_1_valid, d_flag_1_ready: std_logic;
@@ -209,27 +206,8 @@ begin
 			output_ready=> xtildemean_ready
 		);
 		
-	--threshold calculations	
-	d_flag_thres <= std_logic_vector(resize(unsigned(THRESHOLD),(DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG));
-	d_threshold_comparator: entity work.COMPARATOR_AXI
-		Generic map (
-			DATA_WIDTH => (DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG,
-			IS_SIGNED => false,
-			IS_EQUAL => false,
-			IS_GREATER => true
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_a => d_data,
-			input_b => d_flag_thres,
-			input_valid => d_valid,
-			input_ready => d_ready,
-			output => d_flag_data_raw,
-			output_valid => d_flag_valid,
-			output_ready => d_flag_ready
-		);
+	--threshold splitter
 	d_flag_data <= "0" when d_flag_data_raw = '0' else "1";
-	
 	d_threshold_splitter: entity  work.SPLITTER_AXI_2
 		Generic map (
 			DATA_WIDTH => 1

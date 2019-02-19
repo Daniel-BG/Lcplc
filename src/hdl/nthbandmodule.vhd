@@ -38,7 +38,8 @@ entity NTHBANDMODULE is
 		BLOCK_SIZE_LOG: positive := 8;
 		ACC_LOG: positive := 5;
 		UPSHIFT: positive := 1;
-		DOWNSHIFT: positive := 1
+		DOWNSHIFT: positive := 1;
+		THRESHOLD: std_logic_vector := "100000000000000" --has to be std_logic_vector because its value might be greater than 2^32-1: the max of positive
 	);
 	Port (
 		clk, rst		: in  std_logic;
@@ -77,9 +78,9 @@ entity NTHBANDMODULE is
 		xhatout_valid   : out std_logic;
 		xhatout_ready	: in std_logic;
 		xhatout_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
-		distortion_valid: out std_logic;
-		distortion_ready: in std_logic;
-		distortion_data : out std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0)
+		d_flag_valid	: out std_logic;
+		d_flag_ready	: in std_logic;
+		d_flag_data 	: out std_logic
 	);
 end NTHBANDMODULE;
 
@@ -136,6 +137,13 @@ architecture Behavioral of NTHBANDMODULE is
 	--distortion multiplier
 	signal distortion_mult_data: std_logic_vector(PREDICTION_WIDTH*2-1 downto 0);
 	signal distortion_mult_valid, distortion_mult_ready: std_logic;
+	
+	--distortion stuff
+	signal distortion_valid, distortion_ready: std_logic;
+	signal distortion_data: std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0);
+	
+	--distortion flag stuff
+	signal d_flag_thres: std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0); 
 	
 	--error quantizer
 	signal error_quant_ready, error_quant_valid: std_logic;
@@ -426,6 +434,26 @@ begin
 			output_valid => distortion_valid,
 			output_ready => distortion_ready
 		);
+		
+	d_flag_thres <= std_logic_vector(resize(unsigned(THRESHOLD),(DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG));
+	d_threshold_comparator: entity work.COMPARATOR_AXI
+		Generic map (
+			DATA_WIDTH => (DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG,
+			IS_SIGNED => false,
+			IS_EQUAL => false,
+			IS_GREATER => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_a => distortion_data,
+			input_b => d_flag_thres,
+			input_valid => distortion_valid,
+			input_ready => distortion_ready,
+			output => d_flag_data,
+			output_valid => d_flag_valid,
+			output_ready => d_flag_ready
+		);
+	--1 on flag means it is greater than the threshold
 		
 	--error quant/dequant
 	error_quantizer: entity work.BINARY_QUANTIZER
