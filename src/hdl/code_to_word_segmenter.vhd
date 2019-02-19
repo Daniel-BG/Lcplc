@@ -31,147 +31,119 @@ use IEEE.NUMERIC_STD.ALL;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
+--up to DATA_WIDTH bits can come in the input vector
+--at least 1 is used in the first cycle, and then they are used
+--in groups of up to 2**WORD_WIDTH_LOG
+--so if D_WIDTH = 39 it can take up to 3 cycles. 
+--the WORD_CNT_SLACK is needed to be able to know how many cycles we need to
+--spend on each input since we shift by 2**WORD_WIDTH_LOG each time.
+--the input_quantity tells us where we are, and a 2-bit counter keeps track
 entity CODE_TO_WORD_SEGMENTER is
 	Generic (
 		DATA_WIDTH: integer := 39;
-		WORD_WIDTH_LOG: integer := 5
+		WORD_WIDTH_LOG: integer := 5;
+		WORD_CNT_SLACK: integer := 2
 	);
 	Port (
 		clk, rst		: in	std_logic;
 		input_data		: in 	std_logic_vector(DATA_WIDTH - 1 + 2**WORD_WIDTH_LOG - 1 downto 0);
-		input_quantity	: in	natural range 0 to DATA_WIDTH;
+		input_quantity	: in	std_logic_vector(WORD_WIDTH_LOG + WORD_CNT_SLACK - 1 downto 0);
 		input_ready		: out	std_logic;
 		input_valid		: in	std_logic;
 		output_data		: out 	std_logic_vector(2**WORD_WIDTH_LOG - 1 downto 0);
 		output_ends_word: out 	std_logic;
 		output_ready	: in	std_logic;
-		output_valid	: out	std_logic
+		output_valid	: out	std_logic;
+		has_data_buffered:out	std_logic
 	);
 end CODE_TO_WORD_SEGMENTER;
 
 architecture Behavioral of CODE_TO_WORD_SEGMENTER is
-	type c2w_seg_t is (IDLE, BUFFERED);
-	signal state_curr, state_next: c2w_seg_t;
-	
-	--buffers
-	signal input_data_buff, input_data_buff_next: std_logic_vector(DATA_WIDTH - 1 + 2**WORD_WIDTH_LOG - 1 downto 0);
-	signal input_quantity_buff, input_quantity_buff_next: natural range 0 to DATA_WIDTH + 2**WORD_WIDTH_LOG;
-	
-	--internal counters
-	signal bit_counter, bit_counter_next: natural range 0 to 2**WORD_WIDTH_LOG; 
-	signal bit_counter_lookahead, bit_counter_lookahead_next: natural range 0 to 2**WORD_WIDTH_LOG + DATA_WIDTH;
---	signal bit_counter_lookahead_a, bit_counter_lookahead_b, bit_counter_lookahead_c, bit_counter_lookahead_d: natural range 0 to 2**WORD_WIDTH_LOG + DATA_WIDTH;
---	signal bit_counter_la_sel: std_logic_vector(2 downto 0);
-begin
+	type state_segmenter_t is (WORKING, BUFFERED);
+	signal state_curr, state_next: state_segmenter_t;
 
+	signal inner_counter, inner_counter_next: std_logic_vector(WORD_CNT_SLACK - 1 downto 0);
 	
+	signal input_data_buff, input_data_buff_next: std_logic_vector(DATA_WIDTH - 1 - 1 downto 0); -- -1 since 1 is always at least lost in first cycle so we don't need it
+	signal input_quantity_buff, input_quantity_buff_next: std_logic_vector(WORD_WIDTH_LOG + WORD_CNT_SLACK - 1 downto 0);
+	
+begin
 
 	seq: process(clk)
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				state_curr <= IDLE;
-				bit_counter <= 0;
+				state_curr <= WORKING;
+				inner_counter <= (others => '0');
 				input_data_buff <= (others => '0');
-				input_quantity_buff <= 0;
-				bit_counter_lookahead <= 0;
+				input_quantity_buff <= (others => '0');
 			else
 				state_curr <= state_next;
-				bit_counter <= bit_counter_next;
+				inner_counter <= inner_counter_next;
 				input_data_buff <= input_data_buff_next;
 				input_quantity_buff <= input_quantity_buff_next;
-				bit_counter_lookahead <= bit_counter_lookahead_next;
 			end if;
 		end if;
 	end process;
-			
-	output_data <= input_data_buff(input_data_buff'high downto input_data'high - 2**WORD_WIDTH_LOG + 1);
 	
-	comb: process(state_curr, input_valid, input_data, input_quantity, bit_counter, output_ready, input_data_buff, input_quantity_buff, bit_counter_lookahead)
+
+	has_data_buffered <= '1' when state_curr = BUFFERED else '0';
+	
+	comb: process(state_curr, input_quantity_buff, input_data_buff, inner_counter, input_valid, output_ready, input_data, input_quantity)
 	begin
-		
-		input_ready <= '0';
-		output_valid <= '0';
 		output_ends_word <= '0';
-		input_data_buff_next <= input_data_buff;
 		input_quantity_buff_next <= input_quantity_buff;
-		bit_counter_lookahead_next <= 0;		   
+		input_data_buff_next <= input_data_buff;
+		output_valid <= '0';
+		input_ready <= '0';
+		inner_counter_next <= inner_counter;
 		state_next <= state_curr;
-		bit_counter_next <= bit_counter;
 		
-		--bit_counter_la_sel <= "000";
-		
-		if state_curr = IDLE then
-			input_ready <= '1';
-			if input_valid = '1' then
-				input_data_buff_next <= input_data;
-				input_quantity_buff_next <= input_quantity;
-				--bit_counter_la_sel <= "000";
-				bit_counter_lookahead_next <= bit_counter + input_quantity;
-				state_next <= BUFFERED;
+		if state_curr = WORKING then
+			output_valid <= input_valid;
+			input_ready <= output_ready;
+			output_data <= input_data(input_data'high downto input_data'high - 2**WORD_WIDTH_LOG + 1);
+			
+			if input_valid = '1' and output_ready = '1' then
+				if input_quantity(input_quantity'high downto input_quantity'high - WORD_CNT_SLACK + 1) = inner_counter then
+					if input_quantity(WORD_WIDTH_LOG - 1 downto 0) = (WORD_WIDTH_LOG - 1 downto 0 => '0') then
+						output_ends_word <= '1';
+						inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
+					else
+						--do nothing special
+					end if;
+				else
+					output_ends_word <= '1';
+					inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
+					input_quantity_buff_next <= input_quantity;
+					input_data_buff_next <= input_data(input_data'high - 2**WORD_WIDTH_LOG downto 0);
+					state_next <= BUFFERED;
+				end if;
 			end if;
 		elsif state_curr = BUFFERED then
 			output_valid <= '1';
+			output_data <= input_data_buff(input_data_buff'high downto input_data_buff'high - 2**WORD_WIDTH_LOG + 1);
+			
 			if output_ready = '1' then
-				if bit_counter_lookahead > 2**WORD_WIDTH_LOG then
-					output_ends_word <= '1';
-					bit_counter_next <= 0;
-					--bit_counter_la_sel <= "001";
-					bit_counter_lookahead_next <= bit_counter_lookahead - 2**WORD_WIDTH_LOG;
-					input_data_buff_next <= input_data_buff(input_data_buff'high - 2**WORD_WIDTH_LOG downto 0) & (2**WORD_WIDTH_LOG - 1 downto 0 => '0');
-				elsif bit_counter_lookahead = 2**WORD_WIDTH_LOG then
-					output_ends_word <= '1';
-					bit_counter_next <= 0;
-					input_ready <= '1';
-					if input_valid = '1' then
-						--bit_counter_la_sel <= "010";
-						bit_counter_lookahead_next <= input_quantity;
-						input_data_buff_next <= input_data;
-						input_quantity_buff_next <= input_quantity;
+				if input_quantity_buff(input_quantity_buff'high downto input_quantity_buff'high - WORD_CNT_SLACK + 1) = inner_counter then
+					state_next <= WORKING;
+					if input_quantity_buff(WORD_WIDTH_LOG - 1 downto 0) = (WORD_WIDTH_LOG - 1 downto 0 => '0') then
+						output_ends_word <= '1';
+						inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
 					else
-						state_next <= IDLE;
+						--do nothing special
 					end if;
 				else
-					bit_counter_next <= bit_counter_lookahead;
-					input_ready <= '1';
-					if input_valid = '1' then
-						--bit_counter_la_sel <= "011";
-						bit_counter_lookahead_next <= bit_counter_lookahead + input_quantity;
-						input_data_buff_next <= input_data;
-						input_quantity_buff_next <= input_quantity;
-					else
-						state_next <= IDLE;
-					end if; 
+					output_ends_word <= '1';
+					inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
+					input_quantity_buff_next <= input_quantity_buff;
+					input_data_buff_next <= input_data_buff(input_data_buff'high - 2**WORD_WIDTH_LOG downto 0) & (2**WORD_WIDTH_LOG - 1 downto 0 => '0');
 				end if;
 			end if;
-			
 		end if;
-		
 	
 	end process;
 	
---	bit_counter_lookahead_a <= bit_counter + input_quantity;
---	bit_counter_lookahead_b <= bit_counter_lookahead - 2**WORD_WIDTH_LOG;
---	bit_counter_lookahead_c <= input_quantity;
---	bit_counter_lookahead_d <= bit_counter_lookahead + input_quantity;
-	
---	bit_counter_lookahead_next_sel: process(
---		bit_counter_lookahead_a, bit_counter_lookahead_b, bit_counter_lookahead_c, bit_counter_lookahead_d,
---		bit_counter_la_sel,bit_counter_lookahead)
---	begin
---		if bit_counter_la_sel = "000" then
---			bit_counter_lookahead_next <= bit_counter_lookahead_a; 
---		elsif bit_counter_la_sel = "001" then
---			bit_counter_lookahead_next <= bit_counter_lookahead_b;
---		elsif bit_counter_la_sel = "010" then
---			bit_counter_lookahead_next <= bit_counter_lookahead_c;
---		elsif bit_counter_la_sel = "011" then
---			bit_counter_lookahead_next <= bit_counter_lookahead_d;
---		else
---			bit_counter_lookahead_next <= bit_counter_lookahead;
---		end if;
-	
---	end process;
 	
 
 
