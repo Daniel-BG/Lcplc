@@ -301,7 +301,7 @@ public class Main {
 			
 
 			
-			/*int Rj = (int) acc.getRunningSum();		//running count of last (at most) 32 mapped errors
+			/*int Rj = (int) acc.getRunningSum();	//running count of last (at most) 32 mapped errors
 			int J  =       acc.getRunningCount();	//number of samples to average out for golomb param calculation			
 			int kj = Utils.countBitsOf(J);
 			kj = Rj >> kj;
