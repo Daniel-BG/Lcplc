@@ -41,6 +41,9 @@ entity CODER is
 	);
 	Port (
 		clk, rst	: in 	std_logic;
+		--control
+		flush		: in	std_logic;
+		flushed		: out 	std_logic;
 		--inputs
 		ehat_data	: in	std_logic_vector(MAPPED_ERROR_WIDTH - 1 downto 0);
 		ehat_ready	: out	std_logic;
@@ -65,9 +68,6 @@ architecture Behavioral of CODER is
 	signal d_flag_0_data, d_flag_1_data, d_flag_2_data: std_logic_vector(0 downto 0); 
 	signal d_flag_0_ready, d_flag_1_ready, d_flag_2_ready: std_logic;
 	
-	--d flag limiter
-	signal flag_lim_clear, flag_lim_saturated, flag_valid_lim, flag_ready_lim: std_logic;
-	
 	--repeaters
 	signal d_flag_kj_ready, d_flag_ehat_ready, d_flag_kj_valid, d_flag_ehat_valid: std_logic;
 	signal d_flag_kj_data, d_flag_ehat_data: std_logic_vector(0 downto 0);
@@ -83,10 +83,6 @@ architecture Behavioral of CODER is
 	signal ehat_zero_valid, ehat_zero_ready, ehat_one_valid, ehat_one_ready: std_logic;
 	signal ehat_zero_data, ehat_one_data: std_logic_vector(MAPPED_ERROR_WIDTH - 1 downto 0);
 	
-	--limiter to exp golomb coder	
-	signal exp_golomb_limiter_clear, exp_golomb_limiter_saturated: std_logic;
-	signal ehat_zero_valid_lim, ehat_zero_ready_lim: std_logic;
-	
 	--coding constants
 	constant CODING_LENGTH_MAX: integer := MAPPED_ERROR_WIDTH*2+1;
 	constant CODING_LENGTH_MAX_LOG: integer := bits(CODING_LENGTH_MAX);
@@ -100,14 +96,7 @@ architecture Behavioral of CODER is
 	signal golomb_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
 	signal golomb_length: natural range 0 to CODING_LENGTH_MAX;
 	signal golomb_valid, golomb_ready: std_logic;
-	
-	--limiter after e0 golomb coder
-	signal exp_golomb_output_limiter_clear, exp_golomb_output_limiter_saturated: std_logic;
-	signal eg_valid_lim, eg_ready_lim: std_logic;
-	
-	--limiter to golomb coder	
-	signal golomb_limiter_clear, golomb_limiter_saturated: std_logic;
-	signal ehat_one_valid_lim, ehat_one_ready_lim: std_logic;
+	signal golomb_ends_input: std_logic;
 	
 	--merger stuff
 	signal merger_input_0, merger_input_1, merger_input_2: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
@@ -117,12 +106,8 @@ architecture Behavioral of CODER is
 	signal merger_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
 	signal merger_length: natural range 0 to CODING_LENGTH_MAX;
 	
-	--packer stuff
-	signal packer_flush, packer_flushed: std_logic;
-	
 	--control signals
-	type coder_control_t is (AWAIT_SATURATION, FLUSHING);
-	signal state_curr, state_next: coder_control_t;
+	signal counter_bitplane, counter_bitplane_next: natural range 0 to 2**BLOCK_SIZE_LOG - 1;
 begin
 
 	------CONTROL BEGIN---------
@@ -130,40 +115,24 @@ begin
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				state_curr <= AWAIT_SATURATION;
+				counter_bitplane <= 0;
 			else
-				state_curr <= state_next;
+				counter_bitplane <= counter_bitplane_next;
 			end if;
 		end if;	
 	end process;
 	
-
-	
-	comb: process(state_curr, exp_golomb_limiter_saturated, exp_golomb_output_limiter_saturated, golomb_limiter_saturated, flag_lim_saturated, packer_flushed)
+	comb: process(golomb_valid, golomb_ready, golomb_ends_input, counter_bitplane)
 	begin
-		state_next <= state_curr;
-		packer_flush <= '1';
-		exp_golomb_limiter_clear <= '0';
-		exp_golomb_output_limiter_clear <= '0';
-		golomb_limiter_clear <= '0';
-		flag_lim_clear <= '0';
 		merger_clear <= '0';
+		counter_bitplane_next <= counter_bitplane;
 		
-		if state_curr = AWAIT_SATURATION then
-			--data went to exp zero golomb coder
-			if exp_golomb_limiter_saturated = '1' and flag_lim_saturated = '1' and exp_golomb_output_limiter_saturated = '1' and golomb_limiter_saturated = '1' then
-				state_next <= FLUSHING;
-			end if;
-		elsif state_curr = FLUSHING then
-			packer_flush <= '1';
-			if packer_flushed = '1' then
-				--reset all limiters
-				state_next <= AWAIT_SATURATION;
-				exp_golomb_limiter_clear <= '1';
-				exp_golomb_output_limiter_clear <= '1';
-				golomb_limiter_clear <= '1';
-				merger_clear <= '1';
-				flag_lim_clear <= '1';
+		if golomb_valid = '1' and golomb_ready = '1' and golomb_ends_input = '1' then
+			if counter_bitplane = 2**BLOCK_SIZE_LOG - 1 then
+				counter_bitplane_next <= 0;
+				merger_clear <= '1'; --allow for next bitplane to go through
+			else
+				counter_bitplane_next <= counter_bitplane + 1;
 			end if;
 		end if;
 	end process;
@@ -190,22 +159,6 @@ begin
 			output_2_valid => d_flag_2_valid,
 			output_2_data  => d_flag_2_data,
 			output_2_ready => d_flag_2_ready
-		);
-		
-	--D flag limiter for output
-	d_flag_limiter: entity work.TRANSACTION_LIMITER
-		Generic map (
-			DATA_WIDTH => 1,
-			NUMBER_OF_TRANSACTIONS => 1
-		)
-		Port map (
-			clk => clk, rst => rst,
-			clear => flag_lim_clear,
-			saturated => flag_lim_saturated,
-			input_valid => d_flag_0_valid,
-			input_ready => d_flag_0_ready,
-			output_valid => flag_valid_lim,
-			output_ready => flag_ready_lim
 		);
 		
 	--repeater for KJ control
@@ -301,22 +254,6 @@ begin
 			output_ready_1	=> ehat_one_ready,
 			output_data_1	=> ehat_one_data
 		);
-		
-	--limiter to exp golomb coder
-	limiter_to_exp_golomb: entity work.TRANSACTION_LIMITER
-			Generic map (
-				DATA_WIDTH => MAPPED_ERROR_WIDTH,
-				NUMBER_OF_TRANSACTIONS => 1
-			)
-			Port map (
-				clk => clk, rst => rst,
-				clear => exp_golomb_limiter_clear,
-				saturated => exp_golomb_limiter_saturated,
-				input_valid => ehat_zero_valid,
-				input_ready => ehat_zero_ready,
-				output_valid => ehat_zero_valid_lim,
-				output_ready => ehat_zero_ready_lim
-			);
 	
 	--exp zero golomb coder
 	exp_zero_coder: entity work.EXP_ZERO_GOLOMB		
@@ -325,45 +262,12 @@ begin
 		)
 		Port map (
 			input_data	=> ehat_zero_data,
-			input_valid => ehat_zero_valid_lim,
-			input_ready	=> ehat_zero_ready_lim,
+			input_valid => ehat_zero_valid,
+			input_ready	=> ehat_zero_ready,
 			output_code	  => eg_code,
 			output_length => eg_length,
 			output_valid  => eg_valid,
 			output_ready  => eg_ready
-		);
-		
-		
-	--limiter after exp zero
-	limiter_after_exp_zero: entity work.TRANSACTION_LIMITER
-		Generic map (
-			DATA_WIDTH => MAPPED_ERROR_WIDTH,
-			NUMBER_OF_TRANSACTIONS => 1
-		)
-		Port map (
-			clk => clk, rst => rst,
-			clear => exp_golomb_output_limiter_clear,
-			saturated => exp_golomb_output_limiter_saturated,
-			input_valid => eg_valid,
-			input_ready => eg_ready,
-			output_valid => eg_valid_lim,
-			output_ready => eg_ready_lim
-		);
-		
-	--limiter to golomb coder
-	limiter_to_golomb: entity work.TRANSACTION_LIMITER
-		Generic map (
-			DATA_WIDTH => MAPPED_ERROR_WIDTH,
-			NUMBER_OF_TRANSACTIONS => 1
-		)
-		Port map (
-			clk => clk, rst => rst,
-			clear => golomb_limiter_clear,
-			saturated => golomb_limiter_saturated,
-			input_valid => ehat_one_valid,
-			input_ready => ehat_one_ready,
-			output_valid => ehat_one_valid_lim,
-			output_ready => ehat_one_ready_lim
 		);
 			
 	--golomb coder
@@ -382,10 +286,11 @@ begin
 			input_param_valid => kj_filtered_valid,
 			input_param_ready => kj_filtered_ready,
 			input_value_data  => ehat_one_data,
-			input_value_valid => ehat_one_valid_lim,
-			input_value_ready => ehat_one_ready_lim,
+			input_value_valid => ehat_one_valid,
+			input_value_ready => ehat_one_ready,
 			output_code		  => golomb_code,
 			output_length	  => golomb_length,
+			output_ends_input => golomb_ends_input,
 			output_valid	  => golomb_valid,
 			output_ready	  => golomb_ready
 		);
@@ -398,17 +303,18 @@ begin
 	merger: entity work.MERGER_AXI 
 		Generic map (
 			DATA_WIDTH => CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG, --space for both length and the bits themselves
-			FROM_PORT_ZERO => 1 --one from exp coder, the rest from the golomb coder
+			FROM_PORT_ZERO => 1, 	--one from the flag code
+			FROM_PORT_ONE => 1		--one from exp coder, the rest from the golomb coder
 		)
 		Port map ( 
 			clk => clk, rst => rst,
 			clear => merger_clear,
 			--to input axi port
-			input_valid_0	=> flag_valid_lim,
-			input_ready_0	=> flag_ready_lim,
+			input_valid_0	=> d_flag_0_valid,
+			input_ready_0	=> d_flag_0_ready,
 			input_data_0	=> merger_input_0,
-			input_valid_1	=> eg_valid_lim,
-			input_ready_1	=> eg_ready_lim,
+			input_valid_1	=> eg_valid,
+			input_ready_1	=> eg_ready,
 			input_data_1	=> merger_input_1,
 			input_valid_2	=> golomb_valid,
 			input_ready_2	=> golomb_ready,
@@ -428,8 +334,8 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			flush				=> packer_flush,
-			flushed				=> packer_flushed,
+			flush				=> flush,
+			flushed				=> flushed,
 			input_code_data		=> merger_code,
 			input_length_data	=> merger_length,
 			input_valid			=> merger_valid,
