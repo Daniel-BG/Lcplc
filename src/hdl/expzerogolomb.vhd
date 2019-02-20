@@ -36,13 +36,14 @@ entity EXP_ZERO_GOLOMB is
 		DATA_WIDTH: integer := 19
 	);
 	Port (
-		input_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_valid	: in	std_logic;
-		input_ready	: out	std_logic;
-		output_code	: out	std_logic_vector(DATA_WIDTH*2 downto 0);
-		output_length:out	natural range 0 to DATA_WIDTH*2+1;
-		output_valid: out	std_logic;
-		output_ready: in 	std_logic
+		input_data			: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_valid			: in	std_logic;
+		input_ready			: out	std_logic;
+		output_code			: out	std_logic_vector(DATA_WIDTH*2 downto 0);
+		output_length		: out	natural range 0 to DATA_WIDTH*2+1;
+		output_ends_input	: out 	std_logic;
+		output_valid		: out	std_logic;
+		output_ready		: in 	std_logic
 	);
 end EXP_ZERO_GOLOMB;
 
@@ -67,6 +68,7 @@ begin
 	
 	output_code <= (DATA_WIDTH*2 downto DATA_WIDTH + 1 => '0') & input_plus_one;
 	output_valid <= input_valid;
+	output_ends_input <= input_valid;
 	input_Ready <= output_ready;
 	output_length <= final_bit_count;
 

@@ -33,6 +33,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity TRANSACTION_LIMITER is
 	Generic(
+		DATA_WIDTH: integer := 16;
 		NUMBER_OF_TRANSACTIONS: positive := 256
 	);
 	Port (
@@ -53,6 +54,8 @@ architecture Behavioral of TRANSACTION_LIMITER is
 	signal counter, counter_next: natural range 0 to NUMBER_OF_TRANSACTIONS - 1;
 	signal saturated_local_next: std_logic;
 	signal saturated_local: std_logic;
+	
+	signal enable, transaction: std_logic;
 begin
 
 	saturated_local_next <= '1' when counter = NUMBER_OF_TRANSACTIONS - 1 else '0';
@@ -60,10 +63,18 @@ begin
 	
 	--saturated output
 	saturated <= saturated_local;
-	--mask signals when counter is saturated
-	output_valid <= input_valid when saturated_local = '0' else '0';
-	input_ready  <= output_ready when saturated_local = '0' else '0';
+	enable <= not saturated_local;
 
+	enabler: entity work.TRANSACTION_ENABLER
+		Port map (
+			enable => enable,
+			transaction => transaction,
+			input_valid => input_valid,
+			input_ready => input_ready,
+			output_valid => output_valid, 
+			output_ready => output_ready
+		);
+		
 	seq: process(clk, rst)
 	begin
 		if rising_edge(clk) then
@@ -71,13 +82,12 @@ begin
 				counter <= 0;
 				saturated_local <= '0';
 			else
-				if saturated_local = '0' and input_valid = '1' and output_ready = '1' then
+				if transaction = '1' then
 					counter <= counter_next;
 					saturated_local <= saturated_local_next;
 				end if;
 			end if;
 		end if;
 	end process;
-
-
+	
 end Behavioral;

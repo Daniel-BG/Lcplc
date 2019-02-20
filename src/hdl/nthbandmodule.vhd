@@ -620,7 +620,7 @@ begin
 		);
 		
 	--kj filtering (there is one more kj produced than necessary)
-	kj_filtering: entity work.FILTER_AXI
+	kj_filtering: entity work.REDUCER_AXI
 		Generic map (
 			DATA_WIDTH => ACC_LOG,
 			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG - 1,

@@ -51,6 +51,7 @@ entity GOLOMB_CODING is
 		input_value_ready	: out 	std_logic;
 		output_code			: out	std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 		output_length		: out	natural range 0 to OUTPUT_WIDTH;
+		output_ends_input	: out 	std_logic;
 		output_valid		: out	std_logic;
 		output_ready		: in 	std_logic
 	);
@@ -157,6 +158,7 @@ begin
 		state_next <= state_curr;
 		joint_ready <= '0';
 		output_valid <= '0';
+		output_ends_input <= '0';
 		--buffers
 		quotient_buff_next <= quotient_buff;
 		remainder_buff_next <= remainder_buff;
@@ -178,7 +180,7 @@ begin
 			if not need_more_cycles then
 				output_code <= output_code_last;
 				output_length <= output_length_last;
-				
+				output_ends_input <= '1';
 				joint_ready <= output_ready;
 				if joint_valid = '1' then
 					--read next already

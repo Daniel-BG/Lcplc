@@ -32,9 +32,13 @@ use IEEE.STD_LOGIC_1164.ALL;
 --use UNISIM.VComponents.all;
 
 entity TRANSACTION_ENABLER is
+	Generic (
+		DATA_WIDTH: integer := 16
+	);
 	Port (
 		--metacontrol signals
 		enable: in std_logic;
+		transaction: out std_logic;
 		--axi bus controls (data goes directly, only control signals are dealt with here)
 		input_valid: in std_logic;
 		input_ready: out std_logic;
@@ -49,6 +53,7 @@ begin
 
 	input_ready  <= output_ready when enable = '1' else '0';
 	output_valid <= input_valid when enable = '1' else '0';
+	transaction <= '1' when enable = '1' and output_ready = '1' and input_valid = '1' else '0';
 
 
 end Behavioral;
