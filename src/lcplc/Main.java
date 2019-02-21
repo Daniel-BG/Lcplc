@@ -219,19 +219,11 @@ public class Main {
 						
 						distortionAcc += error*error;
 						
-						max[0] = Math.max(max[0], (int) prediction);
-						max[1] = Math.max(max[1], (int) error);
-						min[0] = Math.min(min[0], (int) prediction);
-						min[1] = Math.min(min[1], (int) error);
-						
 						//quantize error and replace it with the
 						//unquantized version since this is the one
 						//the decoder will have
 						int qErr  = iutq.quantize((int) error);
 						error 	  = iutq.dequantize(qErr);
-						
-						max[2] = Math.max(max[2], (int) error);
-						min[2] = Math.min(min[2], (int) error);
 
 						long mappedError = Mapper.mapError(qErr);
 						savedMappedError[l][s] = (int) mappedError;
@@ -241,8 +233,6 @@ public class Main {
 						
 						decodedBlock[b][l][s] = (int) prediction + (int) error;
 						
-						max[3] = Math.max(max[3], (int) decodedBlock[b][l][s]);
-						min[3] = Math.min(min[3], (int) decodedBlock[b][l][s]);
 						acc.add(Math.abs(error));		//update Rj after coding
 					}
 				}

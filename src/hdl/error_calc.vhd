@@ -34,7 +34,6 @@ use IEEE.NUMERIC_STD.ALL;
 entity ERROR_CALC is
 	Generic (
 		DATA_WIDTH: positive := 16;
-		ALPHA_WIDTH: positive := 10;
 		BLOCK_SIZE_LOG: positive := 8;
 		ACC_LOG: positive := 5;
 		UPSHIFT: positive := 1;
@@ -139,6 +138,10 @@ architecture Behavioral of ERROR_CALC is
 	
 	--error mapper
 	signal mapped_error_data_raw:	std_logic_vector (PREDICTION_WIDTH downto 0);
+	
+	--substituter for first sample
+	signal error_acc_in_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0); 
+	signal error_acc_in_valid, error_acc_in_ready: std_logic;
 	
 	--error sliding accumulator
 	signal error_acc_cnt: std_logic_vector(ACC_LOG downto 0);
@@ -440,6 +443,23 @@ begin
 	--no need for last bit since that can only be set when the error value is -2^n and that is not possible here
 	merr_data <= mapped_error_data_raw(PREDICTION_WIDTH - 1 downto 0); 
 	
+	--substituter to change the first error 
+	substituter: entity work.SUBSTITUTER_AXI
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH,
+			INVALID_TRANSACTIONS => 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready		=> error_unquant_splitter_ready_1,
+			input_valid		=> error_unquant_splitter_valid_1,
+			input_data		=> error_unquant_splitter_data_1,
+			input_sub		=> (others => '0'),
+			output_ready    => error_acc_in_ready,
+			output_valid	=> error_acc_in_valid,
+			output_data		=> error_acc_in_data
+		);
+	
 	--sliding accumulator for kj finding
 	error_acc: entity work.SLIDING_ACCUMULATOR
 		Generic map (
@@ -448,9 +468,9 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input => error_unquant_splitter_data_1, 
-			input_valid => error_unquant_splitter_valid_1,
-			input_ready => error_unquant_splitter_ready_1,
+			input => error_acc_in_data, 
+			input_valid => error_acc_in_valid,
+			input_ready => error_acc_in_ready,
 			output_cnt => error_acc_cnt, 
 			output_data => error_acc_data,
 			output_valid => error_acc_valid,

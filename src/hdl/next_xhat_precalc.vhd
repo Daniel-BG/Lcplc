@@ -34,8 +34,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity NEXT_XHAT_PRECALC is
 	Generic (
 		DATA_WIDTH: integer := 16;
-		BLOCK_SIZE_LOG: integer := 8;
-		THRESHOLD: std_logic_vector := "100000000000000" --has to be std_logic_vector because its value might be greater than 2^32-1: the max of positive
+		BLOCK_SIZE_LOG: integer := 8
 	);
 	Port (
 		rst, clk		: in 	std_logic;
