@@ -31,7 +31,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
-entity FIRSTBANDMODULE is
+entity FIRSTBAND_PREDICTOR is
 	Generic (
 		DATA_WIDTH: positive := 16;
 		BLOCK_SIZE_LOG: positive := 8;
@@ -44,19 +44,14 @@ entity FIRSTBANDMODULE is
 		x_ready			: out std_logic;
 		x_data			: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		--output mapped error, coding parameter and xhat out value
-		merr_ready		: in std_logic;
-		merr_valid		: out std_logic;
-		merr_data		: out std_logic_vector(DATA_WIDTH + 2 downto 0);
-		kj_ready		: in std_logic;
-		kj_valid		: out std_logic;
-		kj_data			: out std_logic_vector(ACC_LOG - 1 downto 0);
-		xhatout_valid   : out std_logic;
-		xhatout_ready	: in std_logic;
-		xhatout_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0)
+		--output prediction
+		prediction_ready: in std_logic;
+		prediction_valid: out std_logic;
+		prediction_data : out std_logic_vector(DATA_WIDTH + 2 downto 0)
 	);
-end FIRSTBANDMODULE;
+end FIRSTBAND_PREDICTOR;
 
-architecture Behavioral of FIRSTBANDMODULE is
+architecture Behavioral of FIRSTBAND_PREDICTOR is
 	type firstband_state_t is (IDLE, CODING_FIRST, CODING_REST);
 	signal state_curr, state_next: firstband_state_t;
 

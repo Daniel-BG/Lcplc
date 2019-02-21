@@ -31,7 +31,7 @@ use IEEE.NUMERIC_STD.ALL;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
-entity NTHBANDMODULE is
+entity ERROR_CALC is
 	Generic (
 		DATA_WIDTH: positive := 16;
 		ALPHA_WIDTH: positive := 10;
@@ -44,24 +44,14 @@ entity NTHBANDMODULE is
 	Port (
 		clk, rst		: in  std_logic;
 		--input x, xhat, xmean, xhatmean, alpha
-		--x is the original value (xmean the mean for the block slice)
-		--xhat is the decoded value of previous block slice
-		--alpha is the alpha value for the current block slice
+		--x is the original value
+		--prediction is the predicted value
 		x_valid			: in  std_logic;
 		x_ready			: out std_logic;
 		x_data			: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xhat_valid		: in  std_logic;
-		xhat_ready		: out std_logic;
-		xhat_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xmean_valid		: in  std_logic;
-		xmean_ready		: out std_logic;
-		xmean_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xhatmean_valid	: in  std_logic;
-		xhatmean_ready	: out std_logic;
-		xhatmean_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		alpha_valid     : in  std_logic;
-		alpha_ready		: out std_logic;
-		alpha_data		: in std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+		prediction_ready: out std_logic;
+		prediction_valid: in std_logic;
+		prediction_data : in std_logic_vector(DATA_WIDTH + 2 downto 0);
 		--output distortion, mapped error, parameter kj and prediction
 		--mapped error is going to be coded with parameter kj later
 		--the distortion might be used to skip coding of the current block
@@ -82,31 +72,10 @@ entity NTHBANDMODULE is
 		d_flag_ready	: in std_logic;
 		d_flag_data 	: out std_logic
 	);
-end NTHBANDMODULE;
+end ERROR_CALC;
 
-architecture Behavioral of NTHBANDMODULE is
+architecture Behavioral of ERROR_CALC is
 	constant PREDICTION_WIDTH: integer := DATA_WIDTH + 3;
-	
-	--input repeaters
-	signal xmean_rep_ready, xmean_rep_valid, xhatmean_rep_ready, xhatmean_rep_valid, alpha_rep_ready, alpha_rep_valid: std_logic;
-	signal xmean_rep_data, xhatmean_rep_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal alpha_rep_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
-	
-	--prediction stage 0	
-	signal prediction_stage_0_input_a, prediction_stage_0_input_b: std_logic_vector(DATA_WIDTH downto 0);
-	signal prediction_stage_0_data: std_logic_vector(DATA_WIDTH downto 0);
-	signal prediction_stage_0_out_valid, prediction_stage_0_out_ready: std_logic;
-	
-	--prediction stage 1	
-	signal prediction_stage_1_input_b: std_logic_vector(DATA_WIDTH downto 0);
-	signal prediction_stage_1_data: std_logic_vector(DATA_WIDTH*2+1 downto 0);
-	signal prediction_stage_1_out_valid, prediction_stage_1_out_ready: std_logic;
-	
-	--prediction stage 2
-	signal prediction_stage_2_input_b: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal prediction_stage_2_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal prediction_stage_2_out_valid, prediction_stage_2_out_ready: std_logic;
-	
 	
 	--prediction splitter into 3: 
 		--(0) first one goes to output prediction (in case we skip coding)
@@ -186,123 +155,9 @@ begin
 	
 	
 
-	-------------------
-	--INPUT REPEATERS--
-	-------------------
-	
-	xmean_repeater: entity work.DATA_REPEATER_AXI
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready => xmean_ready,
-			input_valid => xmean_valid,
-			input_data  => xmean_data,
-			output_ready=> xmean_rep_ready,
-			output_valid=> xmean_rep_valid,
-			output_data => xmean_rep_data
-		);
-
-	xhatmean_repeater: entity work.DATA_REPEATER_AXI
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready => xhatmean_ready,
-			input_valid => xhatmean_valid,
-			input_data  => xhatmean_data,
-			output_ready=> xhatmean_rep_ready,
-			output_valid=> xhatmean_rep_valid,
-			output_data => xhatmean_rep_data
-		);
-		
-	alpha_repeater: entity work.DATA_REPEATER_AXI
-		Generic map (
-			DATA_WIDTH => ALPHA_WIDTH,
-			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready => alpha_ready,
-			input_valid => alpha_valid,
-			input_data  => alpha_data,
-			output_ready=> alpha_rep_ready,
-			output_valid=> alpha_rep_valid,
-			output_data => alpha_rep_data
-		);
-		
-		
 	--------------
 	--PREDICTION--
 	--------------
-	
-	--first stage	
-	prediction_stage_0_input_a <= '0' & xhat_data;
-	prediction_stage_0_input_b <= '0' & xhatmean_rep_data;
-	
-	prediction_stage_0: entity work.OP_AXI_MP
-		Generic Map (
-			DATA_WIDTH => DATA_WIDTH + 1,
-			IS_ADD => false,
-			IS_SIGNED => true
-		)
-		Port Map (
-			clk => clk, rst => rst,
-			input_a_data => prediction_stage_0_input_a,
-			input_a_valid => xhat_valid,
-			input_a_ready => xhat_ready,
-			input_b_data  => prediction_stage_0_input_b,
-			input_b_valid => xhatmean_rep_valid,
-			input_b_ready => xhatmean_rep_ready,
-			output => prediction_stage_0_data,
-			output_valid => prediction_stage_0_out_valid,
-			output_ready => prediction_stage_0_out_ready
-		);
-		
-		
-	--second stage
-	prediction_stage_1_input_b <= (DATA_WIDTH downto ALPHA_WIDTH => '0') & alpha_rep_data;
-	prediction_stage_1: entity work.MULT_AXI_MP
-		Generic map (
-			DATA_WIDTH => 17
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_a_data =>  prediction_stage_0_data,
-			input_a_valid => prediction_stage_0_out_valid,
-			input_a_ready => prediction_stage_0_out_ready,
-			input_b_data  => prediction_stage_1_input_b,
-			input_b_valid => alpha_rep_valid,
-			input_b_ready => alpha_rep_ready,
-			output => prediction_stage_1_data,
-			output_valid => prediction_stage_1_out_valid,
-			output_ready => prediction_stage_1_out_ready
-		);
-	
-	--third stage		
-	prediction_stage_2_input_b <= "000" & xmean_rep_data; --to make it up to data-width + 3
-	prediction_stage_2: entity work.OP_AXI_MP
-		Generic Map (
-			DATA_WIDTH => PREDICTION_WIDTH,
-			IS_ADD => true,
-			IS_SIGNED => true
-		)
-		Port Map (
-			clk => clk, rst => rst,
-			input_a_data =>  prediction_stage_1_data(PREDICTION_WIDTH + ALPHA_WIDTH - 2 downto ALPHA_WIDTH - 1),
-			input_a_valid => prediction_stage_1_out_valid,
-			input_a_ready => prediction_stage_1_out_ready,
-			input_b_data  => prediction_stage_2_input_b,
-			input_b_valid => xmean_rep_valid,
-			input_b_ready => xmean_rep_ready,
-			output => prediction_stage_2_data,
-			output_valid => prediction_stage_2_out_valid,
-			output_ready => prediction_stage_2_out_ready
-		);
 
 	--prediction splitter (to output queue and to error calculation)
 	prediction_splitter: entity work.SPLITTER_AXI_3
@@ -312,9 +167,9 @@ begin
 		Port map (
 			clk => clk, rst => rst,
 			--to input axi port
-			input_valid => prediction_stage_2_out_valid,
-			input_data  => prediction_stage_2_data,
-			input_ready => prediction_stage_2_out_ready,
+			input_valid => prediction_valid,
+			input_data  => prediction_data,
+			input_ready => prediction_ready,
 			--to output axi ports
 			output_0_valid => prediction_splitter_valid_0,
 			output_0_data  => prediction_splitter_data_0,
