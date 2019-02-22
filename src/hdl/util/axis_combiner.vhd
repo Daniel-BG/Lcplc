@@ -1,14 +1,15 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 14.02.2019 12:54:33
 -- Design Name: 
--- Module Name: merger_axi - Behavioral
+-- Module Name: AXIS_COMBINER - Behavioral
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Combine two buses into one. Take FROM_PORT_ZERO samples from the
+--		first bus and then FROM_PORT_ONE from second bus. Repeat forever
 -- 
 -- Dependencies: 
 -- 
@@ -18,20 +19,10 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
-entity JUNCTION_AXI is
+entity AXIS_COMBINER is
 	Generic (
 		DATA_WIDTH: integer := 16;
 		FROM_PORT_ZERO: integer := 256;
@@ -51,15 +42,36 @@ entity JUNCTION_AXI is
 		output_ready	: in 	std_logic;
 		output_data		: out	std_logic_vector(DATA_WIDTH - 1 downto 0)
 	);
-end JUNCTION_AXI;
+end AXIS_COMBINER;
 
-architecture Behavioral of JUNCTION_AXI is
-	signal counter_zero: natural range 0 to FROM_PORT_ZERO - 1;
-	signal counter_one: natural range 0 to FROM_PORT_ONE - 1;
+architecture Behavioral of AXIS_COMBINER is
 	
 	signal read_from_zero: boolean;
 	
+	signal counter_zero_enable, counter_zero_saturating: std_logic;
+	signal counter_one_enable, counter_one_saturating: std_logic;
+	
 begin
+
+	counter_zero: entity work.COUNTER 
+		Generic map (
+			COUNT => FROM_PORT_ZERO
+		)
+		Port map ( 
+			clk => clk, rst	=> rst,
+			enable		=> counter_zero_enable,
+			saturating	=> counter_zero_saturating
+		);
+
+	counter_one: entity work.COUNTER 
+		Generic map (
+			COUNT => FROM_PORT_ONE
+		)
+		Port map ( 
+			clk => clk, rst	=> rst,
+			enable		=> counter_one_enable,
+			saturating	=> counter_one_saturating
+		);
 
 	input_ready_0 <= output_ready when read_from_zero else '0';
 	input_ready_1 <= output_ready when not read_from_zero else '0';
@@ -73,26 +85,23 @@ begin
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				counter_zero <= 0;
-				counter_one <= 0;
 				read_from_zero <= true;
 			else
+				counter_zero_enable <= '0';
+				counter_one_enable <= '0';
+				
 				if read_from_zero then
 					if input_valid_0 = '1' and output_ready = '1' then
-						if counter_zero = FROM_PORT_ZERO - 1 then
+						counter_zero_enable <= '1';
+						if counter_zero_saturating = '1' then
 							read_from_zero <= false;
-							counter_zero <= 0;
-						else
-							counter_zero <= counter_zero + 1;
 						end if;
 					end if;
 				elsif not read_from_zero then
 					if input_valid_1 = '1' and output_ready = '1' then
-						if counter_one = FROM_PORT_ZERO - 1 then
+						counter_one_enable <= '1';
+						if counter_one_saturating = '1' then
 							read_from_zero <= true;
-							counter_one <= 0;
-						else
-							counter_one <= counter_one + 1;
 						end if;
 					end if;
 				end if;

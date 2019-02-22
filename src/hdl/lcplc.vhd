@@ -97,7 +97,7 @@ architecture Behavioral of LCPLC is
 	
 	--alpha result
 	signal alpha_ready, alpha_valid: std_logic;
-	signal alpha_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal alpha_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 	
 	--prediction other bands
 	signal prediction_rest_ready, prediction_rest_valid: std_logic;
@@ -161,7 +161,7 @@ begin
 		--prediction_junction_clear
 
 	--input to first band predictor and second band predictor
-	input_separator: entity work.SPLITTER_AXI_3
+	input_separator: entity work.AXIS_SPLITTER_3
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH
 		)
@@ -183,7 +183,7 @@ begin
 		);
 		
 	--reducer to first band processing	
-	reducer_firstband: entity work.REDUCER_AXI
+	reducer_firstband: entity work.AXIS_REDUCER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG,
@@ -219,7 +219,7 @@ begin
 	prediction_first_data <= "00" & prediction_first_data_raw;
 	
 	--reducer for mean (only after first band)
-	reducer_others: entity work.REDUCER_AXI
+	reducer_others: entity work.AXIS_REDUCER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG*(NUMBER_OF_BANDS-1),
@@ -237,7 +237,7 @@ begin
 		);
 		
 	--splitter for rest of bands
-	splitter_others_1: entity work.SPLITTER_AXI_2
+	splitter_others_1: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH
 		)
@@ -256,15 +256,15 @@ begin
 		);
 	
 	--raw mean 
-	raw_mean_calc: entity work.MEAN_CALCULATOR 
+	raw_mean_calc: entity work.AXIS_AVERAGER_POW2 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			ACC_LOG => BLOCK_SIZE_LOG,
+			ELEMENT_COUNT_LOG => BLOCK_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input			=> x_others_0_data,
+			input_data		=> x_others_0_data,
 			input_valid		=> x_others_0_valid,
 			input_ready		=> x_others_0_ready,
 			output_data		=> xmean_data,
@@ -273,7 +273,7 @@ begin
 		);
 		
 	--xmean splitter (alpha and nth prediciton)
-	splitter_xmean: entity work.SPLITTER_AXI_2
+	splitter_xmean: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH
 		)
@@ -292,7 +292,7 @@ begin
 		);
 		
 	--buffer for samples for alpha
-	alpha_x_buffer: entity work.FIFO_AXI 
+	alpha_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
@@ -300,13 +300,13 @@ begin
 		Port map ( 
 			clk	=> clk, rst => rst,
 			--input axi port
-			in_valid => x_others_1_valid,
-			in_ready => x_others_1_ready,
-			in_data	 => x_others_1_data,
+			input_valid => x_others_1_valid,
+			input_ready => x_others_1_ready,
+			input_data	 => x_others_1_data,
 			--out axi port
-			out_ready=> x_delay_ready,
-			out_data => x_delay_data,
-			out_valid=> x_delay_valid
+			output_ready=> x_delay_ready,
+			output_data => x_delay_data,
+			output_valid=> x_delay_valid
 		);
 	
 	--alpha calculation
@@ -347,12 +347,12 @@ begin
 			xhat_valid		=> xhatout_delay_valid,
 			xhat_ready 		=> xhatout_delay_ready,
 			xhat_data  		=> xhatout_delay_data,
-			xmean_valid		=> xmean_valid,
-			xmean_ready		=> xmean_ready,
-			xmean_data		=> xmean_data,
-			xhatmean_valid	=> xhatoutmean_0_valid,
-			xhatmean_ready	=> xhatoutmean_0_ready,
-			xhatmean_data	=> xhatoutmean_0_data,
+			xmean_valid		=> xmean_1_valid,
+			xmean_ready		=> xmean_1_ready,
+			xmean_data		=> xmean_1_data,
+			xhatmean_valid	=> xhatoutmean_1_valid,
+			xhatmean_ready	=> xhatoutmean_1_ready,
+			xhatmean_data	=> xhatoutmean_1_data,
 			alpha_valid     => alpha_valid,
 			alpha_ready		=> alpha_ready,
 			alpha_data		=> alpha_data,
@@ -363,9 +363,9 @@ begin
 		);
 		
 	--junction for preductions
-	prediction_junction: entity work.JUNCTION_AXI
+	prediction_junction: entity work.AXIS_COMBINER
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
+			DATA_WIDTH => PREDICTION_WIDTH,
 			FROM_PORT_ZERO => 2**BLOCK_SIZE_LOG,
 			FROM_PORT_ONE => 2**BLOCK_SIZE_LOG*(NUMBER_OF_BANDS - 1 )
 		)
@@ -383,7 +383,7 @@ begin
 		);
 		
 	--buffer for samples for error calc
-	error_calc_x_buffer: entity work.FIFO_AXI 
+	error_calc_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			FIFO_DEPTH => (2**BLOCK_SIZE_LOG)*2
@@ -391,13 +391,13 @@ begin
 		Port map ( 
 			clk	=> clk, rst => rst,
 			--input axi port
-			in_valid => x_2_valid,
-			in_ready => x_2_ready,
-			in_data	 => x_2_data,
+			input_valid => x_2_valid,
+			input_ready => x_2_ready,
+			input_data	 => x_2_data,
 			--out axi port
-			out_ready=> x_delay_delay_ready,
-			out_data => x_delay_delay_data,
-			out_valid=> x_delay_delay_valid
+			output_ready=> x_delay_delay_ready,
+			output_data => x_delay_delay_data,
+			output_valid=> x_delay_delay_valid
 		);
 		
 	--error calculations
@@ -437,7 +437,7 @@ begin
 		
 	--substitute the first flag by '1' to indicate 
 	d_flag_data_stdlv <= "1" when d_flag_data = '1' else "0";
-	substitute_first_d_flag: entity work.SUBSTITUTER_AXI 
+	substitute_first_d_flag: entity work.AXIS_SUBSTITUTER 
 		Generic map (
 			DATA_WIDTH => 1,
 			INVALID_TRANSACTIONS => 1
@@ -454,7 +454,7 @@ begin
 		);
 	
 	--d flag splitter
-	d_flag_splitter: entity work.SPLITTER_AXI_2
+	d_flag_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH	 => 1
 		)
@@ -499,7 +499,7 @@ begin
 		);
 		
 	--splitter for xhatout
-	xhatout_splitter: entity work.SPLITTER_AXI_2
+	xhatout_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH
 		)
@@ -518,7 +518,7 @@ begin
 		);
 	
 	--one fifo for nth band input
-	xhatout_buffer: entity work.FIFO_AXI 
+	xhatout_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
@@ -526,17 +526,17 @@ begin
 		Port map ( 
 			clk	=> clk, rst => rst,
 			--input axi port
-			in_valid => xhatout_1_valid,
-			in_ready => xhatout_1_ready,
-			in_data	 => xhatout_1_data,
+			input_valid => xhatout_1_valid,
+			input_ready => xhatout_1_ready,
+			input_data	 => xhatout_1_data,
 			--out axi port
-			out_ready=> xhatout_delay_ready,
-			out_data => xhatout_delay_data,
-			out_valid=> xhatout_delay_valid
+			output_ready=> xhatout_delay_ready,
+			output_data => xhatout_delay_data,
+			output_valid=> xhatout_delay_valid
 		);
 		
 	--splitter for xhatoutmean
-	xhatoutmean_splitter: entity work.SPLITTER_AXI_2
+	xhatoutmean_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH
 		)
@@ -556,7 +556,7 @@ begin
 		
 		
 	--one fifo for nth band input
-	delay_mapped_err: entity work.FIFO_AXI 
+	delay_mapped_err: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
 			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
@@ -564,17 +564,17 @@ begin
 		Port map ( 
 			clk	=> clk, rst => rst,
 			--input axi port
-			in_valid => merr_valid,
-			in_ready => merr_ready,
-			in_data	 => merr_data,
+			input_valid => merr_valid,
+			input_ready => merr_ready,
+			input_data	 => merr_data,
 			--out axi port
-			out_ready=> merr_delay_ready,
-			out_data => merr_delay_data,
-			out_valid=> merr_delay_valid
+			output_ready=> merr_delay_ready,
+			output_data => merr_delay_data,
+			output_valid=> merr_delay_valid
 		);
 			
 	--one fifo for nth band input
-	delay_kj_calc: entity work.FIFO_AXI 
+	delay_kj_calc: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => WORD_WIDTH_LOG,
 			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
@@ -582,13 +582,13 @@ begin
 		Port map ( 
 			clk	=> clk, rst => rst,
 			--input axi port
-			in_valid => kj_valid,
-			in_ready => kj_ready,
-			in_data	 => kj_data,
+			input_valid => kj_valid,
+			input_ready => kj_ready,
+			input_data	 => kj_data,
 			--out axi port
-			out_ready=> kj_delay_ready,
-			out_data => kj_delay_data,
-			out_valid=> kj_delay_valid
+			output_ready=> kj_delay_ready,
+			output_data => kj_delay_data,
+			output_valid=> kj_delay_valid
 		);
 		
 	--coder

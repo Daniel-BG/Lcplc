@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 20.02.2019 11:07:14
 -- Design Name: 
@@ -8,9 +8,10 @@
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: AXIS filter that takes an input and a flag, and the outputs the input 
+--		if the flag was 1 or 0 (configurable).
 -- 
--- Dependencies: 
+-- Dependencies: AXIS_SYNCHRONIZER_2 to sync the input data and flag
 -- 
 -- Revision:
 -- Revision 0.01 - File Created
@@ -18,20 +19,10 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
-entity FILTER_AXI is
+entity AXIS_FILTER is
 	Generic (
 		DATA_WIDTH: integer := 16;
 		FILTER_ON_UP: boolean := true
@@ -49,10 +40,10 @@ entity FILTER_AXI is
 		output_ready	: in 	std_logic;
 		output_data		: out	std_logic_vector(DATA_WIDTH - 1 downto 0)
 	);
-end FILTER_AXI;
+end AXIS_FILTER;
 
 
-architecture Behavioral of FILTER_AXI is
+architecture Behavioral of AXIS_FILTER is
 	--synced signals
 	signal synced_valid, synced_ready: std_logic;
 	signal synced_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -60,7 +51,7 @@ architecture Behavioral of FILTER_AXI is
 begin
 
 	--need to sync input and flag
-	input_joiner: entity work.JOINER_AXI_2 
+	input_synchronizer: entity work.AXIS_SYNCHRONIZER_2 
 		Generic map (
 			DATA_WIDTH_0 => DATA_WIDTH,
 			DATA_WIDTH_1 => 1
@@ -68,12 +59,12 @@ begin
 		Port map(
 			clk => clk, rst => rst,
 			--to input axi port
-			input_valid_0 => input_valid, 
-			input_valid_1 => flag_valid,
-			input_ready_0 => input_ready, 
-			input_ready_1 => flag_ready,
-			input_data_0  => input_data,
-			input_data_1  => flag_data,
+			input_0_valid => input_valid, 
+			input_1_valid => flag_valid,
+			input_0_ready => input_ready, 
+			input_1_ready => flag_ready,
+			input_0_data  => input_data,
+			input_1_data  => flag_data,
 			--to output axi ports
 			output_valid  => synced_valid,
 			output_ready  => synced_ready,

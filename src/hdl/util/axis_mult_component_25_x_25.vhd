@@ -4,13 +4,13 @@
 -- 
 -- Create Date: 08.02.2019 10:28:15
 -- Design Name: 
--- Module Name: queued_multiplier - Behavioral
+-- Module Name: AXIS_MULT_COMPONENT_25x25 - Behavioral
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Wrapper around the 25x25 mult IP core to be used with AXIS interfaces
 -- 
--- Dependencies: 
+-- Dependencies: 25x25 MULT ip core
 -- 
 -- Revision:
 -- Revision 0.01 - File Created
@@ -31,7 +31,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
-entity MULT_25_X_25_AXI is
+entity AXIS_MULT_COMPONENT_25x25 is
 	Port(
 		clk, rst: in std_logic;
 		input_a, input_b: in std_logic_vector(24 downto 0);
@@ -41,9 +41,9 @@ entity MULT_25_X_25_AXI is
 		output_valid: out std_logic;
 		output_ready: in std_logic
 	);
-end MULT_25_X_25_AXI;
+end AXIS_MULT_COMPONENT_25x25;
 
-architecture Behavioral of MULT_25_X_25_AXI is
+architecture Behavioral of AXIS_MULT_COMPONENT_25x25 is
 	--multiplier declaration
 	constant MULT_STAGES: integer := 4;
 	COMPONENT mult_25_x_25
@@ -83,6 +83,7 @@ begin
 				 CE => mult_enable, 
 				 SCLR => rst, 
 				 P => output);
+
 				 
 	output_valid <= mult_stage_occupancy(MULT_STAGES - 1);
 	input_ready  <= mult_enable;

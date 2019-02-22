@@ -101,19 +101,19 @@ begin
 		severity failure;
 	
 	--join both input signals
-	data_joiner: entity work.JOINER_AXI_2
+	data_joiner: entity work.AXIS_SYNCHRONIZER_2
 		generic map (
 			DATA_WIDTH_0 => MAX_PARAM_VALUE_LOG,
 			DATA_WIDTH_1 => DATA_WIDTH
 		)
 		port map (
 			clk => clk, rst => rst,
-			input_valid_0 => input_param_valid,
-			input_ready_0 => input_param_ready,
-			input_data_0  => input_param_data,
-			input_valid_1 => input_value_valid,
-			input_ready_1 => input_value_ready,
-			input_data_1  => input_value_data,
+			input_0_valid => input_param_valid,
+			input_0_ready => input_param_ready,
+			input_0_data  => input_param_data,
+			input_1_valid => input_value_valid,
+			input_1_ready => input_value_ready,
+			input_1_data  => input_value_data,
 			output_valid  => joint_valid,
 			output_ready  => joint_ready,
 			output_data_0 => joint_param_data_raw,

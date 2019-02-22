@@ -95,19 +95,19 @@ begin
 		end if;
 	end process;
 	
-	sample_queue: entity work.FIFO_AXI
+	sample_queue: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			FIFO_DEPTH => 2**ACC_LOG
 		)
 		Port map (
 			clk => clk, rst => rst,
-			in_valid => write,
-			in_ready => open, --assume always 1 by construction
-			in_data  => input,
-			out_ready => read,
-			out_data  => input_queued,
-			out_valid => open --assume always valid by construction
+			input_valid => write,
+			input_ready => open, --assume always 1 by construction
+			input_data  => input,
+			output_ready => read,
+			output_data  => input_queued,
+			output_valid => open --assume always valid by construction
 		);
 	
 	output_cnt	<= std_logic_vector(to_unsigned(counter, ACC_LOG + 1));

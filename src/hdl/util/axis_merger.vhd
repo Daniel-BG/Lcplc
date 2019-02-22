@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 14.02.2019 12:54:33
 -- Design Name: 
@@ -8,7 +8,9 @@
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Module that connects the input buses for the given amount of times
+--		with the outputs. The last input is left connected until clear or rst is
+--		brought up.
 -- 
 -- Dependencies: 
 -- 
@@ -18,20 +20,10 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
-entity MERGER_AXI is
+entity AXIS_MERGER is
 	Generic (
 		DATA_WIDTH: integer := 16;
 		FROM_PORT_ZERO: integer := 256;
@@ -55,9 +47,9 @@ entity MERGER_AXI is
 		output_ready	: in 	std_logic;
 		output_data		: out	std_logic_vector(DATA_WIDTH - 1 downto 0)
 	);
-end MERGER_AXI;
+end AXIS_MERGER;
 
-architecture Behavioral of MERGER_AXI is
+architecture Behavioral of AXIS_MERGER is
 	signal counter_zero: natural range 0 to FROM_PORT_ZERO - 1;
 	signal counter_one: natural range 0 to FROM_PORT_ONE - 1;
 	

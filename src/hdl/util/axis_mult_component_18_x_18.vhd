@@ -1,16 +1,16 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 08.02.2019 10:28:15
 -- Design Name: 
--- Module Name: queued_multiplier - Behavioral
+-- Module Name: AXIS_MULT_COMPONENT_18x18 - Behavioral
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Wrapper around the 18x18 mult IP core to be used with AXIS interfaces
 -- 
--- Dependencies: 
+-- Dependencies: mult18x18 component
 -- 
 -- Revision:
 -- Revision 0.01 - File Created
@@ -18,20 +18,10 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
-entity MULT_18_X_18_AXI is
+entity AXIS_MULT_COMPONENT_18x18 is
 	Port(
 		clk, rst: in std_logic;
 		input_a, input_b: in std_logic_vector(17 downto 0);
@@ -41,9 +31,9 @@ entity MULT_18_X_18_AXI is
 		output_valid: out std_logic;
 		output_ready: in std_logic
 	);
-end MULT_18_X_18_AXI;
+end AXIS_MULT_COMPONENT_18x18;
 
-architecture Behavioral of MULT_18_X_18_AXI is
+architecture Behavioral of AXIS_MULT_COMPONENT_18x18 is
 	--multiplier declaration
 	constant MULT_STAGES: integer := 3;
 	COMPONENT mult_18_x_18
@@ -83,7 +73,7 @@ begin
 				 CE => mult_enable, 
 				 SCLR => rst, 
 				 P => output);
-				 
+
 	output_valid <= mult_stage_occupancy(MULT_STAGES - 1);
 	input_ready  <= mult_enable;
 

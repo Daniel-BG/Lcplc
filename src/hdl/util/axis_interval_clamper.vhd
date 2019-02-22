@@ -1,14 +1,15 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 11.02.2019 16:28:19
 -- Design Name: 
--- Module Name: pipelined_op - Behavioral
+-- Module Name: AXIS_INTERVAL_CLAMPER - Behavioral
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Take an input AXIS stream and output the values clamped to a
+--		certain specified interval
 -- 
 -- Dependencies: 
 -- 
@@ -18,20 +19,11 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
 
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
-entity INTERVAL_CLAMPER is
+entity AXIS_INTERVAL_CLAMPER is
 	Generic (
 		DATA_WIDTH: integer := 18;
 		IS_SIGNED: boolean := true;
@@ -39,17 +31,17 @@ entity INTERVAL_CLAMPER is
 		UPPER_LIMIT: integer := 2**16
 	);
 	Port(
-		clk, rst: in std_logic;
-		input_data: in std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_valid: in std_logic;
-		input_ready: out std_logic;
-		output: out std_logic_vector(DATA_WIDTH - 1 downto 0);
+		clk, rst	: in  std_logic;
+		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_valid	: in  std_logic;
+		input_ready	: out std_logic;
+		output_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
 		output_valid: out std_logic;
-		output_ready: in std_logic
+		output_ready: in  std_logic
 	);
-end INTERVAL_CLAMPER;
+end AXIS_INTERVAL_CLAMPER;
 
-architecture Behavioral of INTERVAL_CLAMPER is
+architecture Behavioral of AXIS_INTERVAL_CLAMPER is
 	signal output_reg: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal output_valid_reg: std_logic;
 	
@@ -93,7 +85,7 @@ begin
 				 
 	output_valid <= output_valid_reg;
 	input_ready  <= op_enable;
-	output		 <= output_reg;
+	output_data  <= output_reg;
 	
 
 end Behavioral;

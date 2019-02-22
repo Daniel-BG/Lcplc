@@ -1,16 +1,16 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM 
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 12.02.2019 18:26:18
 -- Design Name: 
--- Module Name: splitter_axi - Behavioral
+-- Module Name: splitter_axiAXIS_SPLITTER_BASE - Behavioral
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Split an input AXIS bus into multiple output AXIS buses
 -- 
--- Dependencies: 
+-- Dependencies: None
 -- 
 -- Revision:
 -- Revision 0.01 - File Created
@@ -18,20 +18,10 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
-entity SPLITTER_AXI is
+entity AXIS_SPLITTER_BASE is
 	Generic (
 		DATA_WIDTH: positive := 32;
 		OUTPUT_PORTS: positive := 2
@@ -47,9 +37,9 @@ entity SPLITTER_AXI is
 		output_data		: out 	STD_LOGIC_VECTOR(DATA_WIDTH - 1 downto 0);
 		output_ready	: in 	STD_LOGIC_VECTOR(OUTPUT_PORTS - 1 downto 0)
 	);
-end SPLITTER_AXI;
+end AXIS_SPLITTER_BASE;
 
-architecture Behavioral of SPLITTER_AXI is	
+architecture Behavioral of AXIS_SPLITTER_BASE is	
 	--buffers
 	signal buf0, buf1: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	

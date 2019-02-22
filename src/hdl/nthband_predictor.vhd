@@ -71,13 +71,12 @@ architecture Behavioral of NTHBAND_PREDICTOR is
 	signal alpha_rep_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 	
 	--prediction stage 0	
-	signal prediction_stage_0_input_a, prediction_stage_0_input_b: std_logic_vector(DATA_WIDTH downto 0);
 	signal prediction_stage_0_data: std_logic_vector(DATA_WIDTH downto 0);
 	signal prediction_stage_0_out_valid, prediction_stage_0_out_ready: std_logic;
 	
 	--prediction stage 1	
 	signal prediction_stage_1_input_b: std_logic_vector(DATA_WIDTH downto 0);
-	signal prediction_stage_1_data: std_logic_vector(DATA_WIDTH*2+1 downto 0);
+	signal prediction_stage_1_data: std_logic_vector(DATA_WIDTH + ALPHA_WIDTH downto 0);
 	signal prediction_stage_1_out_valid, prediction_stage_1_out_ready: std_logic;
 	
 	--prediction stage 2
@@ -91,7 +90,7 @@ begin
 	--INPUT REPEATERS--
 	-------------------
 	
-	xmean_repeater: entity work.DATA_REPEATER_AXI
+	xmean_repeater: entity work.AXIS_DATA_REPEATER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
@@ -106,7 +105,7 @@ begin
 			output_data => xmean_rep_data
 		);
 
-	xhatmean_repeater: entity work.DATA_REPEATER_AXI
+	xhatmean_repeater: entity work.AXIS_DATA_REPEATER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
@@ -121,7 +120,7 @@ begin
 			output_data => xhatmean_rep_data
 		);
 		
-	alpha_repeater: entity work.DATA_REPEATER_AXI
+	alpha_repeater: entity work.AXIS_DATA_REPEATER
 		Generic map (
 			DATA_WIDTH => ALPHA_WIDTH,
 			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
@@ -142,67 +141,75 @@ begin
 	--------------
 	
 	--first stage	
-	prediction_stage_0_input_a <= '0' & xhat_data;
-	prediction_stage_0_input_b <= '0' & xhatmean_rep_data;
-	
-	prediction_stage_0: entity work.OP_AXI_MP
-		Generic Map (
-			DATA_WIDTH => DATA_WIDTH + 1,
-			IS_ADD => false,
-			IS_SIGNED => true
-		)
-		Port Map (
-			clk => clk, rst => rst,
-			input_a_data => prediction_stage_0_input_a,
-			input_a_valid => xhat_valid,
-			input_a_ready => xhat_ready,
-			input_b_data  => prediction_stage_0_input_b,
-			input_b_valid => xhatmean_rep_valid,
-			input_b_ready => xhatmean_rep_ready,
-			output => prediction_stage_0_data,
-			output_valid => prediction_stage_0_out_valid,
-			output_ready => prediction_stage_0_out_ready
-		);
-		
-		
-	--second stage
-	prediction_stage_1_input_b <= (DATA_WIDTH downto ALPHA_WIDTH => '0') & alpha_rep_data;
-	prediction_stage_1: entity work.MULT_AXI_MP
+	prediction_stage_0: entity work.AXIS_ARITHMETIC_OP
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH + 1
+			DATA_WIDTH_0 => DATA_WIDTH,
+			DATA_WIDTH_1 => DATA_WIDTH,
+			OUTPUT_DATA_WIDTH => DATA_WIDTH + 1,
+			IS_ADD => false,
+			SIGN_EXTEND_0 => false,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP => true
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_a_data =>  prediction_stage_0_data,
-			input_a_valid => prediction_stage_0_out_valid,
-			input_a_ready => prediction_stage_0_out_ready,
-			input_b_data  => prediction_stage_1_input_b,
-			input_b_valid => alpha_rep_valid,
-			input_b_ready => alpha_rep_ready,
-			output => prediction_stage_1_data,
-			output_valid => prediction_stage_1_out_valid,
-			output_ready => prediction_stage_1_out_ready
+			input_0_data  => xhat_data,
+			input_0_valid => xhat_valid,
+			input_0_ready => xhat_ready,
+			input_1_data  => xhatmean_rep_data,
+			input_1_valid => xhatmean_rep_valid,
+			input_1_ready => xhatmean_rep_ready,
+			output_data   => prediction_stage_0_data,
+			output_valid  => prediction_stage_0_out_valid,
+			output_ready  => prediction_stage_0_out_ready
+		);
+		
+	--second stage
+	prediction_stage_1_input_b <= (DATA_WIDTH downto ALPHA_WIDTH => '0') & alpha_rep_data;
+	prediction_stage_1: entity work.AXIS_MULTIPLIER
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH + 1,
+			DATA_WIDTH_1 => ALPHA_WIDTH,
+			OUTPUT_WIDTH => DATA_WIDTH + 1 + ALPHA_WIDTH,
+			SIGN_EXTEND_0 => true,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_0_data  => prediction_stage_0_data,
+			input_0_valid => prediction_stage_0_out_valid,
+			input_0_ready => prediction_stage_0_out_ready,
+			input_1_data  => alpha_rep_data,
+			input_1_valid => alpha_rep_valid,
+			input_1_ready => alpha_rep_ready,
+			output_data   => prediction_stage_1_data,
+			output_valid  => prediction_stage_1_out_valid,
+			output_ready  => prediction_stage_1_out_ready
 		);
 	
 	--third stage		
-	prediction_stage_2_input_b <= "000" & xmean_rep_data; --to make it up to data-width + 3
-	prediction_stage_2: entity work.OP_AXI_MP
+	prediction_stage_2: entity work.AXIS_ARITHMETIC_OP
 		Generic Map (
-			DATA_WIDTH => PREDICTION_WIDTH,
+			DATA_WIDTH_0 => DATA_WIDTH + 2,
+			DATA_WIDTH_1 => DATA_WIDTH,
+			OUTPUT_DATA_WIDTH => DATA_WIDTH + 3,
 			IS_ADD => true,
-			IS_SIGNED => true
+			SIGN_EXTEND_0 => true,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP => true
 		)
 		Port Map (
 			clk => clk, rst => rst,
-			input_a_data =>  prediction_stage_1_data(PREDICTION_WIDTH + ALPHA_WIDTH - 2 downto ALPHA_WIDTH - 1),
-			input_a_valid => prediction_stage_1_out_valid,
-			input_a_ready => prediction_stage_1_out_ready,
-			input_b_data  => prediction_stage_2_input_b,
-			input_b_valid => xmean_rep_valid,
-			input_b_ready => xmean_rep_ready,
-			output => prediction_data,
-			output_valid => prediction_valid,
-			output_ready => prediction_ready
+			input_0_data =>  prediction_stage_1_data(ALPHA_WIDTH + DATA_WIDTH downto ALPHA_WIDTH - 1),
+			input_0_valid => prediction_stage_1_out_valid,
+			input_0_ready => prediction_stage_1_out_ready,
+			input_1_data  => xmean_rep_data,
+			input_1_valid => xmean_rep_valid,
+			input_1_ready => xmean_rep_ready,
+			output_data   => prediction_data,
+			output_valid  => prediction_valid,
+			output_ready  => prediction_ready
 		);
 
 end Behavioral;

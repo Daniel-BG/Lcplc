@@ -101,7 +101,7 @@ begin
 	--and enable whatever queue is ok
 
 	--SPLITTERS
-	xhat_splitter: entity work.SPLITTER_AXI_2
+	xhat_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH
 		)
@@ -119,7 +119,8 @@ begin
 			output_1_data  => xhat_split_1_data,
 			output_1_ready => xhat_split_1_ready
 		);
-	xtilde_splitter: entity work.SPLITTER_AXI_2
+		
+	xtilde_splitter: entity work.AXIS_SPLITTER_2
 			Generic map (
 				DATA_WIDTH => DATA_WIDTH
 			)
@@ -139,7 +140,7 @@ begin
 			);
 			
 	--FIFOS
-	xhat_fifo: entity work.FIFO_AXI
+	xhat_fifo: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
@@ -147,15 +148,15 @@ begin
 		Port map ( 
 			clk	=> clk, rst => rst,
 			--input axi port
-			in_valid => xhat_split_0_valid,
-			in_ready => xhat_split_0_ready,
-			in_data  => xhat_split_0_data,
+			input_valid => xhat_split_0_valid,
+			input_ready => xhat_split_0_ready,
+			input_data  => xhat_split_0_data,
 			--out axi port
-			out_ready => xhat_fifo_ready,
-			out_data  => xhat_fifo_data,
-			out_valid => xhat_fifo_valid
+			output_ready => xhat_fifo_ready,
+			output_data  => xhat_fifo_data,
+			output_valid => xhat_fifo_valid
 		);
-	xtilde_fifo: entity work.FIFO_AXI
+	xtilde_fifo: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
@@ -163,25 +164,25 @@ begin
 		Port map ( 
 			clk	=> clk, rst => rst,
 			--input axi port
-			in_valid => xtilde_split_0_valid,
-			in_ready => xtilde_split_0_ready,
-			in_data  => xtilde_split_0_data,
+			input_valid => xtilde_split_0_valid,
+			input_ready => xtilde_split_0_ready,
+			input_data  => xtilde_split_0_data,
 			--out axi port
-			out_ready => xtilde_fifo_ready,
-			out_data  => xtilde_fifo_data,
-			out_valid => xtilde_fifo_valid
+			output_ready => xtilde_fifo_ready,
+			output_data  => xtilde_fifo_data,
+			output_valid => xtilde_fifo_valid
 		);
 		
 	--mean calcs
-	xhat_acc: entity work.MEAN_CALCULATOR 
+	xhat_acc: entity work.AXIS_AVERAGER_POW2 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			ACC_LOG => BLOCK_SIZE_LOG,
+			ELEMENT_COUNT_LOG => BLOCK_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input		=> xhat_split_1_data,
+			input_data	=> xhat_split_1_data,
 			input_valid => xhat_split_1_valid,
 			input_ready => xhat_split_1_ready,
 			output_data => xhatmean_data,
@@ -189,15 +190,15 @@ begin
 			output_ready=> xhatmean_ready
 		);
 		
-	xtilde_acc: entity work.MEAN_CALCULATOR 
+	xtilde_acc: entity work.AXIS_AVERAGER_POW2 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			ACC_LOG => BLOCK_SIZE_LOG,
+			ELEMENT_COUNT_LOG => BLOCK_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input		=> xtilde_split_1_data,
+			input_data	=> xtilde_split_1_data,
 			input_valid => xtilde_split_1_valid,
 			input_ready => xtilde_split_1_ready,
 			output_data => xtildemean_data,
@@ -207,7 +208,7 @@ begin
 		
 	--threshold splitter
 	d_flag_data <= "0" when d_flag_data_raw = '0' else "1";
-	d_threshold_splitter: entity  work.SPLITTER_AXI_2
+	d_threshold_splitter: entity  work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH => 1
 		)
@@ -225,28 +226,28 @@ begin
 		);
 		
 	--select mean
-	mean_selector: entity work.SELECTOR_AXI_MP 
+	mean_selector: entity work.AXIS_SELECTOR 
 		generic map (
 			DATA_WIDTH => DATA_WIDTH
 		)
 		port map (
 			clk => clk, rst => rst,
-			input_false_data	=> xtildemean_data,
-			input_false_ready	=> xtildemean_ready,
-			input_false_valid	=> xtildemean_valid,
-			input_true_data		=> xhatmean_data,
-			input_true_ready	=> xhatmean_ready,
-			input_true_valid	=> xhatmean_valid,
-			flag_data			=> d_flag_1_data,
-			flag_ready			=> d_flag_1_ready,
-			flag_valid			=> d_flag_1_valid,
-			output_data			=> xhatoutmean_data,
-			output_valid		=> xhatoutmean_valid,
-			output_ready		=> xhatoutmean_ready
+			input_0_data	=> xtildemean_data,
+			input_0_ready	=> xtildemean_ready,
+			input_0_valid	=> xtildemean_valid,
+			input_1_data	=> xhatmean_data,
+			input_1_ready	=> xhatmean_ready,
+			input_1_valid	=> xhatmean_valid,
+			flag_data		=> d_flag_1_data,
+			flag_ready		=> d_flag_1_ready,
+			flag_valid		=> d_flag_1_valid,
+			output_data		=> xhatoutmean_data,
+			output_valid	=> xhatoutmean_valid,
+			output_ready	=> xhatoutmean_ready
 		);
 		
 	--replicate flag for sample selector
-	flag_repeater: entity work.DATA_REPEATER_AXI
+	flag_repeater: entity work.AXIS_DATA_REPEATER
 		Generic map (
 			DATA_WIDTH => 1,
 			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
@@ -262,24 +263,24 @@ begin
 		);
 		
 	--select sample
-	sample_selector: entity work.SELECTOR_AXI_MP 
+	sample_selector: entity work.AXIS_SELECTOR 
 		generic map (
 			DATA_WIDTH => DATA_WIDTH
 		)
 		port map (
 			clk => clk, rst => rst,
-			input_false_data	=> xtilde_fifo_data,
-			input_false_ready	=> xtilde_fifo_ready,
-			input_false_valid	=> xtilde_fifo_valid,
-			input_true_data		=> xhat_fifo_data,
-			input_true_ready	=> xhat_fifo_ready,
-			input_true_valid	=> xhat_fifo_valid,
-			flag_data			=> d_flag_0_rep_data,
-			flag_ready			=> d_flag_0_rep_ready,
-			flag_valid			=> d_flag_0_rep_valid,
-			output_data			=> xhatout_data,
-			output_valid		=> xhatout_valid,
-			output_ready		=> xhatout_ready
+			input_0_data	=> xtilde_fifo_data,
+			input_0_ready	=> xtilde_fifo_ready,
+			input_0_valid	=> xtilde_fifo_valid,
+			input_1_data	=> xhat_fifo_data,
+			input_1_ready	=> xhat_fifo_ready,
+			input_1_valid	=> xhat_fifo_valid,
+			flag_data		=> d_flag_0_rep_data,
+			flag_ready		=> d_flag_0_rep_ready,
+			flag_valid		=> d_flag_0_rep_valid,
+			output_data		=> xhatout_data,
+			output_valid	=> xhatout_valid,
+			output_ready	=> xhatout_ready
 		);
 		
 end Behavioral;

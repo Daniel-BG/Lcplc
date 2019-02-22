@@ -186,7 +186,7 @@ begin
 		
 	--splitter (one for shifter, one for c2w_segmenter)
 	shifter_segmenter_splitter_input <= input_code_data & shiftamt_shift;
-	shifter_segmenter_splitter: entity work.SPLITTER_AXI_2 
+	shifter_segmenter_splitter: entity work.AXIS_SPLITTER_2 
 		Generic map(
 			DATA_WIDTH => CODE_WIDTH + OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK
 		)
@@ -228,7 +228,7 @@ begin
 		);
 		
 	--fifo to delay inputs to c2w_segmenter
-	shiftamt_delay_fifo: entity work.FIFO_AXI 
+	shiftamt_delay_fifo: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK,
 			FIFO_DEPTH => SHIFTAMT_DELAY_FIFO_DEPTH
@@ -236,17 +236,17 @@ begin
 		Port map ( 
 			clk => clk, rst => rst,
 			--input axi port
-			in_valid => sss_1_valid,
-			in_ready => sss_1_ready,
-			in_data	=> sss_1_data_shift,
+			input_valid => sss_1_valid,
+			input_ready => sss_1_ready,
+			input_data	=> sss_1_data_shift,
 			--out axi port
-			out_ready => shamt_delay_fifo_ready,
-			out_data  => shamt_delay_fifo_data,
-			out_valid => shamt_delay_fifo_valid
+			output_ready => shamt_delay_fifo_ready,
+			output_data  => shamt_delay_fifo_data,
+			output_valid => shamt_delay_fifo_valid
 		);
 		
 	--join shifter output and shamt in fifo
-	shift_shamt_join: entity work.JOINER_AXI_2
+	shift_shamt_join: entity work.AXIS_SYNCHRONIZER_2
 		Generic map (
 			DATA_WIDTH_0 => CODE_WIDTH + 2**OUTPUT_WIDTH_LOG - 1,
 			DATA_WIDTH_1 => OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK
@@ -254,10 +254,12 @@ begin
 		Port map (
 			clk => clk, rst => rst,
 			--to input axi port
-			input_valid_0 => shifter_valid, input_valid_1 => shamt_delay_fifo_valid,
-			input_ready_0 => shifter_ready, input_ready_1 => shamt_delay_fifo_ready,
-			input_data_0  => shifter_data,
-			input_data_1  => shamt_delay_fifo_data,
+			input_0_valid => shifter_valid, 
+			input_0_ready => shifter_ready, 
+			input_0_data  => shifter_data,
+			input_1_valid => shamt_delay_fifo_valid,
+			input_1_ready => shamt_delay_fifo_ready,
+			input_1_data  => shamt_delay_fifo_data,
 			--to output axi ports
 			output_valid => shift_shamt_valid,
 			output_ready => shift_shamt_ready,
@@ -288,16 +290,16 @@ begin
 		
 	--delay minififo
 	merger_delay_input_data <= segmenter_ends_word & segmenter_data;
-	merger_delay: entity work.MINIFIFO
+	merger_delay: entity work.AXIS_LATCHED_CONNECTION
 		Generic map (DATA_WIDTH => 2**OUTPUT_WIDTH_LOG + 1)
 		Port map (
 			clk => clk, rst => rst,
-			in_ready => segmenter_ready,
-			in_valid => segmenter_valid,
-			in_data => merger_delay_input_data,
-			out_ready => merger_delay_ready,
-			out_valid => merger_delay_valid,
-			out_data => merger_delay_data
+			input_ready => segmenter_ready,
+			input_valid => segmenter_valid,
+			input_data => merger_delay_input_data,
+			output_ready => merger_delay_ready,
+			output_valid => merger_delay_valid,
+			output_data => merger_delay_data
 		);
 	merger_delay_data_data <= merger_delay_data(2**OUTPUT_WIDTH_LOG - 1 downto 0);
 	merger_delay_data_flag <= merger_delay_data(2**OUTPUT_WIDTH_LOG);

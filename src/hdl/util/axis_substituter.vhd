@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 14.02.2019 09:23:30
 -- Design Name: 
@@ -8,7 +8,8 @@
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Substituter for an AXIS bus. It will replace the first INVALID_TRANSACTIONS
+--		with the input_sub port instead of their original value.
 -- 
 -- Dependencies: 
 -- 
@@ -18,20 +19,10 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
-entity SUBSTITUTER_AXI is
+entity AXIS_SUBSTITUTER is
 	Generic (
 		DATA_WIDTH: integer := 32;
 		INVALID_TRANSACTIONS: integer := 1
@@ -46,28 +37,32 @@ entity SUBSTITUTER_AXI is
 		output_valid:	out	std_logic;
 		output_data:	out	std_logic_vector(DATA_WIDTH - 1 downto 0)
 	);
-end SUBSTITUTER_AXI;
+end AXIS_SUBSTITUTER;
 
-architecture Behavioral of SUBSTITUTER_AXI is
+architecture Behavioral of AXIS_SUBSTITUTER is
 	type filter_state_t is (VALID, INVALID);
 	signal state_curr, state_next: filter_state_t;
 
-	signal invalid_counter, invalid_counter_next: natural range 0 to INVALID_TRANSACTIONS - 1;
-
+	signal counter_saturating, counter_enable: std_logic;
 begin
 
-	
-
+	counter: entity work.COUNTER
+		Generic map (
+			COUNT => INVALID_TRANSACTIONS
+		)
+		Port map ( 
+			clk => clk, rst	=> rst,
+			enable		=> counter_enable,
+			saturating	=> counter_saturating
+		);
 
 	seq: process(clk)
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				invalid_counter <= 0;
 				state_curr <= INVALID;
 			else
 				state_curr <= state_next;
-				invalid_counter <= invalid_counter_next;
 			end if;
 		end if;
 	end process;
@@ -75,10 +70,10 @@ begin
 	input_ready <= output_ready;
 	output_valid <= input_valid;
 	
-	comb: process(state_curr, output_ready, input_valid, invalid_counter)
+	comb: process(state_curr, output_ready, input_valid,counter_saturating, input_data, input_sub)
 	begin
 		state_next <= state_curr;
-		invalid_counter_next <= invalid_counter;
+		counter_enable <= '0';
 		
 		if state_curr = VALID then
 			output_data <= input_data;
@@ -86,11 +81,9 @@ begin
 			output_data <= input_sub;
 			--check for transaction (only on input, output is disconnected)
 			if input_valid = '1' and output_ready = '1' then
-				if invalid_counter = INVALID_TRANSACTIONS - 1 then
-					invalid_counter_next <= 0;
+				counter_enable <= '1';
+				if counter_saturating = '0' then
 					state_next <= VALID;
-				else
-					invalid_counter_next <= invalid_counter + 1;
 				end if;
 			end if;
 		end if;

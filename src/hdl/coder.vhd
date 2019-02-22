@@ -139,7 +139,7 @@ begin
 	------CONTROL END-----------
 
 	--D flag splitter (one for ehat control, one for kj control, one for output)
-	d_flag_splitter: entity work.SPLITTER_AXI_3 
+	d_flag_splitter: entity work.AXIS_SPLITTER_3 
 		Generic map (
 			DATA_WIDTH => 1
 		)
@@ -162,7 +162,7 @@ begin
 		);
 		
 	--repeater for KJ control
-	kj_control_repeater: entity work.DATA_REPEATER_AXI
+	kj_control_repeater: entity work.AXIS_DATA_REPEATER
 		Generic map (
 			DATA_WIDTH => 1,
 			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG - 1
@@ -178,7 +178,7 @@ begin
 		);
 	
 	--repeater for ehat control
-	ehat_control_repeater: entity work.DATA_REPEATER_AXI
+	ehat_control_repeater: entity work.AXIS_DATA_REPEATER
 		Generic map (
 			DATA_WIDTH => 1,
 			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG - 1
@@ -194,7 +194,7 @@ begin
 		);
 		
 	--ehat_filter
-	ehat_filter: entity work.FILTER_AXI 
+	ehat_filter: entity work.AXIS_FILTER 
 		Generic map (
 			DATA_WIDTH => MAPPED_ERROR_WIDTH,
 			FILTER_ON_UP => false --0 is below threshold and does not code then
@@ -214,7 +214,7 @@ begin
 		);
 		
 	--kj_filter
-	kj_filter: entity work.FILTER_AXI
+	kj_filter: entity work.AXIS_FILTER
 		Generic map (
 			DATA_WIDTH => ACC_LOG,
 			FILTER_ON_UP => false
@@ -234,7 +234,7 @@ begin
 		);
 		
 	--separator to exp golomb coder and golomb coder
-	separator: entity work.SEPARATOR_AXI 
+	separator: entity work.AXIS_SEPARATOR 
 		Generic map (
 			DATA_WIDTH => MAPPED_ERROR_WIDTH,
 			TO_PORT_ZERO => 1,
@@ -300,7 +300,7 @@ begin
 	merger_input_0 <= (CODING_LENGTH_MAX_LOG - 1 downto 1 => '0') & '1' & (CODING_LENGTH_MAX - 1 downto 1 => '0') & d_flag_0_data;
 	merger_input_1 <= std_logic_vector(to_unsigned(eg_length, CODING_LENGTH_MAX_LOG)) & eg_code;
 	merger_input_2 <= std_logic_vector(to_unsigned(golomb_length, CODING_LENGTH_MAX_LOG)) & golomb_code;
-	merger: entity work.MERGER_AXI 
+	merger: entity work.AXIS_MERGER 
 		Generic map (
 			DATA_WIDTH => CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG, --space for both length and the bits themselves
 			FROM_PORT_ZERO => 1, 	--one from the flag code

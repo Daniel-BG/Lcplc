@@ -94,7 +94,6 @@ architecture Behavioral of ERROR_CALC is
 	signal xhatout_calc_fifo_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
 	--unquant error calculation
-	signal unquant_error_calc_input_0: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	signal unquant_error_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	signal unquant_error_valid, unquant_error_ready: std_logic;
 	
@@ -163,7 +162,7 @@ begin
 	--------------
 
 	--prediction splitter (to output queue and to error calculation)
-	prediction_splitter: entity work.SPLITTER_AXI_3
+	prediction_splitter: entity work.AXIS_SPLITTER_3
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH
 		)
@@ -185,7 +184,7 @@ begin
 			output_2_ready => prediction_splitter_ready_2
 		);
 	
-	clamp_xtildeout: entity work.INTERVAL_CLAMPER
+	clamp_xtildeout: entity work.AXIS_INTERVAL_CLAMPER
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
 			IS_SIGNED => true,
@@ -197,53 +196,56 @@ begin
 			input_data  => prediction_splitter_data_0,
 			input_valid => prediction_splitter_valid_0,
 			input_ready => prediction_splitter_ready_0,
-			output => xtilde_clamped_raw_data,
+			output_data => xtilde_clamped_raw_data,
 			output_valid => xtilde_valid,
 			output_ready => xtilde_ready
 		);
 	xtilde_data <= xtilde_clamped_raw_data(DATA_WIDTH - 1 downto 0);
 	
 	--fifo to xhatout calculation
-	xhatout_calc_fifo: entity work.FIFO_AXI
+	xhatout_calc_fifo: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
 			FIFO_DEPTH => XHATOUT_CALC_FIFO_DEPTH
 		)
 		Port map (
 			clk => clk, rst => rst,
-			in_valid => prediction_splitter_valid_1,
-			in_ready => prediction_splitter_ready_1,
-			in_data  => prediction_splitter_data_1,
-			out_ready => xhatout_calc_fifo_ready,
-			out_valid => xhatout_calc_fifo_valid,
-			out_data  => xhatout_calc_fifo_data
+			input_valid  => prediction_splitter_valid_1,
+			input_ready  => prediction_splitter_ready_1,
+			input_data   => prediction_splitter_data_1,
+			output_ready => xhatout_calc_fifo_ready,
+			output_valid => xhatout_calc_fifo_valid,
+			output_data  => xhatout_calc_fifo_data
 		);
 	
 	
 	
 	--error calculation
-	unquant_error_calc_input_0 <= (PREDICTION_WIDTH -1 downto DATA_WIDTH => '0') & x_data;
-	unquant_error_calc: entity work.OP_AXI_MP
+	unquant_error_calc: entity work.AXIS_ARITHMETIC_OP
 		Generic Map (
-			DATA_WIDTH => PREDICTION_WIDTH,
+			DATA_WIDTH_0 	  => DATA_WIDTH,
+			DATA_WIDTH_1 	  => PREDICTION_WIDTH,
+			OUTPUT_DATA_WIDTH => PREDICTION_WIDTH,
 			IS_ADD => false,
-			IS_SIGNED => true
+			SIGN_EXTEND_0     => false,
+			SIGN_EXTEND_1	  => true,
+			SIGNED_OP		  => true
 		)
 		Port Map (
 			clk => clk, rst => rst,
-			input_a_data  => unquant_error_calc_input_0,
-			input_a_valid => x_valid,
-			input_a_ready => x_ready,
-			input_b_data  => prediction_splitter_data_2,
-			input_b_valid => prediction_splitter_valid_2,
-			input_b_ready => prediction_splitter_ready_2,
-			output => unquant_error_data,
-			output_valid => unquant_error_valid,
-			output_ready => unquant_error_ready
+			input_0_data  => x_data,
+			input_0_valid => x_valid,
+			input_0_ready => x_ready,
+			input_1_data  => prediction_splitter_data_2,
+			input_1_valid => prediction_splitter_valid_2,
+			input_1_ready => prediction_splitter_ready_2,
+			output_data   => unquant_error_data,
+			output_valid  => unquant_error_valid,
+			output_ready  => unquant_error_ready
 		);
 		
 	--error splitter (1 for distortion calculation and 1 for continuing with calcs
-	error_splitter: entity work.SPLITTER_AXI_2
+	error_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH
 		)
@@ -261,40 +263,50 @@ begin
 		);
 		
 	--distortion multiplier
-	distortion_multiplier: entity work.MULT_AXI
+	distortion_multiplier: entity work.AXIS_MULTIPLIER
 		Generic map (
-			DATA_WIDTH => PREDICTION_WIDTH
+			DATA_WIDTH_0 => PREDICTION_WIDTH,
+			DATA_WIDTH_1 => PREDICTION_WIDTH,
+			OUTPUT_WIDTH => PREDICTION_WIDTH*2,
+			SIGN_EXTEND_0=> true,
+			SIGN_EXTEND_1=> true,
+			SIGNED_OP	 => true
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_a => error_splitter_data_0,
-			input_b => error_splitter_data_0,
-			input_valid => error_splitter_valid_0,
-			input_ready => error_splitter_ready_0,
-			output => distortion_mult_data,
-			output_valid => distortion_mult_valid,
-			output_ready => distortion_mult_ready
+			input_0_data	=> error_splitter_data_0,
+			input_0_valid	=> error_splitter_valid_0,
+			input_0_ready	=> error_splitter_ready_0,
+			input_1_data	=> error_splitter_data_0,
+			input_1_valid	=> error_splitter_valid_0,
+			input_1_ready	=> open, --no need for this ready since i already have it from port 0 (they sync)
+			output_data 	=> distortion_mult_data,
+			output_valid 	=> distortion_mult_valid,
+			output_ready 	=> distortion_mult_ready
 		);
+		
+		
 
 	--distortion accumulator
-	distortion_accumulator: entity work.ACCUMULATOR
+	distortion_accumulator: entity work.AXIS_ACCUMULATOR
 		Generic map (
-			DATA_WIDTH => PREDICTION_WIDTH*2,
-			ACC_LOG => BLOCK_SIZE_LOG,
-			IS_SIGNED => true
+			DATA_WIDTH 		=> PREDICTION_WIDTH*2,
+			ACC_COUNT_LOG	=> BLOCK_SIZE_LOG,
+			ACC_COUNT 		=> 2**BLOCK_SIZE_LOG,
+			IS_SIGNED 		=> true
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input => distortion_mult_data,
+			input_data 	=> distortion_mult_data,
 			input_valid => distortion_mult_valid,
 			input_ready => distortion_mult_ready,
 			output_data => distortion_data,
-			output_valid => distortion_valid,
-			output_ready => distortion_ready
+			output_valid=> distortion_valid,
+			output_ready=> distortion_ready
 		);
 		
 	d_flag_thres <= std_logic_vector(resize(unsigned(THRESHOLD),(DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG));
-	d_threshold_comparator: entity work.COMPARATOR_AXI
+	d_threshold_comparator: entity work.AXIS_COMPARATOR
 		Generic map (
 			DATA_WIDTH => (DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG,
 			IS_SIGNED => false,
@@ -303,13 +315,15 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_a => distortion_data,
-			input_b => d_flag_thres,
-			input_valid => distortion_valid,
-			input_ready => distortion_ready,
-			output => d_flag_data,
-			output_valid => d_flag_valid,
-			output_ready => d_flag_ready
+			input_0_data  => distortion_data,
+			input_0_valid => distortion_valid,
+			input_0_ready => distortion_ready,
+			input_1_data  => d_flag_thres,
+			input_1_valid => distortion_valid,
+			input_1_ready => open,
+			output_data	  => d_flag_data,
+			output_valid  => d_flag_valid,
+			output_ready  => d_flag_ready
 		);
 	--1 on flag means it is greater than the threshold
 		
@@ -333,7 +347,7 @@ begin
 	--splitter for quantized error 
 		--one goes to error mapping
 		--one goes to dequantizing and decoding for next layer
-	quantized_error_splitter: entity work.SPLITTER_AXI_2
+	quantized_error_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH
 		)
@@ -370,7 +384,7 @@ begin
 	--splitter for error dequantizer
 		--one going to the decoded block calculation
 		--other one going to the sliding accumulator
-	unquantized_error_splitter: entity work.SPLITTER_AXI_2
+	unquantized_error_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH
 		)
@@ -388,27 +402,31 @@ begin
 		);
 		
 	--decoded block out for next layer calculation
-	xhatout_calc: entity work.OP_AXI_MP
+	xhatout_calc: entity work.AXIS_ARITHMETIC_OP
 		Generic map (
-			DATA_WIDTH => PREDICTION_WIDTH,
+			DATA_WIDTH_0 => PREDICTION_WIDTH,
+			DATA_WIDTH_1 => PREDICTION_WIDTH,
+			OUTPUT_DATA_WIDTH => PREDICTION_WIDTH,
 			IS_ADD => true,
-			IS_SIGNED => true
+			SIGN_EXTEND_0 => true,
+			SIGN_EXTEND_1 => true,
+			SIGNED_OP	  => true
 		)
 		Port map(
 			clk => clk, rst => rst,
-			input_a_data => xhatout_calc_fifo_data,
-			input_a_valid => xhatout_calc_fifo_valid,
-			input_a_ready => xhatout_calc_fifo_ready,
-			input_b_data  => error_unquant_splitter_data_0,
-			input_b_valid => error_unquant_splitter_valid_0,
-			input_b_ready => error_unquant_splitter_ready_0,
-			output => xhatout_raw_data,
-			output_valid => xhatout_raw_valid,
-			output_ready => xhatout_raw_ready
+			input_0_data  => xhatout_calc_fifo_data,
+			input_0_valid => xhatout_calc_fifo_valid,
+			input_0_ready => xhatout_calc_fifo_ready,
+			input_1_data  => error_unquant_splitter_data_0,
+			input_1_valid => error_unquant_splitter_valid_0,
+			input_1_ready => error_unquant_splitter_ready_0,
+			output_data   => xhatout_raw_data,
+			output_valid  => xhatout_raw_valid,
+			output_ready  => xhatout_raw_ready
 		);
 		
 	--clamp decoded block to real interval
-	clamp_xhatout: entity work.INTERVAL_CLAMPER
+	clamp_xhatout: entity work.AXIS_INTERVAL_CLAMPER
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
 			IS_SIGNED => true,
@@ -420,7 +438,7 @@ begin
 			input_data  => xhatout_raw_data,
 			input_valid => xhatout_raw_valid,
 			input_ready => xhatout_raw_ready,
-			output => xhatout_raw_data_out,
+			output_data => xhatout_raw_data_out,
 			output_valid => xhatout_valid,
 			output_ready => xhatout_ready
 		);
@@ -444,7 +462,7 @@ begin
 	merr_data <= mapped_error_data_raw(PREDICTION_WIDTH - 1 downto 0); 
 	
 	--substituter to change the first error 
-	substituter: entity work.SUBSTITUTER_AXI
+	substituter: entity work.AXIS_SUBSTITUTER	
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
 			INVALID_TRANSACTIONS => 1
@@ -495,7 +513,7 @@ begin
 		);
 		
 	--kj filtering (there is one more kj produced than necessary)
-	kj_filtering: entity work.REDUCER_AXI
+	kj_filtering: entity work.AXIS_REDUCER
 		Generic map (
 			DATA_WIDTH => ACC_LOG,
 			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG - 1,
