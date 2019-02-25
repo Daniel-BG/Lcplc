@@ -22,6 +22,7 @@
 
 module test_axis_fifo;
 	
+parameter USE_MINIFIFO=1;
 parameter PERIOD=10;
 parameter DATA_WIDTH=32;
 parameter FIFO_DEPTH=16;
@@ -37,16 +38,32 @@ parameter FIFO_DEPTH=16;
 	wire output_valid;
 	wire[DATA_WIDTH-1:0] output_data;
 	//DUT (auto connect)
-	AXIS_FIFO #(.DATA_WIDTH(DATA_WIDTH), .FIFO_DEPTH(FIFO_DEPTH)) DUT (
-		.clk(clk),
-		.rst(rst),
-		.input_valid(input_valid),
-		.input_ready(input_ready),
-		.input_data(input_data),
-		.output_valid(output_valid),
-		.output_ready(output_ready),
-		.output_data(output_data)
-	);
+	
+	if (USE_MINIFIFO == 1) begin: create_minififo
+		AXIS_LATCHED_CONNECTION #(.DATA_WIDTH(DATA_WIDTH)) DUT (
+			.clk(clk),
+			.rst(rst),
+			.input_valid(input_valid),
+			.input_ready(input_ready),
+			.input_data(input_data),
+			.output_valid(output_valid),
+			.output_ready(output_ready),
+			.output_data(output_data)
+		);
+	end
+	
+	if (USE_MINIFIFO == 0) begin: create_full_fifo
+		AXIS_FIFO #(.DATA_WIDTH(DATA_WIDTH), .FIFO_DEPTH(FIFO_DEPTH)) DUT (
+			.clk(clk),
+			.rst(rst),
+			.input_valid(input_valid),
+			.input_ready(input_ready),
+			.input_data(input_data),
+			.output_valid(output_valid),
+			.output_ready(output_ready),
+			.output_data(output_data)
+		);
+	end;
 	
 	always #(PERIOD/2) clk = ~clk;
 	always begin
