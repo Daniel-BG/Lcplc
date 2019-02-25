@@ -45,8 +45,9 @@ architecture Behavioral of AXIS_FIFO is
 	type memory_t is array(0 to FIFO_DEPTH - 1) of std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal memory: memory_t;
 	
+	signal output_valid_in, input_ready_in: std_logic;
 	
-	signal head, tail, tail_next: natural range 0 to FIFO_DEPTH - 1;
+	signal head, head_next, tail, tail_next, tail_lookahead, tail_lookahead_next: natural range 0 to FIFO_DEPTH - 1;
 	signal occupancy: natural range 0 to FIFO_DEPTH;
 	
 	signal input_empty, input_full: std_logic;
@@ -54,10 +55,15 @@ architecture Behavioral of AXIS_FIFO is
 	
 	signal dataout_mem, dataout_last: std_logic_vector (DATA_WIDTH - 1 downto 0);
 	signal last_read_fromin: std_logic;
+	
+	--precalc flags
+	signal occupancy_0_flag, occupancy_1_flag: std_logic;
 begin
 
-	output_valid <= not input_empty;
-	input_ready	 <= not input_full;
+	output_valid_in <= not input_empty;
+	input_ready_in  <= not input_full;
+	output_valid <= output_valid_in;
+	input_ready  <= input_ready_in;
 
 	next_input_empty <= '1' when 
 					(occupancy = 0 and input_valid = '0') or 
@@ -69,6 +75,8 @@ begin
 					else '0';
 					
 	tail_next <= 0 when tail = FIFO_DEPTH - 1 else tail + 1;
+	tail_lookahead_next <= 0 when tail_lookahead = FIFO_DEPTH - 1 else tail_lookahead + 1;
+	head_next <= 0 when head = FIFO_DEPTH - 1 else head + 1;
 					
 	update_flags: process(clk, rst)
 	begin
@@ -84,45 +92,68 @@ begin
 	end process;
 
 
-	main_proc: process(clk, rst, input_valid, output_ready, input_empty, tail, head, input_full)
+	main_proc: process(clk)
 	begin
 		if (rising_edge(clk)) then
 			if rst = '1' then
 				head <= 0;
 				tail <= 0;
+				tail_lookahead <= 1;
 				occupancy <= 0;
-			else			
-				if (input_valid = '1' and output_ready = '1' and input_empty = '0') then
+				occupancy_0_flag <= '1';
+				occupancy_1_flag <= '0';
+			else	
+				--read always to avoid LUT on input enable
+				dataout_mem <= memory(tail_lookahead);
+				--read and write		
+				if (input_valid = '1' and input_ready_in = '1' and output_ready = '1' and output_valid_in = '1') then
 					tail <= tail_next;
-					if occupancy = 1 then
+					tail_lookahead <= tail_lookahead_next;
+					memory(head) <= input_data;
+					head <= head_next;
+										
+					if occupancy_1_flag = '1'  then
 						last_read_fromin <= '1';
 						dataout_last <= input_data;
 					else
+						--dataout_mem <= memory(tail_lookahead);
 						last_read_fromin <= '0';
-						dataout_mem <= memory(tail_next);
 					end if;
-					
-					memory(head) <= input_data;
-					if (head = FIFO_DEPTH - 1) then
-						head <= 0;
-					else
-						head <= head + 1;
-					end if;
-				elsif (input_valid = '1' and not input_full = '1') then 
+				--just write
+				elsif (input_valid = '1' and input_ready_in = '1') then 
 					occupancy <= occupancy + 1;
 					memory(head) <= input_data;
-					if (head = FIFO_DEPTH - 1) then
-						head <= 0;
+					head <= head_next;
+					occupancy_0_flag <= '0';
+					
+					if occupancy_0_flag = '1' then
+						last_read_fromin <= '1';
+						dataout_last <= input_data;
+						occupancy_1_flag <= '1';
 					else
-						head <= head + 1;
+						occupancy_1_flag <= '0';
 					end if;
-					dataout_last <= input_data;
-					last_read_fromin <= '1';
-				elsif (output_ready = '1' and not input_empty = '1') then 
+					--	last_read_fromin <= '0';
+					--	dataout_mem <= memory(tail);
+					--	occupancy_1_flag <= '0';
+					--end if; --otherwise it alredy has the value
+				--just read
+				elsif (output_ready = '1' and output_valid_in = '1') then 
 					occupancy <= occupancy - 1;
 					tail <= tail_next;
-					dataout_mem <= memory(tail_next);
+					tail_lookahead <= tail_lookahead_next;
+					--dataout_mem <= memory(tail_lookahead);
 					last_read_fromin <= '0';
+					if occupancy = 2 then
+						occupancy_1_flag <= '1';
+					else
+						occupancy_1_flag <= '0';
+					end if;
+					if occupancy = 1 then
+						occupancy_0_flag <= '1';
+					else
+						occupancy_0_flag <= '0';
+					end if;
 				end if;
 			end if;
 		end if;
