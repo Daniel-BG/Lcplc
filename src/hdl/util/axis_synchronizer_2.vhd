@@ -44,110 +44,84 @@ entity AXIS_SYNCHRONIZER_2 is
 end AXIS_SYNCHRONIZER_2;
 
 architecture Behavioral of AXIS_SYNCHRONIZER_2 is
-	signal input_valid: std_logic_vector(1 downto 0);
-
-	signal buf0_i0, buf1_i0: std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
-	signal buf0_i1, buf1_i1: std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
-
-	signal buf0_full, buf0_filled: std_logic_vector(1 downto 0);
-	signal buf1_full: std_logic;
+	signal buf_i_0_full, buf_i_1_full, buf_o_0_full, buf_o_1_full: std_logic;
+	signal buf_i_0, buf_o_0: std_logic_vector(DATA_WIDTH_0 - 1 downto 0); 
+	signal buf_i_1, buf_o_1: std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
 	
-	--inner signals
-	signal input_0_ready_in, input_1_ready_in, output_valid_in: std_logic;
-	
+	signal input_0_ready_in, input_1_ready_in: std_logic;
+	signal output_valid_in: std_logic;
 begin
-	input_0_ready_in <= '1' when buf1_full = '0' or buf0_full(0) = '0' else '0';
-	input_1_ready_in <= '1' when buf1_full = '0' or buf0_full(1) = '0' else '0';	
-	output_valid_in <= buf1_full;
-	
-	buf0_filled(0) <= '1' when buf0_full(0) = '1' or (input_0_valid = '1' and input_0_ready_in = '1') else '0';
-	buf0_filled(1) <= '1' when buf0_full(1) = '1' or (input_1_valid = '1' and input_1_ready_in = '1') else '0';
-	
+
+	input_0_ready_in <= '1' when buf_i_0_full = '0' or buf_o_0_full = '0' else '0';
+	input_1_ready_in <= '1' when buf_i_1_full = '0' or buf_o_1_full = '0' else '0';
 	input_0_ready <= input_0_ready_in;
 	input_1_ready <= input_1_ready_in;
-	output_valid  <= output_valid_in;
-
-	output_data_0 <= buf1_i0;
-	output_data_1 <= buf1_i1;
 	
-	seq: process(clk, rst)
+	output_valid_in <= '1' when buf_o_0_full = '1' and buf_o_1_full = '1' else '0';
+	output_valid <= output_valid_in;
+	
+	output_data_0 <= buf_o_0;
+	output_data_1 <= buf_o_1;
+	
+	seq: process(clk) 
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				buf0_i0 <= (others => '0');
-				buf0_i1 <= (others => '0');
-				buf0_full <= (others => '0');
-				buf1_i0 <= (others => '0');
-				buf1_i1 <= (others => '0');
-				buf1_full <= '0';
+				buf_i_0_full <= '0';
+				buf_i_1_full <= '0';
+				buf_o_0_full <= '0';
+				buf_o_1_full <= '0';
+				buf_i_0 <= (others => '0');
+				buf_i_1 <= (others => '0');
+				buf_o_0 <= (others => '0');
+				buf_o_1 <= (others => '0');
 			else
-				--sending
+				--if reading from output
 				if output_valid_in = '1' and output_ready = '1' then
-					--receiving from both ports
-					if input_0_ready_in = '1' and input_0_valid = '1' and input_1_ready_in = '1' and input_1_valid = '1' then
-						buf1_full <= '1';
-						buf1_i0 <= input_0_data;
-						buf1_i1 <= input_1_data;	
-					else
-						--bypass to end
-						if buf0_filled = (buf0_filled'range => '1') then
-							buf1_full <= '1';
-							buf0_full <= (others => '0');
-							if buf0_full(0) = '1' then
-								buf1_i0 <= buf0_i0;
-							else
-								buf1_i0 <= input_0_data;
-							end if;
-							if buf0_full(1) = '1' then
-								buf1_i1 <= buf0_i1;
-							else
-								buf1_i1 <= input_1_data;
-							end if;
-						else
-							buf1_full <= '0';
-							--write to whatever ports have signals, we are not complete yet
-							if input_0_ready_in = '1' and input_0_valid = '1' then
-								buf0_full(0) <= '1';
-								buf0_i0 <= input_0_data;
-							end if;
-							if input_1_ready_in = '1' and input_1_valid = '1' then
-								buf0_full(1) <= '1';
-								buf0_i1 <= input_1_data;
-							end if;
+					--shift first input
+					if input_0_ready_in = '1' and input_0_valid = '1' then
+						buf_o_0 <= input_0_data;
+						buf_o_0_full <= '1';
+					else --shift first value
+						buf_o_0 <= buf_i_0;
+						buf_o_0_full <= buf_i_0_full;
+						--buf_i_0 <= (others => '0');
+						buf_i_0_full <= '0';
+					end if;
+					--shift second input
+					if input_1_ready_in = '1' and input_1_valid = '1' then
+						buf_o_1 <= input_1_data;
+						buf_o_1_full <= '1';
+					else --shift first value
+						buf_o_1 <= buf_i_1;
+						buf_o_1_full <= buf_i_1_full;
+						--buf_i_1 <= (others => '0');
+						buf_i_1_full <= '0';
+					end if;
+				else --not reading from output
+					if input_0_ready_in = '1' and input_0_valid = '1' then
+						--writing to output buffer
+						if buf_o_0_full = '0' then
+							buf_o_0_full <= '1';
+							buf_o_0 <= input_0_data;
+						else --writing to first buffer
+							buf_i_0_full <= '1';
+							buf_i_0 <= input_0_data;
 						end if;
 					end if;
-				--not sending
-				else
-					--bypass to end if end is not full
-					if buf1_full = '0' and buf0_filled = (buf0_filled'range => '1') then
-						buf1_full <= '1';
-						buf0_full <= (others => '0');
-						if buf0_full(0) = '1' then
-							buf1_i0 <= buf0_i0;
-						else
-							buf1_i0 <= input_0_data;
+					if input_1_ready_in = '1' and input_1_valid = '1' then
+						--writing to output buffer
+						if buf_o_1_full = '0' then
+							buf_o_1_full <= '1';
+							buf_o_1 <= input_1_data;
+						else --writing to first buffer
+							buf_i_1_full <= '1';
+							buf_i_1 <= input_1_data;
 						end if;
-						if buf0_full(1) = '1' then
-							buf1_i1 <= buf0_i1;
-						else
-							buf1_i1 <= input_1_data;
-						end if;
-					else
-						buf1_full <= '0';
-						--write to whatever ports have signals, we are not complete yet
-						if input_0_ready_in = '1' and input_0_valid = '1' then
-							buf0_full(0) <= '1';
-							buf0_i0 <= input_0_data;
-						end if;
-						if input_1_ready_in = '1' and input_1_valid = '1' then
-							buf0_full(1) <= '1';
-							buf0_i1 <= input_1_data;
-						end if;
-				end if;
+					end if;
 				end if;
 			end if;
 		end if;
 	end process;
-	
 	
 end Behavioral;

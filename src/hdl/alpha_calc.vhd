@@ -24,7 +24,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
@@ -38,40 +38,276 @@ entity ALPHA_CALC is
 		constant ALPHA_WIDTH: positive := 10
 	);
 	Port (
-		x_empty			: in  std_logic;
-		x_readen		: out std_logic;
+		clk, rst		: in  std_logic;
+		x_valid			: in  std_logic;
+		x_ready			: out std_logic;
 		x_data			: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xhat_empty		: in  std_logic;
-		xhat_readen		: out std_logic;
+		xhat_valid		: in  std_logic;
+		xhat_ready		: out std_logic;
 		xhat_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xmean_empty		: in  std_logic;
-		xmean_readen	: out std_logic;
-		xmean_data		: in  std_logic_vector(DATA_WIDTH + BLOCK_SIZE_LOG - 1 downto 0);
-		xhatmean_empty	: in  std_logic;
-		xhatmean_readen	: out std_logic;
-		xhatmean_data	: in  std_logic_vector(DATA_WIDTH + BLOCK_SIZE_LOG - 1 downto 0);
-		alpha_full      : in  std_logic;
-		alpha_wren		: out std_logic;
+		xmean_valid		: in  std_logic;
+		xmean_ready		: out std_logic;
+		xmean_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		xhatmean_valid	: in  std_logic;
+		xhatmean_ready	: out std_logic;
+		xhatmean_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		alpha_ready     : in  std_logic;
+		alpha_valid		: out std_logic;
 		alpha_data		: out std_logic_vector(ALPHA_WIDTH - 1 downto 0)
 	);
 end ALPHA_CALC;
 
 architecture Behavioral of ALPHA_CALC is
+	--holders
+	signal xmean_rep_ready, xmean_rep_valid: std_logic;
+	signal xmean_rep_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xhatmean_rep_ready, xhatmean_rep_valid: std_logic;
+	signal xhatmean_rep_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+			
+	--previous substractor
+	signal previous_stage_joiner_data_0_extended, previous_stage_joiner_data_1_extended: std_logic_vector(DATA_WIDTH downto 0);
+	signal previous_sub_data: std_logic_vector(DATA_WIDTH downto 0);
+	signal previous_sub_valid, previous_sub_ready: std_logic;
 	
+	--previous substraction splitter
+	signal previous_sub_splitter_valid_0, previous_sub_splitter_ready_0, previous_sub_splitter_valid_1, previous_sub_splitter_ready_1: std_logic;
+	signal previous_sub_splitter_data_0, previous_sub_splitter_data_1: std_logic_vector(DATA_WIDTH downto 0);
+			
+	--current substractor
+	signal current_sub_data: std_logic_vector(DATA_WIDTH downto 0);
+	signal current_sub_valid, current_sub_ready: std_logic;
 	
+	--joiner for alphaN multiplier
+	signal alphan_joiner_valid, alphan_joiner_ready: std_logic;
+	signal alphan_joiner_data_0, alphan_joiner_data_1: std_logic_vector(DATA_WIDTH downto 0);
+	
+	--multiplication outputs
+	signal alphad_mult_data, alphan_mult_data: std_logic_vector(DATA_WIDTH*2 + 1 downto 0);
+	signal alphad_mult_valid, alphan_mult_valid, alphad_mult_ready, alphan_mult_ready: std_logic;
+	
+	--accumulator outputs 
+	signal alphan_acc_data, alphad_acc_data: std_logic_vector(DATA_WIDTH*2 + 1 + BLOCK_SIZE_LOG downto 0);
+	signal alphan_acc_valid, alphan_acc_ready, alphad_acc_valid, alphad_acc_ready: std_logic;
+	
+	--acc joiner
+	signal alpha_d_n_joiner_valid, alpha_d_n_joiner_ready: std_logic;
+	signal alpha_d_n_joiner_data_0, alpha_d_n_joiner_data_1: std_logic_vector(DATA_WIDTH*2 + 1 + BLOCK_SIZE_LOG downto 0);
 
+	
 begin
 
-	--FSM
-	--read both xmean and xhatmean and save them
-	--read both x and xhat
-	--center on mean and send to multiplier if available, can read the next data right away
-		--need a counter for the amount of data to send to multiplier
+	--need repeaters for xmean and xhatmean
+	xmean_repeater: entity work.AXIS_DATA_REPEATER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
+		)
+		Port map (
+			clk => clk, rst	=> rst,
+			input_ready		=> xmean_ready,
+			input_valid		=> xmean_valid,
+			input_data		=> xmean_data,
+			output_ready	=> xmean_rep_ready,
+			output_valid    => xmean_rep_valid,
+			output_data		=> xmean_rep_data
+		);
 		
-	--at the end of the multiplier
-		--add result to accumulators
-		--when signaled the end of multiplications, send results to calculate alpha. This can trigger a new alpha calculation
-		--find the alpha value and send it to the alpha fifo
+	xhatmean_repeater: entity work.AXIS_DATA_REPEATER 
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
+		)
+		Port map (
+			clk => clk, rst	=> rst,
+			input_ready		=> xhatmean_ready,
+			input_valid		=> xhatmean_valid,
+			input_data		=> xhatmean_data,
+			output_ready	=> xhatmean_rep_ready,
+			output_valid    => xhatmean_rep_valid,
+			output_data		=> xhatmean_rep_data
+		);
+		
+	--previous substraction
+	previous_sub: entity work.AXIS_ARITHMETIC_OP 
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH,
+			DATA_WIDTH_1 => DATA_WIDTH,
+			OUTPUT_DATA_WIDTH => DATA_WIDTH + 1,
+			IS_ADD => false,
+			SIGN_EXTEND_0 => false,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_0_data	=> xhat_data,
+			input_0_valid	=> xhat_valid,
+			input_0_ready	=> xhat_ready,
+			input_1_data	=> xhatmean_rep_data,
+			input_1_valid	=> xhatmean_rep_valid,
+			input_1_ready	=> xhatmean_rep_ready,
+			output_data		=> previous_sub_data,
+			output_valid	=> previous_sub_valid,
+			output_ready	=> previous_sub_ready
+		);
+		
+	--splitter to both multipliers
+	previous_sub_splitter: entity work.AXIS_SPLITTER_2
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH + 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			--to input axi port
+			input_valid => previous_sub_valid,
+			input_data  => previous_sub_data,
+			input_ready => previous_sub_ready,
+			--to output axi ports
+			output_0_valid => previous_sub_splitter_valid_0,
+			output_0_data  => previous_sub_splitter_data_0,
+			output_0_ready => previous_sub_splitter_ready_0,
+			output_1_valid => previous_sub_splitter_valid_1,
+			output_1_data  => previous_sub_splitter_data_1,
+			output_1_ready => previous_sub_splitter_ready_1
+		);
+		
 
+	--currnet substraction
+	current_sub: entity work.AXIS_ARITHMETIC_OP 
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH,
+			DATA_WIDTH_1 => DATA_WIDTH,
+			OUTPUT_DATA_WIDTH => DATA_WIDTH + 1,
+			IS_ADD => false,
+			SIGN_EXTEND_0 => false,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_0_data	=> x_data,
+			input_0_valid	=> x_valid,
+			input_0_ready	=> x_ready,
+			input_1_data	=> xmean_rep_data,
+			input_1_valid	=> xmean_rep_valid,
+			input_1_ready	=> xmean_rep_ready,
+			output_data		=> current_sub_data,
+			output_valid	=> current_sub_valid,
+			output_ready	=> current_sub_ready
+		);
+			
+	--alphaN multiplier
+	alphan_multiplier: entity work.AXIS_MULTIPLIER
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH + 1,
+			DATA_WIDTH_1 => DATA_WIDTH + 1,
+			OUTPUT_WIDTH => 2*DATA_WIDTH + 2
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_0_data  => previous_sub_splitter_data_0,
+			input_0_valid => previous_sub_splitter_valid_0,
+			input_0_ready => previous_sub_splitter_ready_0,
+			input_1_data  => current_sub_data,
+			input_1_valid => current_sub_valid,
+			input_1_ready => current_sub_ready,
+			output_data   => alphan_mult_data,
+			output_valid  => alphan_mult_valid,
+			output_ready  => alphan_mult_ready
+		);
+		
+	--alphaD multiplier
+	alphad_multiplier: entity work.AXIS_MULTIPLIER
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH + 1,
+			DATA_WIDTH_1 => DATA_WIDTH + 1,
+			OUTPUT_WIDTH => 2*DATA_WIDTH + 2
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_0_data  => previous_sub_splitter_data_1,
+			input_0_valid => previous_sub_splitter_valid_1,
+			input_0_ready => previous_sub_splitter_ready_1,
+			input_1_data  => previous_sub_splitter_data_1,
+			input_1_valid => previous_sub_splitter_valid_1,
+			input_1_ready => open,
+			output_data  => alphad_mult_data,
+			output_valid => alphad_mult_valid,
+			output_ready => alphad_mult_ready
+		);
+
+	--alphaN accumulator
+	alphan_accumulator: entity work.AXIS_ACCUMULATOR
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH*2 + 2,
+			ACC_COUNT_LOG => BLOCK_SIZE_LOG,
+			ACC_COUNT => 2**BLOCK_SIZE_LOG,
+			IS_SIGNED => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_data   => alphan_mult_data,
+			input_valid  => alphan_mult_valid,
+			input_ready  => alphan_mult_ready,
+			output_data  => alphan_acc_data,
+			output_valid => alphan_acc_valid,
+			output_ready => alphan_acc_ready
+		);
+
+	--alphaD accumulator
+	alphad_accumulator: entity work.AXIS_ACCUMULATOR
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH*2 + 2,
+			ACC_COUNT_LOG => BLOCK_SIZE_LOG,
+			ACC_COUNT => 2**BLOCK_SIZE_LOG,
+			IS_SIGNED => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_data   => alphad_mult_data,
+			input_valid  => alphad_mult_valid,
+			input_ready  => alphad_mult_ready,
+			output_data  => alphad_acc_data,
+			output_valid => alphad_acc_valid,
+			output_ready => alphad_acc_ready
+		);
+		
+	--alpha D and N joiner
+	alpha_d_n_joiner: entity work.AXIS_SYNCHRONIZER_2 	
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG,
+			DATA_WIDTH_1 => DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_0_valid => alphan_acc_valid,
+			input_0_ready => alphan_acc_ready,
+			input_0_data  => alphan_acc_data,
+			input_1_valid => alphad_acc_valid,
+			input_1_ready => alphad_acc_ready,
+			input_1_data  => alphad_acc_data,
+			output_valid  => alpha_d_n_joiner_valid,
+			output_ready  => alpha_d_n_joiner_ready,
+			output_data_0 => alpha_d_n_joiner_data_0,
+			output_data_1 => alpha_d_n_joiner_data_1
+		);
+		
+	--alpha calculator
+	alpha_calculation: entity work.ALPHA_FINDER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
+			ALPHA_WIDTH => ALPHA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_data_alphan => alpha_d_n_joiner_data_0,
+			input_data_alphad => alpha_d_n_joiner_data_1,
+			input_ready => alpha_d_n_joiner_ready,
+			input_valid => alpha_d_n_joiner_valid,
+			output_data => alpha_data,
+			output_ready => alpha_ready,
+			output_valid => alpha_valid
+		);
 
 end Behavioral;

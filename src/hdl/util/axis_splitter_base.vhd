@@ -88,6 +88,7 @@ begin
 						--shift value
 						buf0_full <= '0';
 						buf1_full <= (buf1_full'range => buf0_full);
+						buf1 <= buf0;
 					else
 						buf1_full <= buf1_full_next; --maybe reading some values, maybe not
 					end if;
