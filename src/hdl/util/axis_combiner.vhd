@@ -31,12 +31,12 @@ entity AXIS_COMBINER is
 	Port ( 
 		clk, rst: in std_logic;
 		--to input axi port
-		input_valid_0	: in	std_logic;
-		input_ready_0	: out	std_logic;
-		input_data_0	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_valid_1	: in	std_logic;
-		input_ready_1	: out	std_logic;
-		input_data_1	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_0_valid	: in	std_logic;
+		input_0_ready	: out	std_logic;
+		input_0_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_1_valid	: in	std_logic;
+		input_1_ready	: out	std_logic;
+		input_1_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		--to output axi ports
 		output_valid	: out 	std_logic;
 		output_ready	: in 	std_logic;
@@ -46,7 +46,7 @@ end AXIS_COMBINER;
 
 architecture Behavioral of AXIS_COMBINER is
 	
-	signal read_from_zero: boolean;
+	signal read_from_zero, read_from_zero_next: boolean;
 	
 	signal counter_zero_enable, counter_zero_saturating: std_logic;
 	signal counter_one_enable, counter_one_saturating: std_logic;
@@ -73,13 +73,13 @@ begin
 			saturating	=> counter_one_saturating
 		);
 
-	input_ready_0 <= output_ready when read_from_zero else '0';
-	input_ready_1 <= output_ready when not read_from_zero else '0';
+	input_0_ready <= output_ready when read_from_zero else '0';
+	input_1_ready <= output_ready when not read_from_zero else '0';
 	
-	output_valid  <= input_valid_0 when read_from_zero else
-					 input_valid_1;
-	output_data   <= input_data_0 when read_from_zero else 
-					 input_data_1; 
+	output_valid  <= input_0_valid when read_from_zero else
+					 input_1_valid;
+	output_data   <= input_0_data when read_from_zero else 
+					 input_1_data; 
 
 	seq: process(clk)
 	begin
@@ -87,23 +87,29 @@ begin
 			if rst = '1' then
 				read_from_zero <= true;
 			else
-				counter_zero_enable <= '0';
-				counter_one_enable <= '0';
-				
-				if read_from_zero then
-					if input_valid_0 = '1' and output_ready = '1' then
-						counter_zero_enable <= '1';
-						if counter_zero_saturating = '1' then
-							read_from_zero <= false;
-						end if;
-					end if;
-				elsif not read_from_zero then
-					if input_valid_1 = '1' and output_ready = '1' then
-						counter_one_enable <= '1';
-						if counter_one_saturating = '1' then
-							read_from_zero <= true;
-						end if;
-					end if;
+				read_from_zero <= read_from_zero_next;
+			end if;
+		end if;
+	end process;
+	
+	comb: process(input_0_valid, output_ready, input_1_valid, read_from_zero, counter_zero_saturating, counter_one_saturating)
+	begin
+		counter_zero_enable <= '0';
+		counter_one_enable <= '0';
+		read_from_zero_next <= read_from_zero;
+		
+		if read_from_zero then
+			if input_0_valid = '1' and output_ready = '1' then
+				counter_zero_enable <= '1';
+				if counter_zero_saturating = '1' then
+					read_from_zero_next <= false;
+				end if;
+			end if;
+		elsif not read_from_zero then
+			if input_1_valid = '1' and output_ready = '1' then
+				counter_one_enable <= '1';
+				if counter_one_saturating = '1' then
+					read_from_zero_next <= true;
 				end if;
 			end if;
 		end if;

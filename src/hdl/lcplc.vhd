@@ -204,8 +204,7 @@ begin
 	first_band_predictor: entity work.FIRSTBAND_PREDICTOR
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
-			ACC_LOG => WORD_WIDTH_LOG
+			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG
 		)
 		Port map (
 			clk => clk, rst => rst,
@@ -371,12 +370,12 @@ begin
 		)
 		Port map ( 
 			clk => clk, rst => rst,
-			input_valid_0	=> prediction_first_valid,
-			input_ready_0	=> prediction_first_ready,
-			input_data_0	=> prediction_first_data,
-			input_valid_1	=> prediction_rest_valid,
-			input_ready_1	=> prediction_rest_ready,
-			input_data_1	=> prediction_rest_data,
+			input_0_valid	=> prediction_first_valid,
+			input_0_ready	=> prediction_first_ready,
+			input_0_data	=> prediction_first_data,
+			input_1_valid	=> prediction_rest_valid,
+			input_1_ready	=> prediction_rest_ready,
+			input_1_data	=> prediction_rest_data,
 			output_valid	=> prediction_valid,
 			output_ready	=> prediction_ready,
 			output_data		=> prediction_data

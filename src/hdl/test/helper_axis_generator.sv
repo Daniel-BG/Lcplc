@@ -25,7 +25,7 @@ module helper_axis_generator(
 	output_valid, output_data, output_ready
 );
 	parameter DATA_WIDTH=10;
-	parameter RANDOM=1;
+	parameter RANDOM=0;
 	
 	input					clk, rst;
 	input 					enable;
