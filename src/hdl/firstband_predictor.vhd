@@ -56,7 +56,6 @@ architecture Behavioral of FIRSTBAND_PREDICTOR is
 	signal counter_x, counter_y: natural range 0 to 2**(BLOCK_SIZE_LOG/2) - 1;
 
 	--prediction
-	signal prediction: std_logic_vector(DATA_WIDTH downto 0);
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
 begin
 
@@ -86,12 +85,11 @@ begin
 			output => upper_sample
 		);
 	
-	comb: process(state_curr, prediction_ready, x_valid, prediction)
+	comb: process(state_curr, prediction_ready, x_valid)
 	begin
 		x_ready <= '0';
 		shift_enable <= '0';
 		prediction_valid <= '0';
-		prediction_data <= (others => '0');
 		state_next <= state_curr;
 		
 		if state_curr = IDLE then
@@ -103,7 +101,6 @@ begin
 		elsif state_curr = PREDICTING_FIRST then
 			prediction_valid <= '1';
 			if prediction_ready = '1' then
-				prediction_data <= (others => '0');
 				x_ready <= '1';
 				if x_valid = '1' then
 					shift_enable <= '1';
@@ -121,7 +118,6 @@ begin
 		elsif state_curr = PREDICTING_REST then
 			prediction_valid <= '1';
 			if prediction_ready = '1' then
-				prediction_data <= prediction;
 				x_ready <= '1';
 				if x_valid = '1' then
 					shift_enable <= '1';
@@ -149,17 +145,15 @@ begin
 		
 	prediction_gen: process(counter_x, counter_y, upper_Sample, left_sample, upleft_addition)
 	begin
-		prediction <= (others => '0');
-		--if counter_x = 0 and counter_y = 0 then
-		--	prediction <= (prediction'high downto current_sample'high+1 => '0') & current_sample;
-		--elsif
-		--can omit that since the state already takes that into account
-		if counter_x = 0 then
-			prediction <= std_logic_vector(resize(unsigned(upper_sample), prediction'length));
+		if counter_x = 0 and counter_y = 0 then
+			prediction_data <= (others => '0');
+			--prediction <= (prediction'high downto current_sample'high+1 => '0') & current_sample;
+		elsif counter_x = 0 then
+			prediction_data <= std_logic_vector(resize(unsigned(upper_sample), prediction_data'length));
 		elsif counter_y = 0 then
-			prediction <= std_logic_vector(resize(unsigned(left_sample), prediction'length));
+			prediction_data <= std_logic_vector(resize(unsigned(left_sample), prediction_data'length));
 		else
-			prediction <= std_logic_vector(resize(unsigned(upleft_addition(upleft_addition'high downto 1)), prediction'length));
+			prediction_data <= std_logic_vector(resize(unsigned(upleft_addition(upleft_addition'high downto 1)), prediction_data'length));
 		end if;
 	end process;
 
