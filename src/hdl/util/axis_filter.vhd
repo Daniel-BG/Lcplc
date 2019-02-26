@@ -25,7 +25,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity AXIS_FILTER is
 	Generic (
 		DATA_WIDTH: integer := 16;
-		FILTER_ON_UP: boolean := true
+		ELIMINATE_ON_UP: boolean := true
 	);
 	Port (
 		clk, rst		: in 	std_logic;
@@ -72,12 +72,12 @@ begin
 			output_data_1 => synced_flag
 		);
 		
-	gen_elim_on_up: if FILTER_ON_UP generate
+	gen_elim_on_up: if ELIMINATE_ON_UP generate
 		output_valid <= '1' when synced_valid = '1' and synced_flag = "0" else '0';
 		synced_ready <= '1' when output_ready = '1' or (synced_valid = '1' and synced_flag = "1") else '0';
 	end generate;
 	
-	gen_elim_on_down: if not FILTER_ON_UP generate
+	gen_elim_on_down: if not ELIMINATE_ON_UP generate
 		output_valid <= '1' when synced_valid = '1' and synced_flag = "1" else '0';
 		synced_ready <= '1' when output_ready = '1' or (synced_valid = '1' and synced_flag = "0") else '0';
 	end generate;

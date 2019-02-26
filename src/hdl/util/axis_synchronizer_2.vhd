@@ -46,7 +46,7 @@ end AXIS_SYNCHRONIZER_2;
 architecture Behavioral of AXIS_SYNCHRONIZER_2 is
 	signal buf_i_0_full, buf_i_1_full, buf_o_0_full, buf_o_1_full: std_logic;
 	signal buf_i_0, buf_o_0: std_logic_vector(DATA_WIDTH_0 - 1 downto 0); 
-	signal buf_i_1, buf_o_1: std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
+	signal buf_i_1, buf_o_1: std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
 	
 	signal input_0_ready_in, input_1_ready_in: std_logic;
 	signal output_valid_in: std_logic;

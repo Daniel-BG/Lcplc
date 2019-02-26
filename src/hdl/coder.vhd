@@ -197,7 +197,7 @@ begin
 	ehat_filter: entity work.AXIS_FILTER 
 		Generic map (
 			DATA_WIDTH => MAPPED_ERROR_WIDTH,
-			FILTER_ON_UP => false --0 is below threshold and does not code then
+			ELIMINATE_ON_UP => false --0 is below threshold and does not code then
 		)
 		Port map (
 			clk => clk, rst => rst,
@@ -217,7 +217,7 @@ begin
 	kj_filter: entity work.AXIS_FILTER
 		Generic map (
 			DATA_WIDTH => ACC_LOG,
-			FILTER_ON_UP => false
+			ELIMINATE_ON_UP => false
 		)
 		Port map (
 			clk => clk, rst => rst,

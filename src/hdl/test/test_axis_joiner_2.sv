@@ -21,21 +21,27 @@
 
 
 module test_axis_joiner_2;
-	parameter DATA_WIDTH=16;
+	parameter DATA_WIDTH_0=16;
+	parameter DATA_WIDTH_1=1;
+	parameter OUT_WIDTH=DATA_WIDTH_0+DATA_WIDTH_1;
 	parameter PERIOD=10;
+	parameter USE_JOINER=0;
+	parameter USE_FILTER=1;
+	parameter ELIMINATE_ON_UP=1;
 	
 	reg clk, rst;
 	
 	reg generator_0_enable;
 	wire gen_0_valid, gen_0_ready;
-	wire[DATA_WIDTH-1:0] gen_0_data;
+	wire[DATA_WIDTH_0-1:0] gen_0_data;
 	
 	reg generator_1_enable;
 	wire gen_1_valid, gen_1_ready;
-	wire[DATA_WIDTH-1:0] gen_1_data;
+	wire[DATA_WIDTH_1-1:0] gen_1_data;
 	
 	wire joiner_valid, joiner_ready;
-	wire[DATA_WIDTH-1:0] joiner_data_0, joiner_data_1;
+	wire[DATA_WIDTH_0-1:0] joiner_data_0;
+	wire[DATA_WIDTH_1-1:0] joiner_data_1;
 	
 	reg drain_enable;
 	
@@ -59,20 +65,7 @@ module test_axis_joiner_2;
 		drain_enable = 1;
 	end
 	
-//	always begin
-//		#(PERIOD)
-//		generator_0_enable = ~generator_0_enable;
-//	end
-	
-//	always begin
-//		#(PERIOD)
-//		generator_1_enable = ~generator_1_enable;
-//	end
-	
-	
-	
-	
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH)) GEN_0
+	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_0)) GEN_0
 		(
 			.clk(clk), .rst(rst), .enable(generator_0_enable),
 			.output_valid(gen_0_valid),
@@ -80,7 +73,7 @@ module test_axis_joiner_2;
 			.output_ready(gen_0_ready)
 		);
 		
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH)) GEN_1
+	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_1)) GEN_1
 		(
 			.clk(clk), .rst(rst), .enable(generator_1_enable),
 			.output_valid(gen_1_valid),
@@ -88,28 +81,46 @@ module test_axis_joiner_2;
 			.output_ready(gen_1_ready)
 		);
 	
+	if (USE_JOINER==1) begin: sync
+		axis_synchronizer_2 #(.DATA_WIDTH_0(DATA_WIDTH_0), .DATA_WIDTH_1(DATA_WIDTH_1)) SYNCRHONIZER
+			(
+				.clk(clk), .rst(rst),
+				.input_0_valid(gen_0_valid),
+				.input_0_data(gen_0_data),
+				.input_0_ready(gen_0_ready),
+				.input_1_valid(gen_1_valid),
+				.input_1_data(gen_1_data),
+				.input_1_ready(gen_1_ready),
+				.output_valid(joiner_valid),
+				.output_data_0(joiner_data_0),
+				.output_data_1(joiner_data_1),
+				.output_ready(joiner_ready)
+			);
+	end
 	
-	axis_synchronizer_2 #(.DATA_WIDTH_0(DATA_WIDTH), .DATA_WIDTH_1(DATA_WIDTH)) SYNCRHONIZER
-		(
-			.clk(clk), .rst(rst),
-			.input_0_valid(gen_0_valid),
-			.input_0_data(gen_0_data),
-			.input_0_ready(gen_0_ready),
-			.input_1_valid(gen_1_valid),
-			.input_1_data(gen_1_data),
-			.input_1_ready(gen_1_ready),
-			.output_valid(joiner_valid),
-			.output_data_0(joiner_data_0),
-			.output_data_1(joiner_data_1),
-			.output_ready(joiner_ready)
-		);
+	if (USE_FILTER==1) begin: filter
+		axis_filter #(.DATA_WIDTH(DATA_WIDTH_0), .ELIMINATE_ON_UP(ELIMINATE_ON_UP)) FILTER
+			(
+				.clk(clk), .rst(rst),
+				.input_valid(gen_0_valid),
+				.input_data(gen_0_data),
+				.input_ready(gen_0_ready),
+				.flag_valid(gen_1_valid),
+				.flag_data(gen_1_data),
+				.flag_ready(gen_1_ready),
+				.output_valid(joiner_valid),
+				.output_data(joiner_data_0),
+				.output_ready(joiner_ready)
+			);
+		assign joiner_data_1 = 0;
+	end
 	
-	helper_axis_drain #(.DATA_WIDTH(DATA_WIDTH*2)) DRAIN
+	helper_axis_drain #(.DATA_WIDTH(OUT_WIDTH)) DRAIN
 		(
 			.clk(clk), .rst(rst), .enable(drain_enable),
 			.input_valid(joiner_valid),
 			.input_ready(joiner_ready),
-			.input_data({joiner_data_0, joiner_data_1})
+			.input_data({joiner_data_1, joiner_data_0})
 		);
 
 
