@@ -35,9 +35,11 @@ end COUNTER;
 
 architecture Behavioral of COUNTER is
 	signal counter: natural range 0 to COUNT - 1;
+	
+	signal saturating_in: std_logic;
 begin
 
-	saturating <= '1' when counter = COUNT - 1 else '0';
+	saturating <= saturating_in;
 
 	seq: process(clk)
 	begin
@@ -45,7 +47,12 @@ begin
 			if rst = '1' then
 				counter <= 0;
 			elsif enable = '1' then
-				if counter = COUNT - 1 then
+				if counter = COUNT - 2 or COUNT = 1 then
+					saturating_in <= '1';
+				else
+					saturating_in <= '0';
+				end if;
+				if saturating_in = '1' then
 					counter <= 0;
 				else
 					counter <= counter + 1;

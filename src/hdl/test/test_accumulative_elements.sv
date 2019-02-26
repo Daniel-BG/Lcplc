@@ -27,7 +27,8 @@ module test_accumulative_elements;
 	parameter BLOCK_SIZE_LOG=8;
 	parameter IS_SIGNED=0;
 	parameter USE_ACC=0;
-	parameter USE_AVG=1;
+	parameter USE_AVG=0;
+	parameter USE_REP=1;
 	
 	//controls
 	reg clk, rst;
@@ -66,6 +67,19 @@ module test_accumulative_elements;
 
 	if (USE_AVG == 1) begin: gen_averager
 		axis_averager_pow2 #(.DATA_WIDTH(DATA_WIDTH), .ELEMENT_COUNT_LOG(BLOCK_SIZE_LOG), .IS_SIGNED(IS_SIGNED)) averager
+			(
+				.clk(clk), .rst(rst),
+				.input_valid(gen_valid),
+				.input_ready(gen_ready),
+				.input_data(gen_data),
+				.output_ready(acc_ready),
+				.output_valid(acc_valid),
+				.output_data(acc_data)
+			);
+	end
+	
+	if (USE_REP == 1) begin: gen_repeater
+		axis_data_repeater #(.DATA_WIDTH(DATA_WIDTH), .NUMBER_OF_REPETITIONS(7)) repeater
 			(
 				.clk(clk), .rst(rst),
 				.input_valid(gen_valid),

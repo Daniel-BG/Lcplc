@@ -90,7 +90,12 @@ begin
 			if output_ready = '1' then
 				counter_enable <= '1';
 				if counter_saturating = '1' then
-					state_next <= READING;
+					input_ready <= '1';
+					if input_valid = '1' then
+						buf_next <= input_data;
+					else
+						state_next <= READING;
+					end if;
 				end if;
 			end if;
 		end if;
