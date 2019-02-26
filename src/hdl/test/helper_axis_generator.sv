@@ -43,7 +43,7 @@ module helper_axis_generator(
 	
 	always @(posedge clk) begin
 		if (output_ready == 1 && output_valid == 1) begin
-			output_data_reg = output_data_reg + 1;
+			output_data_reg = $random();
 		end
 	end
 
