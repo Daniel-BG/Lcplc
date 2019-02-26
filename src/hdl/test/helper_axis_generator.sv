@@ -25,6 +25,7 @@ module helper_axis_generator(
 	output_valid, output_data, output_ready
 );
 	parameter DATA_WIDTH=10;
+	parameter RANDOM=1;
 	
 	input					clk, rst;
 	input 					enable;
@@ -38,12 +39,16 @@ module helper_axis_generator(
 	assign output_data  = output_data_reg;
 
 	initial begin
-		output_data_reg = 1;
+		output_data_reg = 0;
 	end
 	
 	always @(posedge clk) begin
 		if (output_ready == 1 && output_valid == 1) begin
-			output_data_reg = $random();
+			if (RANDOM == 0) begin
+				output_data_reg = output_data_reg + 1;
+			end else begin
+				output_data_reg = $random();
+			end
 		end
 	end
 

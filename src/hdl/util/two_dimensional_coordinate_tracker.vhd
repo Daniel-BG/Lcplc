@@ -38,6 +38,7 @@ entity TWO_DIMENSIONAL_COORDINATE_TRACKER is
 	);
 	Port (
 		clk, rst, enable: in std_logic;
+		saturating: out std_logic;
 		x_coord: out natural range 0 to X_SIZE - 1;
 		y_coord: out natural range 0 to Y_SIZE - 1
 	);
@@ -47,6 +48,7 @@ architecture Behavioral of TWO_DIMENSIONAL_COORDINATE_TRACKER is
 	signal x_counter: natural range 0 to X_SIZE - 1;
 	signal y_counter: natural range 0 to Y_SIZE - 1;
 begin
+	saturating <= '1' when x_counter = X_SIZE - 1 and y_counter = Y_SIZE - 1 else '0';
 	
 	x_coord <= x_counter;
 	y_coord <= y_counter;

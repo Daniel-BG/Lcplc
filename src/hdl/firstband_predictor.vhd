@@ -1,14 +1,15 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 21.02.2019 09:22:48
 -- Design Name: 
--- Module Name: FIRSTBANDMODULE - Behavioral
+-- Module Name: FIRSTBAND_PREDICTOR - Behavioral
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Module that makes the prediction for the first band in a given 
+--			image block. Takes raw values and outputs prediction data
 -- 
 -- Dependencies: 
 -- 
@@ -18,24 +19,14 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity FIRSTBAND_PREDICTOR is
 	Generic (
 		DATA_WIDTH: positive := 16;
-		BLOCK_SIZE_LOG: positive := 8;
-		ACC_LOG: positive := 5
+		BLOCK_SIZE_LOG: positive := 8
 	);
 	Port (
 		clk, rst		: in  std_logic;
@@ -61,6 +52,7 @@ architecture Behavioral of FIRSTBAND_PREDICTOR is
 	
 	--counter stuff
 	signal counter_enable: std_logic;
+	signal counter_saturating: std_logic;
 	signal counter_x, counter_y: natural range 0 to 2**(BLOCK_SIZE_LOG/2) - 1;
 
 	--prediction
@@ -75,7 +67,7 @@ begin
 				state_curr <= IDLE;
 			else
 				state_curr <= state_next;
-				if shift_enable <= '1' then
+				if shift_enable = '1' then
 					current_sample <= x_data;
 					left_sample <= current_sample;
 				end if;
@@ -150,6 +142,7 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst, enable => counter_enable,
+			saturating => open,
 			x_coord => counter_x,
 			y_coord => counter_y
 		);
@@ -162,11 +155,11 @@ begin
 		--elsif
 		--can omit that since the state already takes that into account
 		if counter_x = 0 then
-			prediction <= (prediction'high downto current_sample'high+1 => '0')  & upper_sample;
+			prediction <= std_logic_vector(resize(unsigned(upper_sample), prediction'length));
 		elsif counter_y = 0 then
-			prediction <= (prediction'high downto current_sample'high+1 => '0')  & left_sample;
+			prediction <= std_logic_vector(resize(unsigned(left_sample), prediction'length));
 		else
-			prediction <= (prediction'high downto upleft_addition'high+1 => '0') & upleft_addition;
+			prediction <= std_logic_vector(resize(unsigned(upleft_addition(upleft_addition'high downto 1)), prediction'length));
 		end if;
 	end process;
 

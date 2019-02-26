@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: UCM
+-- Engineer: Daniel Báscones
 -- 
 -- Create Date: 21.02.2019 09:32:49
 -- Design Name: 
@@ -8,7 +8,8 @@
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Put some data of DATA_WIDTH bits and retrieve it DEPTH clks later
+--			does not work with DEPTH<=1
 -- 
 -- Dependencies: 
 -- 
@@ -18,18 +19,8 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity SHIFT_REG is
 	Generic (
@@ -44,10 +35,12 @@ entity SHIFT_REG is
 end SHIFT_REG;
 
 architecture Behavioral of SHIFT_REG is
-	type memory_t is array(0 to DEPTH - 1) of std_logic_vector(DATA_WIDTH - 1 downto 0);
+	constant LIMIT: integer := DEPTH - 2;
+	
+	type memory_t is array(0 to LIMIT) of std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal memory: memory_t;
 	
-	signal counter: natural range 0 to DEPTH - 1;
+	signal counter: natural range 0 to LIMIT;
 	
 	signal output_reg: std_logic_vector(DATA_WIDTH - 1 downto 0);
 begin
@@ -58,7 +51,7 @@ begin
 			if enable = '1' then
 				output_reg <= memory(counter);
 				memory(counter) <= input;
-				if counter = DEPTH - 1 then
+				if counter = LIMIT then
 					counter <= 0;
 				else
 					counter <= counter + 1;
