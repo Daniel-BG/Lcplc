@@ -5,12 +5,12 @@
 // 
 // Create Date: 26.02.2019 16:18:07
 // Design Name: 
-// Module Name: test_firstband_predictor
+// Module Name: test_processing_elements
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
-// Description: Test accumulative elements (ACCUMULATOR/AVERAGER/ETC) to see if they
-//			work
+// Description: Test processing elements that take a single AXIS bus and operate over
+//		its values to produce a results AXIS bus
 // 
 // Dependencies: 
 // 
@@ -20,7 +20,7 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-module test_accumulative_elements;
+module test_processing_elements;
 	parameter PERIOD=10;
 	parameter DATA_WIDTH=16;
 	parameter OUT_WIDTH=16;
@@ -28,7 +28,8 @@ module test_accumulative_elements;
 	parameter IS_SIGNED=0;
 	parameter USE_ACC=0;
 	parameter USE_AVG=0;
-	parameter USE_REP=1;
+	parameter USE_REP=0;
+	parameter USE_CLP=1;
 	
 	//controls
 	reg clk, rst;
@@ -80,6 +81,19 @@ module test_accumulative_elements;
 	
 	if (USE_REP == 1) begin: gen_repeater
 		axis_data_repeater #(.DATA_WIDTH(DATA_WIDTH), .NUMBER_OF_REPETITIONS(7)) repeater
+			(
+				.clk(clk), .rst(rst),
+				.input_valid(gen_valid),
+				.input_ready(gen_ready),
+				.input_data(gen_data),
+				.output_ready(acc_ready),
+				.output_valid(acc_valid),
+				.output_data(acc_data)
+			);
+	end
+
+	if (USE_CLP == 1) begin: gen_clamper
+		axis_interval_clamper #(.DATA_WIDTH(DATA_WIDTH), .IS_SIGNED(IS_SIGNED), .LOWER_LIMIT(256), .UPPER_LIMIT(2**14)) gen_clamper
 			(
 				.clk(clk), .rst(rst),
 				.input_valid(gen_valid),

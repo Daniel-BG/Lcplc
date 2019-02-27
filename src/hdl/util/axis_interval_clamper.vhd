@@ -56,7 +56,7 @@ begin
 		result <=
 			std_logic_vector(to_signed(LOWER_LIMIT, DATA_WIDTH))
 				when signed(input_data) < to_signed(LOWER_LIMIT, DATA_WIDTH) else
-			std_logic_vector(to_signed(LOWER_LIMIT, DATA_WIDTH))
+			std_logic_vector(to_signed(UPPER_LIMIT, DATA_WIDTH))
 				when signed(input_data) > to_signed(UPPER_LIMIT, DATA_WIDTH) else
 			input_data;
 	end generate;
@@ -65,7 +65,7 @@ begin
 		result <=
 			std_logic_vector(to_unsigned(LOWER_LIMIT, DATA_WIDTH))
 				when unsigned(input_data) < to_unsigned(LOWER_LIMIT, DATA_WIDTH) else
-			std_logic_vector(to_unsigned(LOWER_LIMIT, DATA_WIDTH))
+			std_logic_vector(to_unsigned(UPPER_LIMIT, DATA_WIDTH))
 				when unsigned(input_data) > to_unsigned(UPPER_LIMIT, DATA_WIDTH) else
 			input_data;
 	end generate;
