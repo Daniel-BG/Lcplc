@@ -247,12 +247,12 @@ begin
 			input_ready => ehat_filtered_ready,
 			input_data	=> ehat_filtered_data,
 			--to output axi ports
-			output_valid_0	=> ehat_zero_valid,
-			output_ready_0	=> ehat_zero_ready,
-			output_data_0	=> ehat_zero_data,
-			output_valid_1	=> ehat_one_valid,
-			output_ready_1	=> ehat_one_ready,
-			output_data_1	=> ehat_one_data
+			output_0_valid	=> ehat_zero_valid,
+			output_0_ready	=> ehat_zero_ready,
+			output_0_data	=> ehat_zero_data,
+			output_1_valid	=> ehat_one_valid,
+			output_1_ready	=> ehat_one_ready,
+			output_1_data	=> ehat_one_data
 		);
 	
 	--exp zero golomb coder

@@ -29,7 +29,8 @@ module test_processing_elements;
 	parameter USE_ACC=0;
 	parameter USE_AVG=0;
 	parameter USE_REP=0;
-	parameter USE_CLP=1;
+	parameter USE_CLP=0;
+	parameter USE_RED=1;
 	
 	//controls
 	reg clk, rst;
@@ -93,7 +94,20 @@ module test_processing_elements;
 	end
 
 	if (USE_CLP == 1) begin: gen_clamper
-		axis_interval_clamper #(.DATA_WIDTH(DATA_WIDTH), .IS_SIGNED(IS_SIGNED), .LOWER_LIMIT(256), .UPPER_LIMIT(2**14)) gen_clamper
+		axis_interval_clamper #(.DATA_WIDTH(DATA_WIDTH), .IS_SIGNED(IS_SIGNED), .LOWER_LIMIT(256), .UPPER_LIMIT(2**14)) clamper
+			(
+				.clk(clk), .rst(rst),
+				.input_valid(gen_valid),
+				.input_ready(gen_ready),
+				.input_data(gen_data),
+				.output_ready(acc_ready),
+				.output_valid(acc_valid),
+				.output_data(acc_data)
+			);
+	end
+
+	if (USE_RED == 1) begin: gen_reducer
+		axis_reducer #(.DATA_WIDTH(DATA_WIDTH), .VALID_TRANSACTIONS(17), .INVALID_TRANSACTIONS(3), .START_VALID(1)) reducer
 			(
 				.clk(clk), .rst(rst),
 				.input_valid(gen_valid),

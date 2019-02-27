@@ -20,9 +20,11 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module test_axis_splitter_2;
+module test_axis_1in_2out;
 	parameter DATA_WIDTH=16;
 	parameter PERIOD=10;
+	parameter USE_SPL=0;
+	parameter USE_SEP=1;
 	
 	reg clk, rst;
 	
@@ -73,20 +75,37 @@ module test_axis_splitter_2;
 			.output_ready(gen_ready)
 		);
 		
-		
-	axis_splitter_2 #(.DATA_WIDTH(DATA_WIDTH)) SPLITTER
-		(
-			.clk(clk), .rst(rst),
-			.input_valid(gen_valid),
-			.input_data(gen_data),
-			.input_ready(gen_ready),
-			.output_0_valid(splitter_0_valid),
-			.output_0_data(splitter_0_data),
-			.output_0_ready(splitter_0_ready),
-			.output_1_valid(splitter_1_valid),
-			.output_1_data(splitter_1_data),
-			.output_1_ready(splitter_1_ready)
-		);
+	if (USE_SPL == 1) begin: gen_splitter
+		axis_splitter_2 #(.DATA_WIDTH(DATA_WIDTH)) SPLITTER
+			(
+				.clk(clk), .rst(rst),
+				.input_valid(gen_valid),
+				.input_data(gen_data),
+				.input_ready(gen_ready),
+				.output_0_valid(splitter_0_valid),
+				.output_0_data(splitter_0_data),
+				.output_0_ready(splitter_0_ready),
+				.output_1_valid(splitter_1_valid),
+				.output_1_data(splitter_1_data),
+				.output_1_ready(splitter_1_ready)
+			);
+	end
+
+	if (USE_SEP == 1) begin: gen_separator
+		axis_separator #(.DATA_WIDTH(DATA_WIDTH), .TO_PORT_ZERO(17), .TO_PORT_ONE(5)) separator
+			(
+				.clk(clk), .rst(rst),
+				.input_valid(gen_valid),
+				.input_data(gen_data),
+				.input_ready(gen_ready),
+				.output_0_valid(splitter_0_valid),
+				.output_0_data(splitter_0_data),
+				.output_0_ready(splitter_0_ready),
+				.output_1_valid(splitter_1_valid),
+				.output_1_data(splitter_1_data),
+				.output_1_ready(splitter_1_ready)
+			);
+	end
 	
 	helper_axis_drain #(.DATA_WIDTH(DATA_WIDTH)) DRAIN_0
 		(

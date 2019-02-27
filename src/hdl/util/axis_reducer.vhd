@@ -67,12 +67,12 @@ begin
 				input_ready		=> input_ready,
 				input_data		=> input_data,
 				--to output axi ports
-				output_valid_0	=> output_valid,
-				output_ready_0	=> output_ready,
-				output_data_0	=> output_data,
-				output_valid_1	=> open,
-				output_ready_1	=> '1',
-				output_data_1	=> open
+				output_0_valid	=> output_valid,
+				output_0_ready	=> output_ready,
+				output_0_data	=> output_data,
+				output_1_valid	=> open,
+				output_1_ready	=> '1',
+				output_1_data	=> open
 			);
 	end generate;
 	
@@ -90,12 +90,12 @@ begin
 				input_ready		=> input_ready,
 				input_data		=> input_data,
 				--to output axi ports
-				output_valid_0	=> open,
-				output_ready_0	=> '1',
-				output_data_0	=> open,
-				output_valid_1	=> output_valid,
-				output_ready_1	=> output_ready,
-				output_data_1   => output_data
+				output_0_valid	=> open,
+				output_0_ready	=> '1',
+				output_0_data	=> open,
+				output_1_valid	=> output_valid,
+				output_1_ready	=> output_ready,
+				output_1_data   => output_data
 			);
 	end generate;
 
