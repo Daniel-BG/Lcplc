@@ -20,13 +20,14 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module test_axis_joiner_2;
+module test_axis_2in_1out;
 	parameter DATA_WIDTH_0=16;
 	parameter DATA_WIDTH_1=1;
 	parameter OUT_WIDTH=DATA_WIDTH_0+DATA_WIDTH_1;
 	parameter PERIOD=10;
 	parameter USE_JOINER=0;
 	parameter USE_FILTER=1;
+	parameter USE_COMBINER=0;
 	parameter ELIMINATE_ON_UP=1;
 	
 	reg clk, rst;
@@ -108,6 +109,23 @@ module test_axis_joiner_2;
 				.flag_valid(gen_1_valid),
 				.flag_data(gen_1_data),
 				.flag_ready(gen_1_ready),
+				.output_valid(joiner_valid),
+				.output_data(joiner_data_0),
+				.output_ready(joiner_ready)
+			);
+		assign joiner_data_1 = 0;
+	end
+
+	if (USE_COMBINER==1) begin: combiner
+		axis_combiner #(.DATA_WIDTH(DATA_WIDTH), .FROM_PORT_ZERO(16), .FROM_PORT_ONE(7)) COMBINER
+			(
+				.clk(clk), .rst(rst),
+				.input_0_valid(gen_0_valid),
+				.input_0_data(gen_0_data),
+				.input_0_ready(gen_0_ready),
+				.input_1_valid(gen_1_valid),
+				.input_1_data(gen_1_data),
+				.input_1_ready(gen_1_ready),
 				.output_valid(joiner_valid),
 				.output_data(joiner_data_0),
 				.output_ready(joiner_ready)

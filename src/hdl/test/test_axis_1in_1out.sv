@@ -20,7 +20,7 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-module test_processing_elements;
+module test_axis_1in_1out;
 	parameter PERIOD=10;
 	parameter DATA_WIDTH=16;
 	parameter OUT_WIDTH=16;

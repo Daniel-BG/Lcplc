@@ -24,8 +24,10 @@ module test_axis_3in_1out;
 	parameter PERIOD = 10;
 	parameter DATA_WIDTH_0 = 16;
 	parameter DATA_WIDTH_1 = 16;
-	parameter DATA_WIDTH_2 = 16;
+	parameter DATA_WIDTH_2 = 1;
 	parameter OUT_WIDTH = 16;
+	parameter USE_MER=0;
+	parameter USE_SEL=1;
 
 	////////////////////////////////////////
 	// MAIN CONTROL 					  //
@@ -39,7 +41,7 @@ module test_axis_3in_1out;
 	reg generator_0_enable;
 	wire gen_0_valid, gen_0_ready;
 	wire [DATA_WIDTH_0-1:0] gen_0_data;
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_0)) GEN_0
+	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_0), .START_AT(512)) GEN_0
 		(
 			.clk(clk), .rst(rst), .enable(generator_0_enable),
 			.output_valid(gen_0_valid),
@@ -108,22 +110,42 @@ module test_axis_3in_1out;
 		#(PERIOD*2)
 		merger_clear = 0;
 	end
-	AXIS_MERGER #(.DATA_WIDTH(DATA_WIDTH_0), .FROM_PORT_ZERO(17), .FROM_PORT_ONE(17)) merger_dut
-		(
-			.clk(clk), .rst(rst), .clear(merger_clear),
-			.input_0_valid(gen_0_valid),
-			.input_0_ready(gen_0_ready),
-			.input_0_data(gen_0_data),
-			.input_1_valid(gen_1_valid),
-			.input_1_ready(gen_1_ready),
-			.input_1_data(gen_1_data),
-			.input_2_ready(gen_2_ready),
-			.input_2_valid(gen_2_valid),
-			.input_2_data(gen_2_data),
-			.output_ready(drain_ready),
-			.output_valid(drain_valid),
-			.output_data(drain_data)
-		);
+	if (USE_MER==1) begin: gen_merger
+		AXIS_MERGER #(.DATA_WIDTH(DATA_WIDTH_0), .FROM_PORT_ZERO(17), .FROM_PORT_ONE(17)) merger_dut
+			(
+				.clk(clk), .rst(rst), .clear(merger_clear),
+				.input_0_valid(gen_0_valid),
+				.input_0_ready(gen_0_ready),
+				.input_0_data(gen_0_data),
+				.input_1_valid(gen_1_valid),
+				.input_1_ready(gen_1_ready),
+				.input_1_data(gen_1_data),
+				.input_2_ready(gen_2_ready),
+				.input_2_valid(gen_2_valid),
+				.input_2_data(gen_2_data),
+				.output_ready(drain_ready),
+				.output_valid(drain_valid),
+				.output_data(drain_data)
+			);
+	end
 
+	if (USE_SEL==1) begin: gen_selector
+		axis_selector #(.DATA_WIDTH(DATA_WIDTH_0)) selector_dut
+			(
+				.clk(clk), .rst(rst), 
+				.input_0_valid(gen_0_valid),
+				.input_0_ready(gen_0_ready),
+				.input_0_data(gen_0_data),
+				.input_1_valid(gen_1_valid),
+				.input_1_ready(gen_1_ready),
+				.input_1_data(gen_1_data),
+				.flag_ready(gen_2_ready),
+				.flag_valid(gen_2_valid),
+				.flag_data(gen_2_data),
+				.output_ready(drain_ready),
+				.output_valid(drain_valid),
+				.output_data(drain_data)
+			);
+	end
 
 endmodule
