@@ -30,7 +30,8 @@ module test_axis_1in_1out;
 	parameter USE_AVG=0;
 	parameter USE_REP=0;
 	parameter USE_CLP=0;
-	parameter USE_RED=1;
+	parameter USE_RED=0;
+	parameter USE_SUB=1;
 	
 	//controls
 	reg clk, rst;
@@ -113,6 +114,32 @@ module test_axis_1in_1out;
 				.input_valid(gen_valid),
 				.input_ready(gen_ready),
 				.input_data(gen_data),
+				.output_ready(acc_ready),
+				.output_valid(acc_valid),
+				.output_data(acc_data)
+			);
+	end
+
+	reg substituter_clear;
+	initial begin
+		substituter_clear = 0;
+		#(PERIOD*128);
+		substituter_clear = 1;
+		#(PERIOD);
+		substituter_clear = 0;
+	end
+
+	reg [DATA_WIDTH-1:0] input_sub;
+	assign input_sub = {DATA_WIDTH{1'b1}};
+	if (USE_SUB == 1) begin: gen_substituter
+		axis_substituter #(.DATA_WIDTH(DATA_WIDTH), .INVALID_TRANSACTIONS(4)) substituter
+			(
+				.clk(clk), .rst(rst),
+				.clear(substituter_clear),
+				.input_valid(gen_valid),
+				.input_ready(gen_ready),
+				.input_data(gen_data),
+				.input_sub(input_sub),
 				.output_ready(acc_ready),
 				.output_valid(acc_valid),
 				.output_data(acc_data)

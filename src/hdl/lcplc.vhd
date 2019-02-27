@@ -410,7 +410,7 @@ begin
 			THRESHOLD => THRESHOLD
 		)
 		Port map (
-			clk => clk, rst	=> rst,
+			clk => clk, rst	=> rst, clear => '0',
 			x_valid			=> x_delay_delay_valid,
 			x_ready			=> x_delay_delay_ready,
 			x_data			=> x_delay_delay_data,
@@ -442,7 +442,7 @@ begin
 			INVALID_TRANSACTIONS => 1
 		)
 		Port map (
-			clk => clk, rst => rst,
+			clk => clk, rst => rst, clear => '0',
 			input_ready => d_flag_ready,
 			input_valid => d_flag_valid,
 			input_data	=> d_flag_data_stdlv,

@@ -42,6 +42,7 @@ entity ERROR_CALC is
 	);
 	Port (
 		clk, rst		: in  std_logic;
+		clear			: in  std_logic;
 		--input x, xhat, xmean, xhatmean, alpha
 		--x is the original value
 		--prediction is the predicted value
@@ -468,7 +469,7 @@ begin
 			INVALID_TRANSACTIONS => 1
 		)
 		Port map (
-			clk => clk, rst => rst,
+			clk => clk, rst => rst, clear => clear,
 			input_ready		=> error_unquant_splitter_ready_1,
 			input_valid		=> error_unquant_splitter_valid_1,
 			input_data		=> error_unquant_splitter_data_1,
