@@ -10,7 +10,8 @@
 -- Tool Versions: 
 -- Description: Module that connects the input buses for the given amount of times
 --		with the outputs. The last input is left connected until clear or rst is
---		brought up.
+--		brought up. As long as clear is held up, the first axis bus is connected so 
+--		transactions will be made through it!
 -- 
 -- Dependencies: 
 -- 
@@ -33,15 +34,15 @@ entity AXIS_MERGER is
 		clk, rst: in std_logic;
 		clear: in std_logic;
 		--to input axi port
-		input_valid_0	: in	std_logic;
-		input_ready_0	: out	std_logic;
-		input_data_0	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_valid_1	: in	std_logic;
-		input_ready_1	: out	std_logic;
-		input_data_1	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_valid_2	: in	std_logic;
-		input_ready_2	: out	std_logic;
-		input_data_2	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_0_valid	: in	std_logic;
+		input_0_ready	: out	std_logic;
+		input_0_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_1_valid	: in	std_logic;
+		input_1_ready	: out	std_logic;
+		input_1_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_2_valid	: in	std_logic;
+		input_2_ready	: out	std_logic;
+		input_2_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		--to output axi ports
 		output_valid	: out 	std_logic;
 		output_ready	: in 	std_logic;
@@ -50,51 +51,91 @@ entity AXIS_MERGER is
 end AXIS_MERGER;
 
 architecture Behavioral of AXIS_MERGER is
-	signal counter_zero: natural range 0 to FROM_PORT_ZERO - 1;
-	signal counter_one: natural range 0 to FROM_PORT_ONE - 1;
+	signal counter_zero_enable, counter_zero_saturating: std_logic;
+	signal counter_one_enable, counter_one_saturating: std_logic;
 	
-	signal read_from: std_logic_vector(1 downto 0);
+	type merger_state_t is (READING_PORT_ZERO, READING_PORT_ONE, READING_PORT_TWO);
+	signal state_curr, state_next: merger_state_t;
+
+	signal rst_or_clear: std_logic;
 	
 begin
 
-	input_ready_0 <= output_ready when read_from = "00" else '0';
-	input_ready_1 <= output_ready when read_from = "01" else '0';
-	input_ready_2 <= output_ready when read_from = "10" else '0';
-	output_valid  <= input_valid_0 when read_from = "00" else
-					 input_valid_1 when read_from = "01" else
-					 input_valid_2;
-	output_data   <= input_data_0 when read_from = "00" else 
-					 input_data_1 when read_from = "01" else
-					 input_data_2; 
+	rst_or_clear <= rst or clear;
+
+	counter_zero: entity work.COUNTER
+		generic map (
+			COUNT => FROM_PORT_ZERO
+		)
+		Port map (
+			clk => clk, rst => rst_or_clear,
+			enable => counter_zero_enable,
+			saturating => counter_zero_saturating
+		);
+
+	counter_one: entity work.COUNTER
+		generic map (
+			COUNT => FROM_PORT_ONE
+		)
+		Port map (
+			clk => clk, rst => rst_or_clear,
+			enable => counter_one_enable,
+			saturating => counter_one_saturating
+		);
 
 	seq: process(clk)
 	begin
 		if rising_edge(clk) then
-			if rst = '1' or clear = '1' then
-				counter_zero <= 0;
-				counter_one <= 0;
-				read_from <= "00";
+			if rst_or_clear = '1' then
+				state_curr <= READING_PORT_ZERO;
 			else
-				if read_from = "00" then
-					if input_valid_0 = '1' and output_ready = '1' then
-						if counter_zero = FROM_PORT_ZERO - 1 then
-							read_from <= "01";
-						else
-							counter_zero <= counter_zero + 1;
-						end if;
-					end if;
-				elsif read_from = "01" then
-					if input_valid_1 = '1' and output_ready = '1' then
-						if counter_one = FROM_PORT_ZERO - 1 then
-							read_from <= "10";
-						else
-							counter_one <= counter_one + 1;
-						end if;
-					end if;
-				end if;
+				state_curr <= state_next;
 			end if;
 		end if;
 	end process;
+
+	comb: process(state_curr, 
+		input_0_valid, input_1_valid, input_2_valid,
+		input_0_data, input_1_data, input_2_data,
+		output_ready, counter_zero_saturating, counter_one_saturating)
+	begin
+		state_next <= state_curr;
+		counter_zero_enable <= '0';
+		counter_one_enable <= '0';
+
+		input_0_ready <= '0';
+		input_1_ready <= '0';
+		input_2_ready <= '0';
+		output_valid  <= '0';
+		output_data   <= (others => '0');
+
+		if state_curr = READING_PORT_ZERO then
+			input_0_ready <= output_ready;
+			output_valid  <= input_0_valid;
+			output_data   <= input_0_data;
+			if input_0_valid = '1' and output_ready = '1' then
+				counter_zero_enable <= '1';
+				if counter_zero_saturating = '1' then
+					state_next <= READING_PORT_ONE;
+				end if;
+			end if;
+		elsif state_curr = READING_PORT_ONE then
+			input_1_ready <= output_ready;
+			output_valid  <= input_1_valid;
+			output_data   <= input_1_data;
+			if input_1_valid = '1' and output_ready = '1' then
+				counter_one_enable <= '1';
+				if counter_one_saturating = '1' then
+					state_next <= READING_PORT_TWO;
+				end if;
+			end if;
+		elsif state_curr = READING_PORT_TWO then
+			--stay here
+			input_2_ready <= output_ready;
+			output_valid  <= input_2_valid;
+			output_data   <= input_2_data;
+		end if;
+ 	end process;
 
 
 end Behavioral;
