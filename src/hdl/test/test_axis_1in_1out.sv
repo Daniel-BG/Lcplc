@@ -122,7 +122,12 @@ module test_axis_1in_1out;
 	end
 
 	if (USE_PSM == 1) begin: gen_partial_sum
-		axis_partial_sum #(.INPUT_WIDTH_LOG(DATA_WIDTH), .COUNTER_WIDTH_LOG(OUT_WIDTH), .RESET_VALUE(2**OUT_WIDTH-1), .IS_ADD(0)) partial_summer
+		axis_partial_sum #(
+				.INPUT_WIDTH_LOG(DATA_WIDTH), 
+				.COUNTER_WIDTH_LOG(OUT_WIDTH), 
+				.RESET_VALUE(2**OUT_WIDTH-1), 
+				.START_ON_RESET(0),
+				.IS_ADD(0)) partial_summer
 			(
 				.clk(clk), .rst(rst),
 				.input_valid(gen_valid),

@@ -27,6 +27,7 @@ entity AXIS_PARTIAL_SUM is
 		INPUT_WIDTH_LOG		: integer := 6;		    --max accepted input value
 		COUNTER_WIDTH_LOG	: integer := 7;			--counter width
 		RESET_VALUE			: integer := 2**7-1;	--reset value
+		START_ON_RESET		: boolean := true;		--first value is reset or is already reset + first input
 		IS_ADD				: boolean := false		--true if the counter adds the input_shift, false if it substracts it
 	);
 	Port (
@@ -42,23 +43,14 @@ end AXIS_PARTIAL_SUM;
 
 architecture Behavioral of AXIS_PARTIAL_SUM is
 	signal inner_accumulator, inner_accumulator_next: std_logic_vector(COUNTER_WIDTH_LOG - 1 downto 0); 
-begin
+	signal inner_accumulator_enable: std_logic;
 
-	seq: process(clk)
-	begin
-		if rising_edge(clk) then
-			if rst = '1' then
-				inner_accumulator <= std_logic_vector(to_unsigned(RESET_VALUE, COUNTER_WIDTH_LOG));
-			elsif input_valid = '1' and output_ready = '1' then
-				inner_accumulator <= inner_accumulator_next;
-			end if;	
-		end if;
-	end process;
-	
-	output_valid <= input_valid;
-	input_ready  <= output_ready;
-	output_data  <= inner_accumulator;
-	
+	--start on first signals
+	type state_part_sum_t is (AWAIT, READY);
+	signal state_curr, state_next: state_part_sum_t;
+begin
+	--SHARED STUFF--
+	----------------
 	gen_sub: if not IS_ADD generate
 		inner_accumulator_next <= std_logic_vector(unsigned(inner_accumulator) - resize(unsigned(input_data), COUNTER_WIDTH_LOG));	
 	end generate;
@@ -67,6 +59,69 @@ begin
 		inner_accumulator_next <= std_logic_vector(unsigned(inner_accumulator) + resize(unsigned(input_data), COUNTER_WIDTH_LOG));	
 	end generate;
 
+	output_data  <= inner_accumulator;
+
+	acc_update: process(clk)
+	begin
+		if rising_edge(clk) then
+			if rst = '1' then
+				inner_accumulator <= std_logic_vector(to_unsigned(RESET_VALUE, COUNTER_WIDTH_LOG));
+			elsif inner_accumulator_enable = '1' then
+				inner_accumulator <= inner_accumulator_next;
+			end if;	
+		end if;
+	end process;
+
+
+	--START ON RESET--
+	------------------
+	gen_start_on_reset: if START_ON_RESET generate
+		inner_accumulator_enable <= '1' when input_valid = '1' and output_ready = '1' else '0';
+		output_valid <= input_valid;
+		input_ready  <= output_ready;
+	end generate;
+
+
+	--DON'T START ON RESET--
+	------------------------
+	gen_start_on_first: if not START_ON_RESET generate
+		state_update: process(clk)
+		begin
+			if rising_edge(clk) then
+				if rst = '1' then
+					state_curr <= AWAIT;
+				else
+					state_curr <= state_next;
+				end if;
+			end if;
+		end process;
+
+		comb: process(state_curr, input_valid, output_ready)
+		begin
+			input_ready <= '0';
+			output_valid <= '0';
+			inner_accumulator_enable <= '0';
+			state_next <= state_curr;
+
+			if state_curr = AWAIT then
+				input_ready <= '1';
+				if input_valid = '1' then
+					inner_accumulator_enable <= '1';
+					state_next <= READY;
+				end if;
+			elsif state_curr = READY then
+				output_valid <= '1';
+				if output_ready = '1' then
+					input_ready <= '1';
+					if input_valid = '1' then
+						inner_accumulator_enable <= '1';
+					else
+						state_next <= AWAIT;
+					end if;
+				end if;
+			end if;
+		end process;
+	end generate;
 
 
 end Behavioral;
