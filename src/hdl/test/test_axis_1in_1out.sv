@@ -5,7 +5,7 @@
 // 
 // Create Date: 26.02.2019 16:18:07
 // Design Name: 
-// Module Name: test_processing_elements
+// Module Name: test_axis_1in_1out
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
@@ -22,8 +22,8 @@
 
 module test_axis_1in_1out;
 	parameter PERIOD=10;
-	parameter DATA_WIDTH=16;
-	parameter OUT_WIDTH=16;
+	parameter DATA_WIDTH=6;
+	parameter OUT_WIDTH=7;
 	parameter BLOCK_SIZE_LOG=8;
 	parameter IS_SIGNED=0;
 	parameter USE_ACC=0;
@@ -31,7 +31,8 @@ module test_axis_1in_1out;
 	parameter USE_REP=0;
 	parameter USE_CLP=0;
 	parameter USE_RED=0;
-	parameter USE_SUB=1;
+	parameter USE_SUB=0;
+	parameter USE_PSM=1;
 	
 	//controls
 	reg clk, rst;
@@ -109,6 +110,19 @@ module test_axis_1in_1out;
 
 	if (USE_RED == 1) begin: gen_reducer
 		axis_reducer #(.DATA_WIDTH(DATA_WIDTH), .VALID_TRANSACTIONS(17), .INVALID_TRANSACTIONS(3), .START_VALID(1)) reducer
+			(
+				.clk(clk), .rst(rst),
+				.input_valid(gen_valid),
+				.input_ready(gen_ready),
+				.input_data(gen_data),
+				.output_ready(acc_ready),
+				.output_valid(acc_valid),
+				.output_data(acc_data)
+			);
+	end
+
+	if (USE_PSM == 1) begin: gen_partial_sum
+		axis_partial_sum #(.INPUT_WIDTH_LOG(DATA_WIDTH), .COUNTER_WIDTH_LOG(OUT_WIDTH), .RESET_VALUE(2**OUT_WIDTH-1), .IS_ADD(0)) partial_summer
 			(
 				.clk(clk), .rst(rst),
 				.input_valid(gen_valid),

@@ -5,11 +5,11 @@
 // 
 // Create Date: 25.02.2019 12:53:59
 // Design Name: 
-// Module Name: test_axis_joiner_2
+// Module Name: test_axis_2in_1out
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
-// Description: Test for the joiner module
+// Description: Test AXIS modules with two inputs and one output bus
 // 
 // Dependencies: 
 // 

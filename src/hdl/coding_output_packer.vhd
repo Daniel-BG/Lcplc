@@ -18,20 +18,10 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
-use work.functions.all;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+use work.functions.all;
 
 entity CODING_OUTPUT_PACKER is
 	Generic (
@@ -59,6 +49,9 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	end function;
 	
 	constant OUTPUT_WIDTH_SLACK: integer := calc_slack(CODE_WIDTH, OUTPUT_WIDTH_LOG);
+
+	--input_length_data_stdlv
+	signal input_length_data_stdlv: std_logic_vector(bits(CODE_WIDTH) - 1 downto 0);
 	
 	--shiftamt calc outputs
 	signal shiftamt_input_ready: std_logic;
@@ -165,20 +158,21 @@ begin
 	end process;
 
 
-
 	--shift amount calculator
-	shiftamt_calc: entity work.ACCUMULATED_SHIFTAMT_CALC 
+	input_length_data_stdlv <= std_logic_vector(to_unsigned(input_length_data, input_length_data_stdlv'length));
+	shiftamt_calc: entity work.AXIS_PARTIAL_SUM 
 		generic map (
-			INPUT_WIDTH => CODE_WIDTH,
-			OUTPUT_WIDTH_LOG => OUTPUT_WIDTH_LOG,
-			OUTPUT_WIDTH_SLACK => OUTPUT_WIDTH_SLACK
+			INPUT_WIDTH_LOG => bits(CODE_WIDTH),
+			COUNTER_WIDTH_LOG => OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK,
+			RESET_VALUE => 2**(OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK) - 1,
+			IS_ADD => false
 		)
 		port map (
 			clk => clk, rst => rst,
-			input_shift	=> input_length_data,
+			input_data	=> input_length_data_stdlv,
 			input_valid	=> input_valid,
 			input_ready	=> shiftamt_input_ready,
-			output_shift=> shiftamt_shift,
+			output_data => shiftamt_shift,
 			output_valid=> shiftamt_valid,
 			output_ready=> shiftamt_ready
 		);
@@ -219,7 +213,7 @@ begin
 		Port map (
 			clk => clk, rst => rst,
 			input_shift	=> shifter_input_shift,	
-			input_data => shifter_input_data,
+			input_data  => shifter_input_data,
 			input_ready	=> sss_0_ready,
 			input_valid => sss_0_valid,
 			output_data	=> shifter_data,

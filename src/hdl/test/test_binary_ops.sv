@@ -9,7 +9,8 @@
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
-// Description: 
+// Description: Test arithmetic and logical operations performed over two AXIS
+//		buses yielding a new AXIS bus of results
 // 
 // Dependencies: 
 // 

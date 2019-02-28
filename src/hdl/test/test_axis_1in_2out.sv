@@ -5,11 +5,11 @@
 // 
 // Create Date: 25.02.2019 12:11:21
 // Design Name: 
-// Module Name: test_axis_splitter_2
+// Module Name: test_axis_1in_2out
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
-// Description: Test for the AXIS splitter module
+// Description: Test modules with one input AXIS bus and two output AXIS buses
 // 
 // Dependencies: 
 // 
