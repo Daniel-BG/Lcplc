@@ -107,6 +107,12 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	signal segmenter_data: std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
 	--signal segmenter_buffered: std_logic;
 	signal segmenter_ends_word, segmenter_ready, segmenter_valid: std_logic;
+
+	--delayer inbetween segmenter and merger
+	signal segmenter_data_ends_buf: std_logic_vector(2**OUTPUT_WIDTH_LOG downto 0);
+	signal segmenter_data_buf: std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
+	signal segmenter_ends_word_buf: std_logic;
+	signal segmenter_valid_buf, segmenter_ready_buf: std_logic;
 	
 	--merger
 	signal merger_data: std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
@@ -342,6 +348,23 @@ begin
 			output_valid	=> segmenter_valid,
 			has_data_buffered=> open
 		);
+
+	--remove critical path here
+	segmenter_merger_delay: entity work.AXIS_LATCHED_CONNECTION
+		Generic map(
+			DATA_WIDTH => 2**OUTPUT_WIDTH_LOG + 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => segmenter_ready,
+			input_valid => segmenter_valid,
+			input_data  => segmenter_data & segmenter_ends_word,
+			output_ready => segmenter_ready_buf,
+			output_valid => segmenter_valid_buf,
+			output_data  => segmenter_data_ends_buf
+		);
+	segmenter_data_buf <= segmenter_data_ends_buf(2**OUTPUT_WIDTH_LOG downto 1);
+	segmenter_ends_word_buf <= segmenter_data_ends_buf(0);
 		
 	--merger
 	merger: entity work.WORD_MERGER 
@@ -350,10 +373,10 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_data		=> segmenter_data,
-			input_ends_word	=> segmenter_ends_word,
-			input_valid		=> segmenter_valid,
-			input_ready		=> segmenter_ready,
+			input_data		=> segmenter_data_buf,
+			input_ends_word	=> segmenter_ends_word_buf,
+			input_valid		=> segmenter_valid_buf,
+			input_ready		=> segmenter_ready_buf,
 			output_data		=> merger_data,
 			output_valid	=> merger_valid,
 			output_ready	=> merger_ready,
