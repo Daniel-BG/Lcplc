@@ -26,14 +26,16 @@ use work.functions.all;
 entity CODING_OUTPUT_PACKER is
 	Generic (
 		CODE_WIDTH: integer := 39;
-		OUTPUT_WIDTH_LOG: integer := 5
+		BIT_AMT_WIDTH: integer := 6;
+		OUTPUT_WIDTH_LOG: integer := 5;
+		FIFO_SLACK: integer := 2
 	);
 	Port (
 		clk, rst			: in	std_logic;
 		flush				: in 	std_logic;
 		flushed				: out 	std_logic;
 		input_code_data		: in	std_logic_vector(CODE_WIDTH - 1 downto 0);
-		input_length_data	: in 	natural range 0 to CODE_WIDTH;
+		input_length_data	: in 	std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
 		input_valid			: in 	std_logic;
 		input_ready			: out 	std_logic;
 		output_data			: out	std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
@@ -49,147 +51,82 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	end function;
 	
 	constant OUTPUT_WIDTH_SLACK: integer := calc_slack(CODE_WIDTH, OUTPUT_WIDTH_LOG);
+	--constant BIT_AMT_WIDTH: integer := bits(CODE_WIDTH);
+	constant COUNTER_WIDTH: integer := OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK;
+	constant SHIFTED_WIDTH: integer := CODE_WIDTH + 2**OUTPUT_WIDTH_LOG - 1;
+	
 
-	--input_length_data_stdlv
-	signal input_length_data_stdlv: std_logic_vector(bits(CODE_WIDTH) - 1 downto 0);
-	
-	--shiftamt calc outputs
-	signal shiftamt_input_ready: std_logic;
-	signal shiftamt_shift: std_logic_vector(OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK - 1 downto 0);
-	signal shiftamt_valid: std_logic;
-	signal shiftamt_ready: std_logic;
-	
 	--splitter
-	signal shifter_segmenter_splitter_input: std_logic_vector(CODE_WIDTH + OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK - 1 downto 0);
-	signal sss_0_valid, sss_1_ready, sss_0_ready, sss_1_valid: std_logic;
-	signal sss_0_data, sss_1_data: std_logic_vector(CODE_WIDTH + OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK - 1 downto 0);
-	signal sss_0_data_code, sss_1_data_code: std_logic_vector(CODE_WIDTH - 1 downto 0);
-	signal sss_0_data_shift, sss_1_data_shift: std_logic_vector(OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK - 1 downto 0);
+	signal shifter_segmenter_splitter_input: std_logic_vector(CODE_WIDTH + BIT_AMT_WIDTH - 1 downto 0);
+	signal sss_0_valid, sss_0_ready: std_logic;
+	signal sss_1_ready, sss_1_valid: std_logic;
+	signal sss_0_data: std_logic_vector(CODE_WIDTH + BIT_AMT_WIDTH - 1 downto 0);
+	signal sss_1_data: std_logic_vector(CODE_WIDTH + BIT_AMT_WIDTH - 1 downto 0);
+	signal sss_0_data_code: std_logic_vector(CODE_WIDTH - 1 downto 0);
+	signal sss_1_data_code: std_logic_vector(CODE_WIDTH - 1 downto 0);
+	signal sss_0_data_shift: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
+	signal sss_1_data_shift: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
 	
-	--shifter
-	signal shifter_input_shift: natural range 0 to 2**OUTPUT_WIDTH_LOG - 1;
-	signal shifter_input_data, shifter_data: std_logic_vector(CODE_WIDTH + 2**OUTPUT_WIDTH_LOG - 2 downto 0);
-	signal shifter_ready, shifter_valid: std_logic;
+	--length splitter
+	signal length_0_valid, length_0_ready: std_logic;
+	signal length_1_valid, length_1_ready: std_logic;
+	signal length_2_valid, length_2_ready: std_logic;
+	signal length_0_data: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
+	signal length_1_data: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
+	signal length_2_data: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
 	
-	--fifo to delay inputs to c2w segmenter
-	constant SHIFTAMT_DELAY_FIFO_DEPTH: integer := 10;
-	signal shamt_delay_fifo_ready, shamt_delay_fifo_valid: std_logic; 
-	signal shamt_delay_fifo_data: std_logic_vector(OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK - 1 downto 0);
+	--partial sums
+	signal len_cnt_data: std_logic_vector(COUNTER_WIDTH-1 downto 0);
+	signal len_cnt_rst_data: std_logic_vector(COUNTER_WIDTH-1 downto 0);
+	signal len_cnt_valid, len_cnt_ready: std_logic;
+	signal len_cnt_rst_valid, len_cnt_rst_ready: std_logic;
 	
-	--joiner for shifter and fifo
-	signal shift_shamt_valid, shift_shamt_ready: std_logic;
-	signal shift_shamt_data: std_logic_vector(CODE_WIDTH + 2**OUTPUT_WIDTH_LOG - 2 downto 0);
-	signal shift_shamt_shamt: std_logic_vector(OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK - 1 downto 0);
+	--delay for shift adjustment
+	signal len_cnt_rst_ready_buf, len_cnt_rst_valid_buf: std_logic;
+	signal len_cnt_rst_data_buf: std_logic_vector(COUNTER_WIDTH-1 downto 0);
 	
-	--segmenter signals
+	--shift adjustments
+	signal adjust_data: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
+	signal adjust_valid, adjust_ready: std_logic;
+	signal final_shift_data: std_logic_vector(COUNTER_WIDTH - 1 downto 0);
+	signal final_shift_valid, final_shift_ready: std_logic;
+	
+	--delayed data input to shifter
+	signal sss_1_ready_buf, sss_1_valid_buf: std_logic;
+	signal sss_1_data_code_buf: std_logic_vector(CODE_WIDTH - 1 downto 0);
+	
+	--shifted results /presults
+	signal shifted_data, data_code_extended: std_logic_vector(SHIFTED_WIDTH - 1 downto 0);
+	signal shifted_ready, shifted_valid: std_logic;
+	
+	--delay before segmenter
+	signal len_cnt_ready_buf, len_cnt_valid_buf: std_logic;
+	signal len_cnt_data_buf: std_logic_vector(COUNTER_WIDTH-1 downto 0);
+	
+	--segmenter things
 	signal segmenter_data: std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
-	signal segmenter_ends_word: std_logic;
-	signal segmenter_ready, segmenter_valid: std_logic;
-	signal segmenter_buffered: std_logic;
+	--signal segmenter_buffered: std_logic;
+	signal segmenter_ends_word, segmenter_ready, segmenter_valid: std_logic;
 	
-	--merger delayed data
-	signal merger_delay_data, merger_delay_input_data: std_logic_vector( 2**OUTPUT_WIDTH_LOG downto 0);
-	signal merger_delay_ready, merger_delay_valid: std_logic;
-	signal merger_delay_data_data: std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
-	signal merger_delay_data_flag: std_logic;
-	
-	--merger hijacked signals for flushing
-	signal merger_valid: std_logic;
-	signal merger_flush: std_logic;
-	
-	--flushing control signals
-	signal inflight_transactions: natural range 0 to 31; --enough space for all stages within the packer
-	type flushing_state_t is (WAITING, COUNTDOWN, FINISHING, FINISHED);
-	signal state_curr, state_next: flushing_state_t;
-	constant COUNTDOWN_MAX: integer := 4; --4 should be enough
-	signal end_countdown, end_countdown_next: natural range 0 to COUNTDOWN_MAX; 
-	
+	--merger
+	signal merger_data: std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
+	signal merger_valid, merger_ready: std_logic;
+	--signal merger_flush: std_logic;
 begin
-	--inflight control
-	seq: process(clk)
-	begin
-		if rising_edge(clk) then
-			if rst = '1' then
-				inflight_transactions <= 0;			
-				state_curr <= WAITING;
-				end_countdown <= 0;
-			else
-				--how many enter the packer vs how many left the segmenter
-				if input_valid = '1' and shiftamt_input_ready = '1' and shift_shamt_ready = '1' and shift_shamt_valid = '1' then
-					 --do nothing, one goes in one goes out
-				elsif input_valid = '1' and shiftamt_input_ready = '1' then --one goes in
-					inflight_transactions <= inflight_transactions + 1;
-				elsif shift_shamt_ready = '1' and shift_shamt_valid = '1' then --one goes out
-					inflight_transactions <= inflight_transactions - 1;
-				end if;
-				state_curr <= state_next;
-				end_countdown <= end_countdown_next;
-			end if;
-		end if;
-	end process;
-	
-	--flushing control
-	comb: process(state_curr, flush, inflight_transactions,
-		end_countdown, merger_valid, output_ready)
-	begin
-		state_next <= state_curr;
-		flushed <= '0';
-		end_countdown_next <= end_countdown;
-		merger_flush <= '0';
-		
-		if state_curr = WAITING then
-			if flush = '1' and inflight_transactions = 0 then
-				state_next <= COUNTDOWN;
-			end if;
-		elsif state_curr = COUNTDOWN then
-			if end_countdown = COUNTDOWN_MAX then
-				state_next <= FINISHING;
-			elsif merger_valid = '0' or output_ready = '1' then
-				end_countdown_next <= end_countdown + 1;
-			end if; 
-		elsif state_curr = FINISHING then
-			merger_flush <= '1';
-			if merger_valid = '1' and output_ready = '1' then
-				state_next <= FINISHED;
-			end if;
-		elsif state_curr = FINISHED then
-			flushed <= '1';
-		end if;
-	end process;
-
-
-	--shift amount calculator
-	input_length_data_stdlv <= std_logic_vector(to_unsigned(input_length_data, input_length_data_stdlv'length));
-	shiftamt_calc: entity work.AXIS_PARTIAL_SUM 
-		generic map (
-			INPUT_WIDTH_LOG => bits(CODE_WIDTH),
-			COUNTER_WIDTH_LOG => OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK,
-			RESET_VALUE => 2**(OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK) - 1,
-			IS_ADD => false
-		)
-		port map (
-			clk => clk, rst => rst,
-			input_data	=> input_length_data_stdlv,
-			input_valid	=> input_valid,
-			input_ready	=> shiftamt_input_ready,
-			output_data => shiftamt_shift,
-			output_valid=> shiftamt_valid,
-			output_ready=> shiftamt_ready
-		);
-	input_ready <= shiftamt_input_ready;
-		
+								  
+								  
 	--splitter (one for shifter, one for c2w_segmenter)
-	shifter_segmenter_splitter_input <= input_code_data & shiftamt_shift;
+	shifter_segmenter_splitter_input <= input_code_data & input_length_data;
 	shifter_segmenter_splitter: entity work.AXIS_SPLITTER_2 
 		Generic map(
-			DATA_WIDTH => CODE_WIDTH + OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK
+			DATA_WIDTH => CODE_WIDTH + BIT_AMT_WIDTH
 		)
 		Port map (
 			clk => clk, rst	=> rst,
 			--to input axi port
-			input_valid => shiftamt_valid,
+			input_valid => input_valid,
 			input_data	=> shifter_segmenter_splitter_input,
-			input_ready => shiftamt_ready,
+			input_ready => input_ready,
 			--to output axi ports
 			output_0_valid => sss_0_valid,
 			output_0_data  => sss_0_data,
@@ -200,122 +137,231 @@ begin
 		);
 	sss_0_data_code <= sss_0_data(sss_0_data'high downto sss_0_data'high - CODE_WIDTH + 1);
 	sss_1_data_code <= sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1);
-	sss_0_data_shift <= sss_0_data(OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK - 1 downto 0);
-	sss_1_data_shift <= sss_1_data(OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK - 1 downto 0);
+	sss_0_data_shift <= sss_0_data(BIT_AMT_WIDTH - 1 downto 0);
+	sss_1_data_shift <= sss_1_data(BIT_AMT_WIDTH - 1 downto 0);
 	
-	--shifter
-	shifter_input_shift <= to_integer(unsigned(sss_0_data_shift(OUTPUT_WIDTH_LOG - 1 downto 0)));
-	shifter_input_data <= (2**OUTPUT_WIDTH_LOG - 2 downto 0 => '0') & sss_1_data_code;
-	shifter_instance: entity work.LEFT_SHIFTER
-		Generic map (
-			DATA_WIDTH => CODE_WIDTH + 2**OUTPUT_WIDTH_LOG - 1
+	--split length into two partial sums 
+	length_splitter: entity work.AXIS_SPLITTER_3
+		Generic map(
+			DATA_WIDTH => BIT_AMT_WIDTH
 		)
 		Port map (
-			clk => clk, rst => rst,
-			input_shift	=> shifter_input_shift,	
-			input_data  => shifter_input_data,
-			input_ready	=> sss_0_ready,
-			input_valid => sss_0_valid,
-			output_data	=> shifter_data,
-			output_ready=> shifter_ready,
-			output_valid=> shifter_valid
-		);
-		
-	--fifo to delay inputs to c2w_segmenter
-	shiftamt_delay_fifo: entity work.AXIS_FIFO 
-		Generic map (
-			DATA_WIDTH => OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK,
-			FIFO_DEPTH => SHIFTAMT_DELAY_FIFO_DEPTH
-		)
-		Port map ( 
-			clk => clk, rst => rst,
-			--input axi port
-			input_valid => sss_1_valid,
-			input_ready => sss_1_ready,
-			input_data	=> sss_1_data_shift,
-			--out axi port
-			output_ready => shamt_delay_fifo_ready,
-			output_data  => shamt_delay_fifo_data,
-			output_valid => shamt_delay_fifo_valid
-		);
-		
-	--join shifter output and shamt in fifo
-	shift_shamt_join: entity work.AXIS_SYNCHRONIZER_2
-		Generic map (
-			DATA_WIDTH_0 => CODE_WIDTH + 2**OUTPUT_WIDTH_LOG - 1,
-			DATA_WIDTH_1 => OUTPUT_WIDTH_LOG + OUTPUT_WIDTH_SLACK
-		)
-		Port map (
-			clk => clk, rst => rst,
+			clk => clk, rst	=> rst,
 			--to input axi port
-			input_0_valid => shifter_valid, 
-			input_0_ready => shifter_ready, 
-			input_0_data  => shifter_data,
-			input_1_valid => shamt_delay_fifo_valid,
-			input_1_ready => shamt_delay_fifo_ready,
-			input_1_data  => shamt_delay_fifo_data,
+			input_valid => sss_0_valid,
+			input_data	=> sss_0_data_shift,
+			input_ready => sss_0_ready,
 			--to output axi ports
-			output_valid => shift_shamt_valid,
-			output_ready => shift_shamt_ready,
-			output_data_0=> shift_shamt_data,
-			output_data_1=> shift_shamt_shamt
+			output_0_valid => length_0_valid,
+			output_0_data  => length_0_data,
+			output_0_ready => length_0_ready,
+			output_1_valid => length_1_valid,
+			output_1_data  => length_1_data,
+			output_1_ready => length_1_ready,
+			output_2_valid => length_2_valid,
+			output_2_data  => length_2_data,
+			output_2_ready => length_2_ready
 		);
-	
 		
-	--code to word segmenter
-	c2w_segmenter: entity work.CODE_TO_WORD_SEGMENTER 
+	--partial sums (one starting @reset value, the other @reset plus first)
+	partial_sum_reset: entity work.AXIS_PARTIAL_SUM
+		Generic map(
+			INPUT_WIDTH_LOG		=> BIT_AMT_WIDTH,
+			COUNTER_WIDTH_LOG	=> COUNTER_WIDTH,
+			RESET_VALUE			=> 2**COUNTER_WIDTH-1,
+			START_ON_RESET		=> true,
+			IS_ADD				=> false
+		)
+		Port map (
+			clk => clk, rst	=> rst,
+			input_data		=> length_0_data,
+			input_valid		=> length_0_valid,
+			input_ready		=> length_0_ready,
+			output_data 	=> len_cnt_rst_data,
+			output_valid	=> len_cnt_rst_valid,
+			output_ready	=> len_cnt_rst_ready
+		);
+		
+	partial_sum_no_reset: entity work.AXIS_PARTIAL_SUM
+		Generic map(
+			INPUT_WIDTH_LOG		=> BIT_AMT_WIDTH,
+			COUNTER_WIDTH_LOG	=> COUNTER_WIDTH,
+			RESET_VALUE			=> 2**COUNTER_WIDTH-1,
+			START_ON_RESET		=> false,
+			IS_ADD				=> false
+		)
+		Port map (
+			clk => clk, rst	=> rst,
+			input_data		=> length_1_data,
+			input_valid		=> length_1_valid,
+			input_ready		=> length_1_ready,
+			output_data 	=> len_cnt_data,
+			output_valid	=> len_cnt_valid,
+			output_ready	=> len_cnt_ready
+		);
+		
+	--preparation of shift value
+	shift_sub: entity work.AXIS_ARITHMETIC_OP
+		Generic map (
+			DATA_WIDTH_0 => BIT_AMT_WIDTH,
+			DATA_WIDTH_1 => BIT_AMT_WIDTH,
+			OUTPUT_DATA_WIDTH => BIT_AMT_WIDTH,
+			IS_ADD => false,
+			SIGN_EXTEND_0 => false,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP => false
+		)
+		Port map(
+			clk => clk, rst => rst,
+			input_0_data  => std_logic_vector(to_unsigned(CODE_WIDTH, BIT_AMT_WIDTH)),
+			input_0_valid => '1',
+			input_0_ready => open,
+			input_1_data  => length_2_data,
+			input_1_valid => length_2_valid,
+			input_1_ready => length_2_ready,
+			output_data	  => adjust_data,
+			output_valid  => adjust_valid,
+			output_ready  => adjust_ready
+		);
+		
+	--delay for sum w/reset
+	len_cnt_rst_buf: entity work.AXIS_FIFO
+		Generic map (
+			DATA_WIDTH => COUNTER_WIDTH,
+			FIFO_DEPTH => 2 + FIFO_SLACK
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready =>len_cnt_rst_ready,
+			input_valid =>len_cnt_rst_valid,
+			input_data  =>len_cnt_rst_data,
+			output_ready=>len_cnt_rst_ready_buf,
+			output_valid=>len_cnt_rst_valid_buf,
+			output_data =>len_cnt_rst_data_buf
+		);
+		
+	shift_add: entity work.AXIS_ARITHMETIC_OP
+		Generic map (
+			DATA_WIDTH_0 => OUTPUT_WIDTH_LOG,
+			DATA_WIDTH_1 => BIT_AMT_WIDTH,
+			OUTPUT_DATA_WIDTH => COUNTER_WIDTH,
+			IS_ADD => true,
+			SIGN_EXTEND_0 => false,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP => false
+		)
+		Port map(
+			clk => clk, rst => rst,
+			input_0_data  => len_cnt_rst_data_buf(OUTPUT_WIDTH_LOG - 1 downto 0),
+			input_0_valid => len_cnt_rst_valid_buf,
+			input_0_ready => len_cnt_rst_ready_buf,
+			input_1_data  => adjust_data,
+			input_1_valid => adjust_valid,
+			input_1_ready => adjust_ready,
+			output_data	  => final_shift_data,
+			output_valid  => final_shift_valid,
+			output_ready  => final_shift_ready
+		);
+		
+	--FIFO buffer before shifter
+	data_buf: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => CODE_WIDTH,
+			FIFO_DEPTH => 5 + FIFO_SLACK
+		)
+		Port map ( 
+			clk => clk, rst	=> rst,
+			--input axi port
+			input_valid		=> sss_1_valid,
+			input_ready		=> sss_1_ready,
+			input_data		=> sss_1_data_code,
+			--out axi port
+			output_ready	=> sss_1_ready_buf,
+			output_data		=> sss_1_data_code_buf,
+			output_valid	=> sss_1_valid_buf
+		);
+		
+	--shifter
+	data_code_extended <= (SHIFTED_WIDTH - 1 downto CODE_WIDTH => '0') & sss_1_data_code_buf;
+	shifter: entity work.AXIS_SHIFTER 
+		Generic map (
+			SHIFT_WIDTH	=> COUNTER_WIDTH,
+			DATA_WIDTH  => SHIFTED_WIDTH,
+			LEFT	    => true,
+			ARITHMETIC	=> false
+		)
+		Port map ( 
+			clk => clk, rst	=> rst,
+			shift_data		=> final_shift_data,
+			shift_ready		=> final_shift_ready,
+			shift_valid		=> final_shift_valid,
+			input_data		=> data_code_extended, 
+			input_ready		=> sss_1_ready_buf,
+			input_valid		=> sss_1_valid_buf,
+			output_data		=> shifted_data,
+			output_ready	=> shifted_ready,
+			output_valid	=> shifted_valid
+		);
+		
+	--delay fifo for len_cnt
+	len_cnt_buf: entity work.AXIS_FIFO
+		Generic map (
+			DATA_WIDTH => COUNTER_WIDTH,
+			FIFO_DEPTH => 12 + FIFO_SLACK
+		)
+		Port map ( 
+			clk => clk, rst	=> rst,
+			--input axi port
+			input_valid		=> len_cnt_valid,
+			input_ready		=> len_cnt_ready,
+			input_data		=> len_cnt_data,
+			--out axi port
+			output_ready	=> len_cnt_ready_buf,
+			output_data		=> len_cnt_data_buf,
+			output_valid	=> len_cnt_valid_buf
+		);
+		
+	--segmenter
+	segmenter: entity work.CODE_TO_WORD_SEGMENTER 
+		Generic map (
+			BASE_WIDTH => CODE_WIDTH,
 			WORD_WIDTH_LOG => OUTPUT_WIDTH_LOG,
 			WORD_CNT_SLACK => OUTPUT_WIDTH_SLACK
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_data		=> shift_shamt_data,
-			input_quantity	=> shift_shamt_shamt,
-			input_ready		=> shift_shamt_ready,
-			input_valid		=> shift_shamt_valid,
+			bits_data		=> shifted_data,
+			bits_ready		=> shifted_ready,
+			bits_valid		=> shifted_valid,
+			position_data	=> len_cnt_data_buf,
+			position_ready	=> len_cnt_ready_buf,
+			position_valid	=> len_cnt_valid_buf,
 			output_data		=> segmenter_data,
 			output_ends_word=> segmenter_ends_word,
 			output_ready	=> segmenter_ready,
 			output_valid	=> segmenter_valid,
-			has_data_buffered => segmenter_buffered
+			has_data_buffered=> open
 		);
 		
-	--delay minififo
-	merger_delay_input_data <= segmenter_ends_word & segmenter_data;
-	merger_delay: entity work.AXIS_LATCHED_CONNECTION
-		Generic map (DATA_WIDTH => 2**OUTPUT_WIDTH_LOG + 1)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready => segmenter_ready,
-			input_valid => segmenter_valid,
-			input_data => merger_delay_input_data,
-			output_ready => merger_delay_ready,
-			output_valid => merger_delay_valid,
-			output_data => merger_delay_data
-		);
-	merger_delay_data_data <= merger_delay_data(2**OUTPUT_WIDTH_LOG - 1 downto 0);
-	merger_delay_data_flag <= merger_delay_data(2**OUTPUT_WIDTH_LOG);
-	
-		
-	--word merger
+	--merger
 	merger: entity work.WORD_MERGER 
 		Generic map (
 			WORD_WIDTH => 2**OUTPUT_WIDTH_LOG
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_data		=> merger_delay_data_data,
-			input_ends_word	=> merger_delay_data_flag,
-			input_valid		=> merger_delay_valid,
-			input_ready		=> merger_delay_ready,
-			output_data		=> output_data,
+			input_data		=> segmenter_data,
+			input_ends_word	=> segmenter_ends_word,
+			input_valid		=> segmenter_valid,
+			input_ready		=> segmenter_ready,
+			output_data		=> merger_data,
 			output_valid	=> merger_valid,
-			output_ready	=> output_ready,
-			flush   		=> merger_flush
+			output_ready	=> merger_ready,
+			flush   		=> '0'
 		);
 		
 	output_valid <= merger_valid;
-
+	merger_ready <= output_ready;
+	output_data  <= merger_data;
+		
 end Behavioral;
