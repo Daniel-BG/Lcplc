@@ -4,12 +4,14 @@
 -- 
 -- Create Date: 12.02.2019 19:01:39
 -- Design Name: 
--- Module Name: AXIS_SYNCHRONIZER_2 - Behavioral
+-- Module Name: AXIS_SYNCHRONIZER_PASSTHROUGH_2 - Behavioral
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
 -- Description: Synchronize two axis streams into only one. Data outputs are kept separate for ease of use
--- 
+--		this passthrough version does not latch control signals but reduces the registers from 2 to 1.
+-- 		use this when the critical path for control signals is short so you can save registers 
+--
 -- Dependencies: None
 -- 
 -- Revision:
@@ -63,8 +65,6 @@ begin
 	output_data_0 <= buf_0;
 	output_data_1 <= buf_1;
 
-	--
-	
 	seq: process(clk) 
 	begin
 		if rising_edge(clk) then
@@ -88,35 +88,6 @@ begin
 				elsif output_valid_in = '1' and output_ready = '1' then
 					buf_1_full <= '0';
 				end if;
-
---				--if reading from output
---				if output_valid_in = '1' and output_ready = '1' then
---					--shift first input
---					buf_0 <= input_0_data;
---					if input_0_ready_in = '1' and input_0_valid = '1' then
---						buf_0_full <= '1';
---					else --delete buffer
---						buf_0_full <= '0';
---					end if;
---					--shift second input
---					buf_1 <= input_1_data;
---					if input_1_ready_in = '1' and input_1_valid = '1' then
---						buf_1_full <= '1';
---					else --shift first value
---						buf_1_full <= '0';
---					end if;
---				else --not reading from output
---					if input_0_ready_in = '1' and input_0_valid = '1' then
---						--writing to buffer
---						buf_0_full <= '1';		
---						buf_0 <= input_0_data;
---					end if;
---					if input_1_ready_in = '1' and input_1_valid = '1' then
---						--writing to output buffer
---						buf_1_full <= '1';
---						buf_1 <= input_1_data;
---					end if;
---				end if;
 			end if;
 		end if;
 	end process;

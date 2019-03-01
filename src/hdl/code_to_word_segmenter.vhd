@@ -73,10 +73,18 @@ architecture Behavioral of CODE_TO_WORD_SEGMENTER is
 
 	signal inner_counter, inner_counter_next: std_logic_vector(WORD_CNT_SLACK - 1 downto 0);
 	
-	signal input_data_buff, input_data_buff_next: std_logic_vector(BASE_WIDTH - 1 - 1 downto 0); -- -1 since 1 is always at least lost in first cycle so we don't need it
+	signal input_data_buff, input_data_buff_next: std_logic_vector(FULL_INPUT_WIDTH - 1 downto 0); -- -1 since 1 is always at least lost in first cycle so we don't need it
 	signal input_position_buff, input_position_buff_next: std_logic_vector(POSITION_WIDTH - 1 downto 0);
 	
+	--qol signals
+	signal input_position_counter, input_position_buff_counter: std_logic_vector(WORD_CNT_SLACK - 1 downto 0);
+	signal input_position_end_flag, input_position_buff_end_flag: boolean;
 begin
+
+	input_position_counter 		<= input_position(input_position'high downto input_position'high - WORD_CNT_SLACK + 1);
+	input_position_buff_counter <= input_position_buff(input_position_buff'high downto input_position_buff'high - WORD_CNT_SLACK + 1);
+	input_position_end_flag 	<= input_position(WORD_WIDTH_LOG - 1 downto 0) = (WORD_WIDTH_LOG - 1 downto 0 => '0');
+	input_position_buff_end_flag<= input_position_buff(WORD_WIDTH_LOG - 1 downto 0) = (WORD_WIDTH_LOG - 1 downto 0 => '0');
 
 
 	synchronizer: entity work.AXIS_SYNCHRONIZER_2
@@ -120,7 +128,8 @@ begin
 
 	has_data_buffered <= '1' when state_curr = BUFFERED else '0';
 	
-	comb: process(state_curr, input_position_buff, input_data_buff, inner_counter, input_valid, output_ready, input_data, input_position)
+	comb: process(state_curr, input_position_buff, input_data_buff, inner_counter, input_valid, output_ready, input_data, input_position, 
+			input_position_counter, input_position_end_flag, input_position_buff_counter, input_position_buff_end_flag)
 	begin
 		output_ends_word <= '0';
 		input_position_buff_next <= input_position_buff;
@@ -136,8 +145,8 @@ begin
 			output_data <= input_data(input_data'high downto input_data'high - 2**WORD_WIDTH_LOG + 1);
 			
 			if input_valid = '1' and output_ready = '1' then
-				if input_position(input_position'high downto input_position'high - WORD_CNT_SLACK + 1) = inner_counter then
-					if input_position(WORD_WIDTH_LOG - 1 downto 0) = (WORD_WIDTH_LOG - 1 downto 0 => '0') then
+				if input_position_counter = inner_counter then
+					if input_position_end_flag then
 						output_ends_word <= '1';
 						inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
 					else
@@ -147,7 +156,7 @@ begin
 					output_ends_word <= '1';
 					inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
 					input_position_buff_next <= input_position;
-					input_data_buff_next <= input_data(input_data'high - 2**WORD_WIDTH_LOG downto 0);
+					input_data_buff_next <= input_data(input_data'high - 2**WORD_WIDTH_LOG downto 0) & (2**WORD_WIDTH_LOG - 1 downto 0 => '0');
 					state_next <= BUFFERED;
 				end if;
 			end if;
@@ -156,13 +165,42 @@ begin
 			output_data <= input_data_buff(input_data_buff'high downto input_data_buff'high - 2**WORD_WIDTH_LOG + 1);
 			
 			if output_ready = '1' then
-				if input_position_buff(input_position_buff'high downto input_position_buff'high - WORD_CNT_SLACK + 1) = inner_counter then
-					state_next <= WORKING;
-					if input_position_buff(WORD_WIDTH_LOG - 1 downto 0) = (WORD_WIDTH_LOG - 1 downto 0 => '0') then
-						output_ends_word <= '1';
-						inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
-					else
-						--do nothing special
+				if input_position_buff_counter = inner_counter then
+					input_ready <= '1';
+					if input_valid = '0' then
+						state_next <= WORKING;
+						if input_position_buff_end_flag then
+							output_ends_word <= '1';
+							inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
+						else
+							--do nothing special
+						end if;
+					else				
+						if input_position_buff_end_flag then
+							output_ends_word <= '1';
+							inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
+							input_position_buff_next <= input_position;
+							input_data_buff_next <= input_data;
+							state_next <= BUFFERED;
+						else
+							state_next <= WORKING;
+							output_data <= input_data_buff(input_data_buff'high downto input_data_buff'high - 2**WORD_WIDTH_LOG + 1)
+										or input_data(input_data'high downto input_data'high - 2**WORD_WIDTH_LOG + 1);
+							if input_position_counter = inner_counter then
+								if input_position_end_flag then
+									output_ends_word <= '1';
+									inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
+								else
+									--nothing
+								end if;
+							else
+								output_ends_word <= '1';
+								inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
+								input_position_buff_next <= input_position;
+								input_data_buff_next <= input_data(input_data'high - 2**WORD_WIDTH_LOG downto 0) & (2**WORD_WIDTH_LOG - 1 downto 0 => '0');
+								state_next <= BUFFERED;
+							end if;
+						end if;
 					end if;
 				else
 					output_ends_word <= '1';
@@ -175,7 +213,3 @@ begin
 	end process;
 
 end Behavioral;
-
-
---output_overflow	<= input_data(input_data'high - 2**WORD_WIDTH_LOG downto max(input_data'high - 2*2**WORD_WIDTH_LOG + 1, 0))
---				& (max(input_data'high - 2*2**WORD_WIDTH_LOG + 1, 0) - 1 downto 0 => '0');
