@@ -175,3 +175,7 @@ begin
 	end process;
 
 end Behavioral;
+
+
+--output_overflow	<= input_data(input_data'high - 2**WORD_WIDTH_LOG downto max(input_data'high - 2*2**WORD_WIDTH_LOG + 1, 0))
+--				& (max(input_data'high - 2*2**WORD_WIDTH_LOG + 1, 0) - 1 downto 0 => '0');

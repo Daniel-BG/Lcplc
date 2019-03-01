@@ -25,10 +25,10 @@ module test_axis_2in_1out;
 	parameter DATA_WIDTH_1=6;
 	parameter OUT_WIDTH=40; //DATA_WIDTH_0+DATA_WIDTH_1;
 	parameter PERIOD=10;
-	parameter USE_JOINER=0;
+	parameter USE_JOINER=1;
 	parameter USE_FILTER=0;
 	parameter USE_COMBINER=0;
-	parameter USE_SHIFTER=1;
+	parameter USE_SHIFTER=0;
 	parameter ELIMINATE_ON_UP=1;
 	
 	reg clk, rst;
@@ -84,7 +84,7 @@ module test_axis_2in_1out;
 		);
 	
 	if (USE_JOINER==1) begin: sync
-		axis_synchronizer_2 #(.DATA_WIDTH_0(DATA_WIDTH_0), .DATA_WIDTH_1(DATA_WIDTH_1)) SYNCRHONIZER
+		axis_synchronizer_passthrough_2 #(.DATA_WIDTH_0(DATA_WIDTH_0), .DATA_WIDTH_1(DATA_WIDTH_1)) SYNCRHONIZER
 			(
 				.clk(clk), .rst(rst),
 				.input_0_valid(gen_0_valid),
