@@ -27,8 +27,9 @@ use work.FUNCTIONS.ALL;
 
 entity AXIS_SHIFTER is
 	Generic (
-		SHIFT_WIDTH	: integer := 6;
-		DATA_WIDTH	: integer := 39;
+		SHIFT_WIDTH	: integer := 7;
+		DATA_WIDTH	: integer := 69;
+		BITS_PER_STAGE: integer := 7;
 		LEFT		: boolean := true;
 		ARITHMETIC	: boolean := false
 	);
@@ -47,23 +48,25 @@ entity AXIS_SHIFTER is
 end AXIS_SHIFTER;
 
 architecture Behavioral of AXIS_SHIFTER is
+	constant STAGES: integer := (SHIFT_WIDTH + BITS_PER_STAGE - 1) / BITS_PER_STAGE;
+
 	--synchronizer signals
 	signal synced_shift	: std_logic_vector(SHIFT_WIDTH - 1 downto 0);
 	signal synced_data	: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal synced_valid, synced_ready: std_logic;
 
 	--shifting signals
-	type data_storage_t is array(0 to SHIFT_WIDTH) of std_logic_vector(DATA_WIDTH - 1 downto 0);
+	type data_storage_t is array(0 to STAGES) of std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal memory_curr: data_storage_t;
-	type data_storage_t_1 is array(1 to SHIFT_WIDTH) of std_logic_vector(DATA_WIDTH - 1 downto 0);
+	type data_storage_t_1 is array(1 to STAGES) of std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal memory_next: data_storage_t_1;
-	type data_storage_t_swm1 is array(0 to SHIFT_WIDTH-1) of std_logic_vector(DATA_WIDTH - 1 downto 0);
+	type data_storage_t_swm1 is array(0 to STAGES-1) of std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal shifted_values: data_storage_t_swm1;
 	
-	type shiftamt_storage_t is array(0 to SHIFT_WIDTH) of std_logic_vector(SHIFT_WIDTH - 1 downto 0);
-	signal shiftamt_curr: shiftamt_storage_t;
+	type shiftamt_storage_t is array(0 to STAGES-1) of std_logic_vector(SHIFT_WIDTH - 1 downto 0);
+	signal shiftamt_curr, shiftamt_final: shiftamt_storage_t;
 	
-	signal valid: std_logic_vector(SHIFT_WIDTH downto 0);
+	signal valid: std_logic_vector(STAGES downto 0);
 	signal enable: std_logic;
 begin
 
@@ -87,58 +90,86 @@ begin
 
 	--enable when i have something at the output and it is being read
 	--or when i have nothing to output
-	enable <= '1' when output_ready = '1' or valid(SHIFT_WIDTH) = '0' else '0';
+	enable <= '1' when output_ready = '1' or valid(STAGES) = '0' else '0';
 	
-	output_valid <= valid(SHIFT_WIDTH);
+	output_valid <= valid(STAGES);
 	synced_ready <= enable;
-	output_data <= memory_curr(SHIFT_WIDTH);
+	output_data <= memory_curr(STAGES);
 	
-	gen_next_vals: for i in 1 to SHIFT_WIDTH generate
-		memory_next(i) <= shifted_values(i-1) when shiftamt_curr(i-1)(i-1) = '1' else memory_curr(i-1);
+	gen_next_vals: for i in 1 to STAGES generate
+		memory_next(i) <= shifted_values(i-1); --when shiftamt_curr(i-1)(i-1) = '1' else memory_curr(i-1);
 	end generate;
-
+	gen_shamt_final: for i in 0 to STAGES - 1 generate
+		shiftamt_final(i) <= 
+			  (SHIFT_WIDTH - 1 downto BITS_PER_STAGE*(i+1) => '0')
+			& shiftamt_curr(i)(minval(BITS_PER_STAGE*(i+1) - 1, SHIFT_WIDTH - 1) downto BITS_PER_STAGE*i) 
+			& (BITS_PER_STAGE*i - 1 downto 0 => '0');
+	end generate;
+	
 	gen_left_shift: if LEFT generate
-		gen_shifts: for i in 0 to SHIFT_WIDTH - 1 generate
-			shifted_values(i) <= memory_curr(i)(DATA_WIDTH - 1 - 2**i downto 0) & (2**i - 1 downto 0 => '0');
+		gen_shifts: for i in 0 to STAGES - 1 generate
+			shifted_values(i) <= std_logic_vector(shift_left(
+				unsigned(memory_curr(i)), 
+				to_integer(unsigned(shiftamt_final(i)))
+			)); 
+			--memory_curr(i)(DATA_WIDTH - 1 - 2**i downto 0) & (2**i - 1 downto 0 => '0');
 		end generate;
 	end generate;
 
 	gen_right_shift: if not LEFT generate
-		gen_shifts: for i in 0 to SHIFT_WIDTH - 1 generate
+		gen_shifts: for i in 0 to STAGES - 1 generate
 			gen_arith: if ARITHMETIC generate
-				shifted_values(i) <= (2**i - 1 downto 0 =>  memory_curr(i)(DATA_WIDTH)) & memory_curr(i)(DATA_WIDTH - 1 downto 2**i);
+				shifted_values(i) <= std_logic_vector(shift_right(
+					signed(memory_curr(i)), 
+					to_integer(unsigned(shiftamt_final(i)))
+				)); 
+				--shifted_values(i) <= (2**i - 1 downto 0 =>  memory_curr(i)(DATA_WIDTH)) & memory_curr(i)(DATA_WIDTH - 1 downto 2**i);
 			end generate;
 			gen_logic: if NOT ARITHMETIC generate
-				shifted_values(i) <= (2**i - 1 downto 0 => '0') & memory_curr(i)(DATA_WIDTH - 1 downto 2**i);
+				shifted_values(i) <= std_logic_vector(shift_right(
+					unsigned(memory_curr(i)), 
+					to_integer(unsigned(shiftamt_final(i)))
+				)); 
+				--shifted_values(i) <= (2**i - 1 downto 0 => '0') & memory_curr(i)(DATA_WIDTH - 1 downto 2**i);
 			end generate;
 		end generate;
 	end generate;
+
+--	comb: process(synced_data, synced_shift, enable, synced_valid)
+--	begin
+--	memory_curr(0) <= synced_data;
+--		shiftamt_curr(0) <= synced_shift;
+--		if enable = '1' and synced_valid = '1' then
+--			valid(0) <= '1';
+--		else
+--			valid(0) <= '0';
+--		end if;
+--		--valid(0) <= '1' when enable = '1' and synced_valid = '1' else '0';
+--	end process;
 	
-	
-	seq: process(clk, rst)
+	seq: process(clk, rst, synced_data, synced_shift, synced_valid, enable)
 	begin
+		memory_curr(0) <= synced_data;
+		shiftamt_curr(0) <= synced_shift;
+		if enable = '1' and synced_valid = '1' then
+			valid(0) <= '1';
+		else
+			valid(0) <= '0';
+		end if;
+
 		if rising_edge(clk) then
 			if rst = '1' then	
-				valid <= (others => '0');
+				valid(valid'high downto 1) <= (others => '0');
 			else
 				if enable = '1' then
 					--do all necessary shifting
-					for i in 1 to SHIFT_WIDTH loop
+					for i in 1 to STAGES loop
 						memory_curr(i) <= memory_next(i);
-						shiftamt_curr(i) <= shiftamt_curr(i-1);
 						valid(i) <= valid(i-1);
 					end loop;
-					if synced_valid = '1' then
-						--shift in a 1 into the input
-						memory_curr(0) <= synced_data;
-						shiftamt_curr(0) <= synced_shift;
-						valid(0) <= '1'; 
-					else
-						--shift in a 0 into the input
-						memory_curr(0) <= (others => '0');
-						shiftamt_curr(0) <= (others => '0');
-						valid(0) <= '0';
-					end if; 
+					for i in 1 to STAGES - 1 loop
+						shiftamt_curr(i) <= shiftamt_curr(i-1);
+					end loop;
 				end if;
 			end if;
 		end if;
