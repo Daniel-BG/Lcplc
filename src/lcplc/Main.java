@@ -196,8 +196,8 @@ public class Main {
 				//generate means. we'll see where these means have to be from
 				long currAcc = Utils.sumArray(band, lines, samples);
 				long prevAcc = Utils.sumArray(decodedBlock[b-1], lines, samples);
-				xmeanSampler.sample(currAcc);
-				xhatmeanSampler.sample(prevAcc);
+				xmeanSampler.sample(currAcc/sampleCnt);
+				xhatmeanSampler.sample(prevAcc/sampleCnt);
 				
 				//generate alpha value. Could try to generate it using the original band as well to see performance
 				long simpleAlphaNacc = 0;
@@ -290,7 +290,7 @@ public class Main {
 			xhatSampler.export(samplerBaseDir + "xhat.smpl");
 			xmeanSampler.export(samplerBaseDir + "xmean.smpl");
 			xhatmeanSampler.export(samplerBaseDir + "xhatmean.smpl");
-			predictionSampler.export(samplerBaseDir + "prediciton.smpl");
+			predictionSampler.export(samplerBaseDir + "prediction.smpl");
 		}
 		
 		public int findAlpha(long alphaN, long alphaD, long depth) {

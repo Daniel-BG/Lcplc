@@ -45,7 +45,7 @@ module test_nthband_predictor;
 	wire xhatmean_valid, xhatmean_ready;
 	wire [DATA_WIDTH - 1:0] xhatmean_data;
 
-	reg drain_prediction_enable;
+	reg checker_enable;
 	wire prediction_valid, prediction_ready;
 	wire [DATA_WIDTH:0] prediction_data;
 
@@ -57,7 +57,7 @@ module test_nthband_predictor;
 		gen_xhat_enable = 0;
 		gen_xmean_enable = 0;
 		gen_xhatmean_enable = 0;
-		drain_prediction_enable = 0;
+		checker_enable = 0;
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
@@ -66,10 +66,10 @@ module test_nthband_predictor;
 		gen_xhat_enable = 1;
 		gen_xmean_enable = 1;
 		gen_xhatmean_enable = 1;
-		drain_prediction_enable = 1;
+		checker_enable = 1;
 	end
 	
-	helper_axis_reader #(.SKIP(3),.DATA_WIDTH(ALPHA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/alpha.smpl")) GEN_alpha
+	helper_axis_reader #(.DATA_WIDTH(ALPHA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/alpha.smpl")) GEN_alpha
 		(
 			.clk(clk), .rst(rst), .enable(gen_alpha_enable),
 			.output_valid(alpha_valid),
@@ -77,7 +77,7 @@ module test_nthband_predictor;
 			.output_ready(alpha_ready)
 		);
 
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH), .START_AT(256), .STEP(2)) GEN_xhat
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/xhat.smpl")) GEN_xhat
 		(
 			.clk(clk), .rst(rst), .enable(gen_xhat_enable),
 			.output_valid(xhat_valid),
@@ -85,7 +85,7 @@ module test_nthband_predictor;
 			.output_ready(xhat_ready)
 		);
 
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH), .START_AT(640), .STEP(256)) GEN_xmean
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/xmean.smpl")) GEN_xmean
 		(
 			.clk(clk), .rst(rst), .enable(gen_xmean_enable),
 			.output_valid(xmean_valid),
@@ -93,7 +93,7 @@ module test_nthband_predictor;
 			.output_ready(xmean_ready)
 		);
 
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH), .START_AT(384), .STEP(512)) GEN_xhatmean
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/xhatmean.smpl")) GEN_xhatmean
 		(
 			.clk(clk), .rst(rst), .enable(gen_xhatmean_enable),
 			.output_valid(xhatmean_valid),
@@ -101,13 +101,14 @@ module test_nthband_predictor;
 			.output_ready(xhatmean_ready)
 		);
 
-	
-	helper_axis_drain #(.DATA_WIDTH(ALPHA_WIDTH)) DRAIN
+	helper_axis_checker #(.SKIP(256), .DATA_WIDTH(DATA_WIDTH+1), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/prediction.smpl")) GEN_checker
 		(
-			.clk(clk), .rst(rst), .enable(drain_prediction_enable),
+			.clk        (clk),
+			.rst        (rst),
+			.enable     (checker_enable),
 			.input_valid(prediction_valid),
 			.input_ready(prediction_ready),
-			.input_data(prediction_data)
+			.input_data (prediction_data)
 		);
 
 	nthband_predictor #(.DATA_WIDTH(DATA_WIDTH), .ALPHA_WIDTH(ALPHA_WIDTH), .BLOCK_SIZE_LOG(BLOCK_SIZE_LOG)) predictor

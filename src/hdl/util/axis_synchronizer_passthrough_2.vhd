@@ -54,8 +54,8 @@ architecture Behavioral of AXIS_SYNCHRONIZER_PASSTHROUGH_2 is
 	signal output_valid_in: std_logic;
 begin
 
-	input_0_ready_in <= '1' when buf_0_full = '0' or output_ready = '1' else '0';
-	input_1_ready_in <= '1' when buf_1_full = '0' or output_ready = '1' else '0';
+	input_0_ready_in <= '1' when buf_0_full = '0' or (output_ready = '1' and buf_1_full = '1') else '0';
+	input_1_ready_in <= '1' when buf_1_full = '0' or (output_ready = '1' and buf_0_full = '1') else '0';
 	input_0_ready <= input_0_ready_in;
 	input_1_ready <= input_1_ready_in;
 	
