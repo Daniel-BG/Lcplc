@@ -61,7 +61,6 @@ module test_nthband_predictor;
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
-		#(PERIOD/2)
 		rst = 0;
 		gen_alpha_enable = 1;
 		gen_xhat_enable = 1;
@@ -70,14 +69,14 @@ module test_nthband_predictor;
 		drain_prediction_enable = 1;
 	end
 	
-	helper_axis_generator #(.DATA_WIDTH(ALPHA_WIDTH), .START_AT(256)) GEN_alpha
+	helper_axis_reader #(.SKIP(3),.DATA_WIDTH(ALPHA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/alpha.smpl")) GEN_alpha
 		(
 			.clk(clk), .rst(rst), .enable(gen_alpha_enable),
 			.output_valid(alpha_valid),
 			.output_data(alpha_data),
 			.output_ready(alpha_ready)
 		);
-		
+
 	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH), .START_AT(256), .STEP(2)) GEN_xhat
 		(
 			.clk(clk), .rst(rst), .enable(gen_xhat_enable),

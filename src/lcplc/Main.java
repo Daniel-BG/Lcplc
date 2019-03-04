@@ -19,6 +19,7 @@ public class Main {
 	//USE THIS SINCE ITS DATA TYPE 12: UNSIGNED TWO BYTE!!
 	static String input = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.dat";
 	static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.hdr";
+	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data/";
 
 	static int[] min = new int[5];
 	static int[] max = new int[5];
@@ -131,6 +132,15 @@ public class Main {
 		
 		
 		public void compress(int[][][] block, int bands, int lines, int samples, BitOutputStream bos) throws IOException {
+			//samplers for testing in verilog/vhdl
+			Sampler<Integer> alphaSampler		= new Sampler<Integer>();
+			Sampler<Integer> xhatSampler 		= new Sampler<Integer>();
+			Sampler<Long>    xmeanSampler		= new Sampler<Long>();
+			Sampler<Long>    xhatmeanSampler	= new Sampler<Long>();
+			Sampler<Integer> predictionSampler	= new Sampler<Integer>();
+			
+			
+			
 			int[][][] decodedBlock = new int[bands][lines][samples];
 			
 			ExpGolombCoDec expGolombZero = new ExpGolombCoDec(0);
@@ -148,16 +158,20 @@ public class Main {
 						expGolombZero.encode(block[0][l][s], bos);
 						
 						decodedBlock[0][l][s] = block[0][l][s];
+						xhatSampler.sample(decodedBlock[0][l][s]);
 						acc.add(0);
+						predictionSampler.sample(0);
 					//For every other sample, code following
 					//the predictive scheme
 					} else {
-						long prediction = Predictor.basic2DPrediction(decodedBlock[0], l, s);
+						int prediction = Predictor.basic2DPrediction(decodedBlock[0], l, s);
+						predictionSampler.sample(prediction);
 						
 						int error = block[0][l][s] - (int) prediction;
 						int qErr  = iutq.quantize(error);
 						error 	  = iutq.dequantize(qErr);
 						decodedBlock[0][l][s] = (int) prediction + error;
+						xhatSampler.sample(decodedBlock[0][l][s]);
 						
 						int kj = findkj(acc);
 						
@@ -175,12 +189,15 @@ public class Main {
 			double thres = (double) CONST_GAMMA * delta * delta * sampleCnt * sampleCnt / 3.0;
 			System.out.println("Threshold is: " + thres);
 			
+
 			//compress rest of bands
 			for (int b = 1; b < bands; b++) {
 				band = block[b];
 				//generate means. we'll see where these means have to be from
 				long currAcc = Utils.sumArray(band, lines, samples);
 				long prevAcc = Utils.sumArray(decodedBlock[b-1], lines, samples);
+				xmeanSampler.sample(currAcc);
+				xhatmeanSampler.sample(prevAcc);
 				
 				//generate alpha value. Could try to generate it using the original band as well to see performance
 				long simpleAlphaNacc = 0;
@@ -194,7 +211,8 @@ public class Main {
 				
 				//allocate 10 bits for alpha (when using it we need to divide by 512
 				//to stay in the [0, 2) range
-				long simpleAlphaScaled = findAlpha(simpleAlphaNacc, simpleAlphaDacc, 10);
+				int simpleAlphaScaled = findAlpha(simpleAlphaNacc, simpleAlphaDacc, 10);
+				alphaSampler.sample(simpleAlphaScaled);
 				long alphaScaleVal = 512;
 				//mu is 16 bits wide, and should stay that way since we are averaging 16-bit values
 				long muScaled = currAcc / sampleCnt;
@@ -211,9 +229,11 @@ public class Main {
 				//initialize values for block compression
 				long distortionAcc = 0;
 				acc.reset(); 
+				int[][] savedxhat = new int[lines][samples];
 				for (int l = 0; l < lines; l++) {
 					for (int s = 0; s < samples; s++) {
 						long prediction = muScaled + (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled/alphaScaleVal;
+						predictionSampler.sample((int) prediction);
 						savedPrediction[l][s] = (int) prediction;
 						int error = band[l][s] - (int) prediction;
 						
@@ -231,7 +251,7 @@ public class Main {
 							savedGolombParam[l][s] = findkj(acc);
 						}
 						
-						decodedBlock[b][l][s] = (int) prediction + (int) error;
+						savedxhat[l][s] = (int) prediction + (int) error;
 						
 						acc.add(Math.abs(error));		//update Rj after coding
 					}
@@ -242,6 +262,8 @@ public class Main {
 					//code block as normal
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
+							decodedBlock[b][l][s] = savedxhat[l][s];
+							xhatSampler.sample(decodedBlock[b][l][s]);
 							if (l == 0 && s == 0) {
 								expGolombZero.encode(savedMappedError[l][s], bos);
 							} else {
@@ -255,12 +277,20 @@ public class Main {
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
 							decodedBlock[b][l][s] = savedPrediction[l][s];
+							xhatSampler.sample(decodedBlock[b][l][s]);
 						}
 					}
 				}
 				
 				//System.out.println("Distortion is: " + distortionAcc + " (block was skipped: " + (distortionAcc <= thres) + ")");
 			}
+			
+			//samplers for testing in verilog/vhdl
+			alphaSampler.export(samplerBaseDir + "alpha.smpl");
+			xhatSampler.export(samplerBaseDir + "xhat.smpl");
+			xmeanSampler.export(samplerBaseDir + "xmean.smpl");
+			xhatmeanSampler.export(samplerBaseDir + "xhatmean.smpl");
+			predictionSampler.export(samplerBaseDir + "prediciton.smpl");
 		}
 		
 		public int findAlpha(long alphaN, long alphaD, long depth) {
