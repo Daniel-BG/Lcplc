@@ -65,7 +65,6 @@ architecture Behavioral of ALPHA_CALC is
 	signal xhatmean_rep_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 			
 	--previous substractor
-	signal previous_stage_joiner_data_0_extended, previous_stage_joiner_data_1_extended: std_logic_vector(DATA_WIDTH downto 0);
 	signal previous_sub_data: std_logic_vector(DATA_WIDTH downto 0);
 	signal previous_sub_valid, previous_sub_ready: std_logic;
 	
@@ -76,10 +75,6 @@ architecture Behavioral of ALPHA_CALC is
 	--current substractor
 	signal current_sub_data: std_logic_vector(DATA_WIDTH downto 0);
 	signal current_sub_valid, current_sub_ready: std_logic;
-	
-	--joiner for alphaN multiplier
-	signal alphan_joiner_valid, alphan_joiner_ready: std_logic;
-	signal alphan_joiner_data_0, alphan_joiner_data_1: std_logic_vector(DATA_WIDTH downto 0);
 	
 	--multiplication outputs
 	signal alphad_mult_data, alphan_mult_data: std_logic_vector(DATA_WIDTH*2 + 1 downto 0);
