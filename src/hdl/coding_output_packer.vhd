@@ -294,7 +294,8 @@ begin
 			SHIFT_WIDTH	=> COUNTER_WIDTH,
 			DATA_WIDTH  => SHIFTED_WIDTH,
 			LEFT	    => true,
-			ARITHMETIC	=> false
+			ARITHMETIC	=> false,
+			BITS_PER_STAGE => 4
 		)
 		Port map ( 
 			clk => clk, rst	=> rst,

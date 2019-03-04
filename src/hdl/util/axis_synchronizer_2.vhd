@@ -8,7 +8,10 @@
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: Synchronize two axis streams into only one. Data outputs are kept separate for ease of use
+-- Description: Synchronize two axis streams into only one. 
+--		Data outputs are kept separate for ease of use
+--		Can select if the control flow is latched (critical path is lower but
+--		resource usage is higher) or not (higher critical path but less resources)
 -- 
 -- Dependencies: None
 -- 
@@ -24,7 +27,8 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity AXIS_SYNCHRONIZER_2 is
 	Generic (
 		DATA_WIDTH_0: integer := 32;
-		DATA_WIDTH_1: integer := 32
+		DATA_WIDTH_1: integer := 32;
+		LATCH: boolean := true
 	);
 	Port (
 		clk, rst: in std_logic;
@@ -44,84 +48,48 @@ entity AXIS_SYNCHRONIZER_2 is
 end AXIS_SYNCHRONIZER_2;
 
 architecture Behavioral of AXIS_SYNCHRONIZER_2 is
-	signal buf_i_0_full, buf_i_1_full, buf_o_0_full, buf_o_1_full: std_logic;
-	signal buf_i_0, buf_o_0: std_logic_vector(DATA_WIDTH_0 - 1 downto 0); 
-	signal buf_i_1, buf_o_1: std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
-	
-	signal input_0_ready_in, input_1_ready_in: std_logic;
-	signal output_valid_in: std_logic;
 begin
 
-	input_0_ready_in <= '1' when buf_i_0_full = '0' or buf_o_0_full = '0' else '0';
-	input_1_ready_in <= '1' when buf_i_1_full = '0' or buf_o_1_full = '0' else '0';
-	input_0_ready <= input_0_ready_in;
-	input_1_ready <= input_1_ready_in;
-	
-	output_valid_in <= '1' when buf_o_0_full = '1' and buf_o_1_full = '1' else '0';
-	output_valid <= output_valid_in;
-	
-	output_data_0 <= buf_o_0;
-	output_data_1 <= buf_o_1;
-	
-	seq: process(clk) 
-	begin
-		if rising_edge(clk) then
-			if rst = '1' then
-				buf_i_0_full <= '0';
-				buf_i_1_full <= '0';
-				buf_o_0_full <= '0';
-				buf_o_1_full <= '0';
-				buf_i_0 <= (others => '0');
-				buf_i_1 <= (others => '0');
-				buf_o_0 <= (others => '0');
-				buf_o_1 <= (others => '0');
-			else
-				--if reading from output
-				if output_valid_in = '1' and output_ready = '1' then
-					--shift first input
-					if input_0_ready_in = '1' and input_0_valid = '1' then
-						buf_o_0 <= input_0_data;
-						buf_o_0_full <= '1';
-					else --shift first value
-						buf_o_0 <= buf_i_0;
-						buf_o_0_full <= buf_i_0_full;
-						--buf_i_0 <= (others => '0');
-						buf_i_0_full <= '0';
-					end if;
-					--shift second input
-					if input_1_ready_in = '1' and input_1_valid = '1' then
-						buf_o_1 <= input_1_data;
-						buf_o_1_full <= '1';
-					else --shift first value
-						buf_o_1 <= buf_i_1;
-						buf_o_1_full <= buf_i_1_full;
-						--buf_i_1 <= (others => '0');
-						buf_i_1_full <= '0';
-					end if;
-				else --not reading from output
-					if input_0_ready_in = '1' and input_0_valid = '1' then
-						--writing to output buffer
-						if buf_o_0_full = '0' then
-							buf_o_0_full <= '1';
-							buf_o_0 <= input_0_data;
-						else --writing to first buffer
-							buf_i_0_full <= '1';
-							buf_i_0 <= input_0_data;
-						end if;
-					end if;
-					if input_1_ready_in = '1' and input_1_valid = '1' then
-						--writing to output buffer
-						if buf_o_1_full = '0' then
-							buf_o_1_full <= '1';
-							buf_o_1 <= input_1_data;
-						else --writing to first buffer
-							buf_i_1_full <= '1';
-							buf_i_1 <= input_1_data;
-						end if;
-					end if;
-				end if;
-			end if;
-		end if;
-	end process;
+	gen_latched_version: if LATCH generate
+		latched_version: entity work.AXIS_SYNCHRONIZER_LATCHED_2
+		generic map (
+				DATA_WIDTH_0 => DATA_WIDTH_0,
+				DATA_WIDTH_1 => DATA_WIDTH_1
+			)
+		port map (
+				clk => clk, rst => rst,
+				input_0_valid => input_0_valid,
+				input_0_ready => input_0_ready,
+				input_0_data  => input_0_data,
+				input_1_valid => input_1_valid,
+				input_1_ready => input_1_ready,
+				input_1_data  => input_1_data,
+				output_valid  => output_valid,
+				output_ready  => output_ready,
+				output_data_0 => output_data_0,
+				output_data_1 => output_data_1
+			);
+	end generate;
+
+	gen_passthrough_version: if not LATCH generate
+		passthrough_version: entity work.AXIS_SYNCHRONIZER_PASSTHROUGH_2
+		generic map (
+				DATA_WIDTH_0 => DATA_WIDTH_0,
+				DATA_WIDTH_1 => DATA_WIDTH_1
+			)
+		port map (
+				clk => clk, rst => rst,
+				input_0_valid => input_0_valid,
+				input_0_ready => input_0_ready,
+				input_0_data  => input_0_data,
+				input_1_valid => input_1_valid,
+				input_1_ready => input_1_ready,
+				input_1_data  => input_1_data,
+				output_valid  => output_valid,
+				output_ready  => output_ready,
+				output_data_0 => output_data_0,
+				output_data_1 => output_data_1
+			);
+	end generate;
 	
 end Behavioral;
