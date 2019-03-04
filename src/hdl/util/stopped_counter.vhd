@@ -20,12 +20,11 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use work.data_types.all;
 use work.functions.all;
 
 entity STOPPED_COUNTER is
 	Generic (
-		STOPS: array_of_integers := (121, 235, 323, 498, 528, 619, 749)
+		STOPS: integer_vector := (121, 235, 323, 498, 528, 619, 749) --vhdl2k8 construct
 	);
 	Port ( 
 		clk, rst	: in  std_logic;
