@@ -89,11 +89,6 @@ architecture Behavioral of ALPHA_CALC is
 	signal alphan_acc_data, alphad_acc_data: std_logic_vector(DATA_WIDTH*2 + 1 + BLOCK_SIZE_LOG downto 0);
 	signal alphan_acc_valid, alphan_acc_ready, alphad_acc_valid, alphad_acc_ready: std_logic;
 	
-	--acc joiner
-	signal alpha_d_n_joiner_valid, alpha_d_n_joiner_ready: std_logic;
-	signal alpha_d_n_joiner_data_0, alpha_d_n_joiner_data_1: std_logic_vector(DATA_WIDTH*2 + 1 + BLOCK_SIZE_LOG downto 0);
-
-	
 begin
 
 	--need repeaters for xmean and xhatmean
@@ -272,26 +267,6 @@ begin
 			output_ready => alphad_acc_ready
 		);
 		
-	--alpha D and N joiner
-	alpha_d_n_joiner: entity work.AXIS_SYNCHRONIZER_2 	
-		Generic map (
-			DATA_WIDTH_0 => DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG,
-			DATA_WIDTH_1 => DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_0_valid => alphan_acc_valid,
-			input_0_ready => alphan_acc_ready,
-			input_0_data  => alphan_acc_data,
-			input_1_valid => alphad_acc_valid,
-			input_1_ready => alphad_acc_ready,
-			input_1_data  => alphad_acc_data,
-			output_valid  => alpha_d_n_joiner_valid,
-			output_ready  => alpha_d_n_joiner_ready,
-			output_data_0 => alpha_d_n_joiner_data_0,
-			output_data_1 => alpha_d_n_joiner_data_1
-		);
-		
 	--alpha calculator
 	alpha_calculation: entity work.ALPHA_FINDER
 		Generic map (
@@ -301,13 +276,15 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_data_alphan => alpha_d_n_joiner_data_0,
-			input_data_alphad => alpha_d_n_joiner_data_1,
-			input_ready => alpha_d_n_joiner_ready,
-			input_valid => alpha_d_n_joiner_valid,
-			output_data => alpha_data,
-			output_ready => alpha_ready,
-			output_valid => alpha_valid
+			alphan_data 	=> alphan_acc_data,
+			alphan_ready 	=> alphan_acc_ready,
+			alphan_valid 	=> alphan_acc_valid,
+			alphad_data 	=> alphad_acc_data,
+			alphad_ready 	=> alphad_acc_ready,
+			alphad_valid 	=> alphad_acc_valid,
+			output_data 	=> alpha_data,
+			output_ready 	=> alpha_ready,
+			output_valid 	=> alpha_valid
 		);
 
 end Behavioral;
