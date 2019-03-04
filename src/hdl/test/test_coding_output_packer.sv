@@ -38,7 +38,7 @@ module test_coding_output_packer;
 	wire gen_1_valid, gen_1_ready;
 	wire[DATA_WIDTH_1-1:0] gen_1_data;
 
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_0), .START_AT(1)) GEN_0
+	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_0), .START_AT(1), .END_AT(39)) GEN_0
 		(
 			.clk(clk), .rst(rst), .enable(generator_0_enable),
 			.output_valid(gen_0_valid),
@@ -46,7 +46,7 @@ module test_coding_output_packer;
 			.output_ready(gen_0_ready)
 		);
 		
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_1), .START_AT(1), .END_AT(5)) GEN_1
+	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_1), .START_AT(1), .END_AT(39)) GEN_1
 		(
 			.clk(clk), .rst(rst), .enable(generator_1_enable),
 			.output_valid(gen_1_valid),
