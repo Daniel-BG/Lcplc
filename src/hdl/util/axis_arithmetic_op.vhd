@@ -34,7 +34,8 @@ entity AXIS_ARITHMETIC_OP is
 		IS_ADD: boolean := true;
 		SIGN_EXTEND_0	: boolean := true;
 		SIGN_EXTEND_1	: boolean := true;
-		SIGNED_OP		: boolean := true
+		SIGNED_OP		: boolean := true;
+		LATCH_INPUT_SYNC: boolean := true
 	);
 	Port(
 		clk, rst: in std_logic;
@@ -69,7 +70,8 @@ begin
 	data_joiner: entity work.AXIS_SYNCHRONIZER_2
 		generic map (
 			DATA_WIDTH_0 => DATA_WIDTH_0,
-			DATA_WIDTH_1 => DATA_WIDTH_1
+			DATA_WIDTH_1 => DATA_WIDTH_1,
+			LATCH 		 => LATCH_INPUT_SYNC
 		)
 		port map (
 			clk => clk, rst => rst,

@@ -1,8 +1,12 @@
+use work.data_types.all;
+
 package FUNCTIONS is
 	--headers
 	function bits(invalue: integer) return integer;
 	function minval(a, b: integer) return integer;
 	function maxval(a, b: integer) return integer;
+	function sum(a: array_of_integers) return integer;
+	function partsum(a: array_of_integers; numelems: integer) return integer;
 	
 end FUNCTIONS;
 
@@ -36,5 +40,23 @@ package body FUNCTIONS is
 		else
 			return b;
 		end if;
+	end function;
+
+	function sum(a: array_of_integers) return integer is
+		variable res: integer := 0;
+	begin
+		for i in a'low to a'high loop
+			res := res + a(i);
+		end loop;
+		return res;
+	end function;
+	
+	function partsum(a: array_of_integers; numelems: integer) return integer is
+		variable res: integer := 0;
+	begin
+		for i in a'low to a'low + numelems - 1 loop
+			res := res + a(i);
+		end loop;
+		return res;
 	end function;
 end FUNCTIONS;

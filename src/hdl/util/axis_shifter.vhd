@@ -31,7 +31,8 @@ entity AXIS_SHIFTER is
 		DATA_WIDTH	: integer := 69;
 		BITS_PER_STAGE: integer := 7;
 		LEFT		: boolean := true;
-		ARITHMETIC	: boolean := false
+		ARITHMETIC	: boolean := false;
+		LATCH_INPUT_SYNC: boolean := true
 	);
 	Port ( 
 		clk, rst		: in	std_logic;
@@ -71,7 +72,11 @@ architecture Behavioral of AXIS_SHIFTER is
 begin
 
 	sync_inputs: entity work.AXIS_SYNCHRONIZER_2
-		Generic map (DATA_WIDTH_0 => SHIFT_WIDTH, DATA_WIDTH_1 => DATA_WIDTH)
+		Generic map (
+			DATA_WIDTH_0 => SHIFT_WIDTH, 
+			DATA_WIDTH_1 => DATA_WIDTH,
+			LATCH 		 => LATCH_INPUT_SYNC
+		)
 		Port map (
 			clk => clk, rst => rst,
 			input_0_valid => shift_valid,

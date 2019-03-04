@@ -51,8 +51,9 @@ entity AXIS_MERGER is
 end AXIS_MERGER;
 
 architecture Behavioral of AXIS_MERGER is
-	signal counter_zero_enable, counter_zero_saturating: std_logic;
-	signal counter_one_enable, counter_one_saturating: std_logic;
+	signal counter_enable: std_logic;
+	signal counter_zero_saturating, counter_one_saturating: std_logic;
+	signal saturating: std_logic_vector(1 downto 0);
 	
 	type merger_state_t is (READING_PORT_ZERO, READING_PORT_ONE, READING_PORT_TWO);
 	signal state_curr, state_next: merger_state_t;
@@ -60,28 +61,21 @@ architecture Behavioral of AXIS_MERGER is
 	signal rst_or_clear: std_logic;
 	
 begin
-
 	rst_or_clear <= rst or clear;
 
-	counter_zero: entity work.COUNTER
-		generic map (
-			COUNT => FROM_PORT_ZERO
+	--counters
+	counters: entity work.STOPPED_COUNTER
+		Generic map (
+			STOPS => (FROM_PORT_ZERO, FROM_PORT_ONE)
 		)
 		Port map (
 			clk => clk, rst => rst_or_clear,
-			enable => counter_zero_enable,
-			saturating => counter_zero_saturating
+			enable => counter_enable,
+			saturating => saturating
 		);
 
-	counter_one: entity work.COUNTER
-		generic map (
-			COUNT => FROM_PORT_ONE
-		)
-		Port map (
-			clk => clk, rst => rst_or_clear,
-			enable => counter_one_enable,
-			saturating => counter_one_saturating
-		);
+	counter_zero_saturating <= saturating(0);
+	counter_one_saturating  <= saturating(1);
 
 	seq: process(clk)
 	begin
@@ -100,8 +94,7 @@ begin
 		output_ready, counter_zero_saturating, counter_one_saturating)
 	begin
 		state_next <= state_curr;
-		counter_zero_enable <= '0';
-		counter_one_enable <= '0';
+		counter_enable <= '0';
 
 		input_0_ready <= '0';
 		input_1_ready <= '0';
@@ -114,7 +107,7 @@ begin
 			output_valid  <= input_0_valid;
 			output_data   <= input_0_data;
 			if input_0_valid = '1' and output_ready = '1' then
-				counter_zero_enable <= '1';
+				counter_enable <= '1';
 				if counter_zero_saturating = '1' then
 					state_next <= READING_PORT_ONE;
 				end if;
@@ -124,7 +117,7 @@ begin
 			output_valid  <= input_1_valid;
 			output_data   <= input_1_data;
 			if input_1_valid = '1' and output_ready = '1' then
-				counter_one_enable <= '1';
+				counter_enable <= '1';
 				if counter_one_saturating = '1' then
 					state_next <= READING_PORT_TWO;
 				end if;

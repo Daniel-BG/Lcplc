@@ -48,30 +48,25 @@ architecture Behavioral of AXIS_COMBINER is
 	
 	signal read_from_zero, read_from_zero_next: boolean;
 	
-	signal counter_zero_enable, counter_zero_saturating: std_logic;
-	signal counter_one_enable, counter_one_saturating: std_logic;
+	signal counter_enable: std_logic;
+	signal counter_zero_saturating, counter_one_saturating: std_logic;
+
+	signal saturating: std_logic_vector(1 downto 0);
 	
 begin
 
-	counter_zero: entity work.COUNTER 
+	--counters
+	counters: entity work.STOPPED_COUNTER
 		Generic map (
-			COUNT => FROM_PORT_ZERO
+			STOPS => (FROM_PORT_ZERO, FROM_PORT_ONE)
 		)
-		Port map ( 
-			clk => clk, rst	=> rst,
-			enable		=> counter_zero_enable,
-			saturating	=> counter_zero_saturating
+		Port map (
+			clk => clk, rst => rst,
+			enable => counter_enable,
+			saturating => saturating
 		);
-
-	counter_one: entity work.COUNTER 
-		Generic map (
-			COUNT => FROM_PORT_ONE
-		)
-		Port map ( 
-			clk => clk, rst	=> rst,
-			enable		=> counter_one_enable,
-			saturating	=> counter_one_saturating
-		);
+	counter_zero_saturating <= saturating(0);
+	counter_one_saturating  <= saturating(1);
 
 	input_0_ready <= output_ready when read_from_zero else '0';
 	input_1_ready <= output_ready when not read_from_zero else '0';
@@ -94,20 +89,19 @@ begin
 	
 	comb: process(input_0_valid, output_ready, input_1_valid, read_from_zero, counter_zero_saturating, counter_one_saturating)
 	begin
-		counter_zero_enable <= '0';
-		counter_one_enable <= '0';
+		counter_enable <= '0';
 		read_from_zero_next <= read_from_zero;
 		
 		if read_from_zero then
 			if input_0_valid = '1' and output_ready = '1' then
-				counter_zero_enable <= '1';
+				counter_enable <= '1';
 				if counter_zero_saturating = '1' then
 					read_from_zero_next <= false;
 				end if;
 			end if;
 		elsif not read_from_zero then
 			if input_1_valid = '1' and output_ready = '1' then
-				counter_one_enable <= '1';
+				counter_enable <= '1';
 				if counter_one_saturating = '1' then
 					read_from_zero_next <= true;
 				end if;

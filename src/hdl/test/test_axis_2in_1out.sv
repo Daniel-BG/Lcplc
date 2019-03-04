@@ -25,9 +25,9 @@ module test_axis_2in_1out;
 	parameter DATA_WIDTH_1=6;
 	parameter OUT_WIDTH=40; //DATA_WIDTH_0+DATA_WIDTH_1;
 	parameter PERIOD=10;
-	parameter USE_JOINER=1;
+	parameter USE_JOINER=0;
 	parameter USE_FILTER=0;
-	parameter USE_COMBINER=0;
+	parameter USE_COMBINER=1;
 	parameter USE_SHIFTER=0;
 	parameter ELIMINATE_ON_UP=1;
 	

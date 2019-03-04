@@ -90,7 +90,8 @@ begin
 	synchronizer: entity work.AXIS_SYNCHRONIZER_2
 		Generic map (
 			DATA_WIDTH_0 => FULL_INPUT_WIDTH,
-			DATA_WIDTH_1 => POSITION_WIDTH
+			DATA_WIDTH_1 => POSITION_WIDTH,
+			LATCH		 => false
 		)
 		Port map (
 			clk => clk, rst => rst,

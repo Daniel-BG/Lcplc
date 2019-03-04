@@ -48,28 +48,28 @@ architecture Behavioral of AXIS_SEPARATOR is
 	type separator_state_t is (PORT_ZERO, PORT_ONE);
 	signal state_curr, state_next: separator_state_t;
 	
-	signal counter_zero_saturating, counter_zero_enable: std_logic;
-	signal counter_one_saturating, counter_one_enable: std_logic;
+	signal counter_zero_saturating: std_logic;
+	signal counter_one_saturating: std_logic;
+	signal saturating: std_logic_vector(1 downto 0);
+
+	signal counter_enable: std_logic;
 begin
+	output_0_data <= input_data;
+	output_1_data <= input_data;
+
 	--counters
-	counter_zero: entity work.COUNTER
+	counters: entity work.STOPPED_COUNTER
 		Generic map (
-			COUNT => TO_PORT_ZERO
+			STOPS => (TO_PORT_ZERO, TO_PORT_ONE)
 		)
-		Port map ( 
-			clk => clk, rst	=> rst,
-			enable 		=> counter_zero_enable,
-			saturating	=> counter_zero_saturating
+		Port map (
+			clk => clk, rst => rst,
+			enable => counter_enable,
+			saturating => saturating
 		);
-	counter_one: entity work.COUNTER
-		Generic map (
-			COUNT => TO_PORT_ONE
-		)
-		Port map ( 
-			clk => clk, rst	=> rst,
-			enable 		=> counter_one_enable,
-			saturating	=> counter_one_saturating
-		);
+
+	counter_zero_saturating <= saturating(0);
+	counter_one_saturating  <= saturating(1);
 
 	seq: process(clk)
 	begin
@@ -82,14 +82,10 @@ begin
 		end if;
 	end process;
 	
-	output_0_data <= input_data;
-	output_1_data <= input_data;
-	
 	comb: process(state_curr, output_0_ready, output_1_ready, input_valid, counter_zero_saturating, counter_one_saturating)
 	begin
 		state_next <= state_curr;
-		counter_one_enable <= '0';
-		counter_zero_enable <= '0';
+		counter_enable <= '0';
 		
 		if state_curr = PORT_ZERO then
 			input_ready <= output_0_ready;
@@ -97,7 +93,7 @@ begin
 			output_1_valid <= '0';
 			--check if a transaction is made
 			if input_valid = '1' and output_0_ready = '1' then
-				counter_zero_enable <= '1';
+				counter_enable <= '1';
 				if counter_zero_saturating = '1' then
 					state_next <= PORT_ONE;
 				end if;
@@ -108,7 +104,7 @@ begin
 			output_0_valid <= '0';
 			--check if a transaction is made
 			if input_valid = '1' and output_1_ready = '1' then
-				counter_one_enable <= '1';
+				counter_enable <= '1';
 				if counter_one_saturating = '1' then
 					state_next <= PORT_ZERO;
 				end if;

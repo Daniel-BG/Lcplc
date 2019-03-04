@@ -24,10 +24,10 @@ module test_axis_3in_1out;
 	parameter PERIOD = 10;
 	parameter DATA_WIDTH_0 = 16;
 	parameter DATA_WIDTH_1 = 16;
-	parameter DATA_WIDTH_2 = 1;
+	parameter DATA_WIDTH_2 = 16; //1;
 	parameter OUT_WIDTH = 16;
-	parameter USE_MER=0;
-	parameter USE_SEL=1;
+	parameter USE_MER=1;
+	parameter USE_SEL=0;
 
 	////////////////////////////////////////
 	// MAIN CONTROL 					  //
