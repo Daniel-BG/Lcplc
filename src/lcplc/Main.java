@@ -138,14 +138,18 @@ public class Main {
 			Sampler<Long> 	 alphadSampler		= new Sampler<Long>();
 			Sampler<Integer> xSampler			= new Sampler<Integer>();
 			Sampler<Integer> xhatSampler 		= new Sampler<Integer>();
+			Sampler<Integer> xhatrawSampler 	= new Sampler<Integer>();
 			Sampler<Long>    xmeanSampler		= new Sampler<Long>();
 			Sampler<Long>    xhatmeanSampler	= new Sampler<Long>();
 			Sampler<Integer> predictionSampler	= new Sampler<Integer>();
+			Sampler<Integer> mappedErrorSampler = new Sampler<Integer>();
+			Sampler<Integer> kjSampler			= new Sampler<Integer>();
+			Sampler<Integer> xtildeSampler		= new Sampler<Integer>();
+			Sampler<Integer> dFlagSampler		= new Sampler<Integer>();
+			
 			Sampler<Long>	 samplerHelper1		= new Sampler<Long>();
 			Sampler<Long>	 samplerHelper2		= new Sampler<Long>();
-			Sampler<Long>	 samplerHelper3		= new Sampler<Long>();
-		
-			
+			Sampler<Long>	 samplerHelper3		= new Sampler<Long>();			
 			
 			int[][][] decodedBlock = new int[bands][lines][samples];
 			
@@ -161,32 +165,42 @@ public class Main {
 					xSampler.sample(block[0][l][s]);
 					//First sample is just coded raw since we have not initialized
 					//the counters/accumulators/predictors yet
+					int mappedError;
+					int prediction;
 					if (l == 0 && s == 0) {
 						expGolombZero.encode(block[0][l][s], bos);
 						
+						mappedError = block[0][l][s];
+						prediction = 0;
+						
 						decodedBlock[0][l][s] = block[0][l][s];
-						xhatSampler.sample(decodedBlock[0][l][s]);
 						acc.add(0);
-						predictionSampler.sample(0);
 					//For every other sample, code following
 					//the predictive scheme
 					} else {
-						int prediction = Predictor.basic2DPrediction(decodedBlock[0], l, s);
-						predictionSampler.sample(prediction);
+						prediction = Predictor.basic2DPrediction(decodedBlock[0], l, s);
+						
 						
 						int error = block[0][l][s] - (int) prediction;
 						int qErr  = iutq.quantize(error);
 						error 	  = iutq.dequantize(qErr);
 						decodedBlock[0][l][s] = (int) prediction + error;
-						xhatSampler.sample(decodedBlock[0][l][s]);
+
 						
 						int kj = findkj(acc);
+						kjSampler.sample(kj);
 						
 						//code mapped error
-						int mappedError = Mapper.mapError(qErr);
+						mappedError = Mapper.mapError(qErr);
 						golombCoDec.encode(kj, mappedError, bos);	//encode the error
 						acc.add(Math.abs(error));		//update Rj after coding
 					}
+					
+					xtildeSampler.sample(prediction);
+					predictionSampler.sample(prediction);
+					mappedErrorSampler.sample(mappedError);
+					xhatSampler.sample(decodedBlock[0][l][s]);
+					xhatrawSampler.sample(decodedBlock[0][l][s]);
 				}
 			}
 			
@@ -243,13 +257,10 @@ public class Main {
 				int[][] savedxhat = new int[lines][samples];
 				for (int l = 0; l < lines; l++) {
 					for (int s = 0; s < samples; s++) {
-						xSampler.sample(block[b][l][s]);
 						long prediction = muScaled + (((decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled)>>alphaScaleVal);
-						
-						predictionSampler.sample((int) prediction);
 						savedPrediction[l][s] = (int) prediction;
-						int error = band[l][s] - (int) prediction;
 						
+						int error = band[l][s] - (int) prediction;
 						distortionAcc += error*error;
 						
 						//quantize error and replace it with the
@@ -257,20 +268,31 @@ public class Main {
 						//the decoder will have
 						int qErr  = iutq.quantize((int) error);
 						error 	  = iutq.dequantize(qErr);
-
 						long mappedError = Mapper.mapError(qErr);
 						savedMappedError[l][s] = (int) mappedError;
-						if (l != 0 || s != 0) {
-							savedGolombParam[l][s] = findkj(acc);
-						}
 						
 						savedxhat[l][s] = (int) prediction + (int) error;
 						
+						if (l != 0 || s != 0) {
+							savedGolombParam[l][s] = findkj(acc);
+							kjSampler.sample(savedGolombParam[l][s]);
+						}
 						acc.add(Math.abs(error));		//update Rj after coding
+						
+
+						
+						
+						xSampler.sample(block[b][l][s]);
+						xtildeSampler.sample((int) prediction);
+						predictionSampler.sample((int) prediction);
+						
+						mappedErrorSampler.sample((int)mappedError);
+						xhatrawSampler.sample(savedxhat[l][s]);
 					}
 				}
 				
 				if (distortionAcc > thres) {
+					dFlagSampler.sample(1);
 					bos.writeBit(Bit.BIT_ONE);
 					//code block as normal
 					for (int l = 0; l < lines; l++) {
@@ -285,6 +307,7 @@ public class Main {
 						}
 					}
 				} else {
+					dFlagSampler.sample(0);
 					bos.writeBit(Bit.BIT_ZERO);
 					//skip block
 					for (int l = 0; l < lines; l++) {
@@ -303,10 +326,15 @@ public class Main {
 			alphanSampler.export(samplerBaseDir + "alphan.smpl");
 			alphadSampler.export(samplerBaseDir + "alphad.smpl");
 			xhatSampler.export(samplerBaseDir + "xhat.smpl");
+			xhatrawSampler.export(samplerBaseDir + "xhatraw.smpl");
 			xmeanSampler.export(samplerBaseDir + "xmean.smpl");
 			xhatmeanSampler.export(samplerBaseDir + "xhatmean.smpl");
 			predictionSampler.export(samplerBaseDir + "prediction.smpl");
 			xSampler.export(samplerBaseDir + "x.smpl");
+			mappedErrorSampler.export(samplerBaseDir + "merr.smpl");
+			kjSampler.export(samplerBaseDir + "kj.smpl");
+			xtildeSampler.export(samplerBaseDir + "xtilde.smpl");
+			dFlagSampler.export(samplerBaseDir + "dflag.smpl");
 			samplerHelper1.export(samplerBaseDir + "helper1.smpl");
 			samplerHelper2.export(samplerBaseDir + "helper2.smpl");
 			samplerHelper3.export(samplerBaseDir + "helper3.smpl");

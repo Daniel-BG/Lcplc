@@ -25,10 +25,11 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity AXIS_SUBSTITUTER is
 	Generic (
 		DATA_WIDTH: integer := 32;
-		INVALID_TRANSACTIONS: integer := 1
+		INVALID_TRANSACTIONS: integer := 1;
+		VALID_TRANSACTIONS: integer := 255
 	);
 	Port (
-		clk, rst, clear: in std_logic;
+		clk, rst: in std_logic;
 		input_ready:	out	std_logic;
 		input_valid:	in	std_logic;
 		input_data: 	in	std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -43,27 +44,29 @@ architecture Behavioral of AXIS_SUBSTITUTER is
 	type filter_state_t is (VALID, INVALID);
 	signal state_curr, state_next: filter_state_t;
 
-	signal counter_saturating, counter_enable: std_logic;
+	signal counter_saturating: std_logic_vector(1 downto 0);
+	signal counter_enable: std_logic;
+	signal counter_saturating_invalid, counter_saturating_valid: std_logic;
 
-	signal rst_or_clear: std_logic;
 begin
 
-	rst_or_clear <= rst or clear;
 
-	counter: entity work.COUNTER
+	counter: entity work.STOPPED_COUNTER
 		Generic map (
-			COUNT => INVALID_TRANSACTIONS
+			STOPS => (INVALID_TRANSACTIONS, VALID_TRANSACTIONS)
 		)
 		Port map ( 
-			clk => clk, rst	=> rst_or_clear,
+			clk => clk, rst	=> rst,
 			enable		=> counter_enable,
 			saturating	=> counter_saturating
 		);
+	counter_saturating_invalid <= counter_saturating(0);
+	counter_saturating_valid   <= counter_saturating(1);
 
 	seq: process(clk)
 	begin
 		if rising_edge(clk) then
-			if rst_or_clear = '1' then
+			if rst = '1' then
 				state_curr <= INVALID;
 			else
 				state_curr <= state_next;
@@ -81,12 +84,19 @@ begin
 		
 		if state_curr = VALID then
 			output_data <= input_data;
+			--check for transaction (only on input, output is disconnected)
+			if input_valid = '1' and output_ready = '1' then
+				counter_enable <= '1';
+				if counter_saturating_valid = '1' then
+					state_next <= INVALID;
+				end if;
+			end if;
 		elsif state_curr = INVALID then
 			output_data <= input_sub;
 			--check for transaction (only on input, output is disconnected)
 			if input_valid = '1' and output_ready = '1' then
 				counter_enable <= '1';
-				if counter_saturating = '1' then
+				if counter_saturating_invalid = '1' then
 					state_next <= VALID;
 				end if;
 			end if;

@@ -33,6 +33,7 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity ERROR_CALC is
 	Generic (
+		BANDS: positive := 224;
 		DATA_WIDTH: positive := 16;
 		BLOCK_SIZE_LOG: positive := 8;
 		ACC_LOG: positive := 5;
@@ -42,13 +43,12 @@ entity ERROR_CALC is
 	);
 	Port (
 		clk, rst		: in  std_logic;
-		clear			: in  std_logic;
-		--input x, xhat, xmean, xhatmean, alpha
-		--x is the original value
-		--prediction is the predicted value
+		--original samples (all included)
 		x_valid			: in  std_logic;
 		x_ready			: out std_logic;
 		x_data			: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		--all predictions (from both the first layer predictor and the second layer)
+		--prediction for first sample included (will be inserted by the first layer predictor)
 		prediction_ready: out std_logic;
 		prediction_valid: in std_logic;
 		prediction_data : in std_logic_vector(DATA_WIDTH + 2 downto 0);
@@ -466,10 +466,11 @@ begin
 	substituter: entity work.AXIS_SUBSTITUTER	
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
-			INVALID_TRANSACTIONS => 1
+			INVALID_TRANSACTIONS => 1,
+			VALID_TRANSACTIONS => BANDS - 1
 		)
 		Port map (
-			clk => clk, rst => rst, clear => clear,
+			clk => clk, rst => rst,
 			input_ready		=> error_unquant_splitter_ready_1,
 			input_valid		=> error_unquant_splitter_valid_1,
 			input_data		=> error_unquant_splitter_data_1,
