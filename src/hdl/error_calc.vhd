@@ -467,7 +467,7 @@ begin
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
 			INVALID_TRANSACTIONS => 1,
-			VALID_TRANSACTIONS => BANDS - 1
+			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG*BANDS - 1
 		)
 		Port map (
 			clk => clk, rst => rst,

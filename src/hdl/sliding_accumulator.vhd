@@ -50,7 +50,7 @@ architecture Behavioral of SLIDING_ACCUMULATOR  is
 	signal accumulator, accumulator_next: std_logic_vector(DATA_WIDTH + ACC_LOG - 1 downto 0);
 
 	signal counter, counter_next: natural range 0 to 2**ACC_LOG;
-	signal reset_counter, reset_counter_next: natural range 0 to 2**BLOCK_SIZE_LOG - 1;
+	signal reset_counter, reset_counter_next: natural range 0 to 2**BLOCK_SIZE_LOG;
 
 	--input queue signals
 	signal write_en, read_en: std_logic;
@@ -110,7 +110,7 @@ begin
 		elsif state_curr = PRIMED then
 			output_valid <= '1';
 			if output_ready = '1' then
-				if reset_counter = 2**BLOCK_SIZE_LOG - 1 then
+				if reset_counter = 2**BLOCK_SIZE_LOG then
 					state_next <= EMPTYING;
 				else
 					input_ready <= '1';
