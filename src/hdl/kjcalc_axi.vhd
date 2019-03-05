@@ -110,7 +110,7 @@ begin
 	calc_kj: process(rj_shifted_latch)
 		variable kj_tmp: std_logic_vector(ACC_LOG - 1 downto 0);
 	begin
-		kj_tmp := (others => '0');
+		kj_tmp := std_logic_vector(to_unsigned(1, ACC_LOG));
 		for i in DATA_WIDTH + ACC_LOG - 1 downto 0 loop
 			if rj_shifted_latch(i) = '1' then
 				kj_tmp := std_logic_vector(to_unsigned(i+1, ACC_LOG));

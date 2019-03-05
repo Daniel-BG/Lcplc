@@ -140,7 +140,7 @@ architecture Behavioral of ERROR_CALC is
 	signal mapped_error_data_raw:	std_logic_vector (PREDICTION_WIDTH downto 0);
 	
 	--substituter for first sample
-	signal error_acc_in_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0); 
+	signal error_acc_in_data, error_acc_in_data_pre: std_logic_vector(PREDICTION_WIDTH - 1 downto 0); 
 	signal error_acc_in_valid, error_acc_in_ready: std_logic;
 	
 	--error sliding accumulator
@@ -477,18 +477,21 @@ begin
 			input_sub		=> (others => '0'),
 			output_ready    => error_acc_in_ready,
 			output_valid	=> error_acc_in_valid,
-			output_data		=> error_acc_in_data
+			output_data		=> error_acc_in_data_pre
 		);
 	
+	error_acc_in_data <= error_acc_in_data_pre when error_acc_in_data_pre(error_acc_in_data_pre'high) = '0' else 
+		std_logic_vector(-signed(error_acc_in_data_pre));
 	--sliding accumulator for kj finding
 	error_acc: entity work.SLIDING_ACCUMULATOR
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
+			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
 			ACC_LOG => ACC_LOG
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input => error_acc_in_data, 
+			input_data => error_acc_in_data, 
 			input_valid => error_acc_in_valid,
 			input_ready => error_acc_in_ready,
 			output_cnt => error_acc_cnt, 

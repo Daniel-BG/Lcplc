@@ -196,6 +196,9 @@ public class Main {
 						acc.add(Math.abs(error));		//update Rj after coding
 					}
 					
+					samplerHelper3.sample(acc.getRunningSum());
+					samplerHelper3.sample((long) acc.getRunningCount());
+					
 					xtildeSampler.sample(prediction);
 					predictionSampler.sample(prediction);
 					mappedErrorSampler.sample(mappedError);
@@ -279,7 +282,8 @@ public class Main {
 						}
 						acc.add(Math.abs(error));		//update Rj after coding
 						
-
+						samplerHelper3.sample(acc.getRunningSum());
+						samplerHelper3.sample((long) acc.getRunningCount());
 						
 						
 						xSampler.sample(block[b][l][s]);
@@ -373,21 +377,21 @@ public class Main {
 		
 		
 		public int findkj(Accumulator acc) {
-			int Rj = (int) acc.getRunningSum();		//running count of last (at most) 32 mapped errors
+			/*int Rj = (int) acc.getRunningSum();		//running count of last (at most) 32 mapped errors
 			int J  =       acc.getRunningCount();	//number of samples to average out for golomb param calculation			
 			int kj;									//will be the golomb parameter to code current mapped error
 			for (kj = 0; (J<<kj) <= Rj; kj++);		//calculate kj
 			
-			return kj;
+			return kj;*/
 			
 
 			
-			/*int Rj = (int) acc.getRunningSum();	//running count of last (at most) 32 mapped errors
+			int Rj = (int) acc.getRunningSum();	//running count of last (at most) 32 mapped errors
 			int J  =       acc.getRunningCount();	//number of samples to average out for golomb param calculation			
 			int kj = Utils.countBitsOf(J);
 			kj = Rj >> kj;
 			kj = Utils.countBitsOf(kj) + 1;
-			return kj;*/
+			return kj;
 		}
 		
 		
