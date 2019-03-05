@@ -1,10 +1,10 @@
 TO DO
 
 --test big module
-	*--test alpha calc
-		*--test alpha finder
+	*--test nthband predictor
 
-	--test nthband predictor
+	--test alpha calc
+		--test alpha finder
 
 	--test error calc
 		--test error mapper

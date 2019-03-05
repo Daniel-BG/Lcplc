@@ -134,6 +134,9 @@ public class Main {
 		public void compress(int[][][] block, int bands, int lines, int samples, BitOutputStream bos) throws IOException {
 			//samplers for testing in verilog/vhdl
 			Sampler<Integer> alphaSampler		= new Sampler<Integer>();
+			Sampler<Long> 	 alphanSampler		= new Sampler<Long>();
+			Sampler<Long> 	 alphadSampler		= new Sampler<Long>();
+			Sampler<Integer> xSampler			= new Sampler<Integer>();
 			Sampler<Integer> xhatSampler 		= new Sampler<Integer>();
 			Sampler<Long>    xmeanSampler		= new Sampler<Long>();
 			Sampler<Long>    xhatmeanSampler	= new Sampler<Long>();
@@ -155,6 +158,7 @@ public class Main {
 			int[][] band = block[0];
 			for (int l = 0; l < lines; l++) {
 				for (int s = 0; s < samples; s++) {
+					xSampler.sample(block[0][l][s]);
 					//First sample is just coded raw since we have not initialized
 					//the counters/accumulators/predictors yet
 					if (l == 0 && s == 0) {
@@ -207,6 +211,8 @@ public class Main {
 				long simpleAlphaDacc = 0;
 				for (int l = 0; l < lines; l++) {
 					for (int s = 0; s < samples; s++) {
+						samplerHelper1.sample(decodedBlock[b-1][l][s] - prevAcc/sampleCnt);
+						samplerHelper2.sample(band[l][s] 			  - currAcc/sampleCnt);
 						simpleAlphaNacc += (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*(band[l][s] 			  - currAcc/sampleCnt);
 						simpleAlphaDacc += (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*(decodedBlock[b-1][l][s] - prevAcc/sampleCnt);
 					}
@@ -215,6 +221,8 @@ public class Main {
 				//allocate 10 bits for alpha (when using it we need to divide by 512
 				//to stay in the [0, 2) range
 				int simpleAlphaScaled = findAlpha(simpleAlphaNacc, simpleAlphaDacc, 10);
+				alphanSampler.sample(simpleAlphaNacc);
+				alphadSampler.sample(simpleAlphaDacc);
 				alphaSampler.sample(simpleAlphaScaled);
 				long alphaScaleVal = 9; //512;
 				//mu is 16 bits wide, and should stay that way since we are averaging 16-bit values
@@ -235,6 +243,7 @@ public class Main {
 				int[][] savedxhat = new int[lines][samples];
 				for (int l = 0; l < lines; l++) {
 					for (int s = 0; s < samples; s++) {
+						xSampler.sample(block[b][l][s]);
 						long prediction = muScaled + (((decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled)>>alphaScaleVal);
 						
 						predictionSampler.sample((int) prediction);
@@ -291,19 +300,36 @@ public class Main {
 			
 			//samplers for testing in verilog/vhdl
 			alphaSampler.export(samplerBaseDir + "alpha.smpl");
+			alphanSampler.export(samplerBaseDir + "alphan.smpl");
+			alphadSampler.export(samplerBaseDir + "alphad.smpl");
 			xhatSampler.export(samplerBaseDir + "xhat.smpl");
 			xmeanSampler.export(samplerBaseDir + "xmean.smpl");
 			xhatmeanSampler.export(samplerBaseDir + "xhatmean.smpl");
 			predictionSampler.export(samplerBaseDir + "prediction.smpl");
+			xSampler.export(samplerBaseDir + "x.smpl");
 			samplerHelper1.export(samplerBaseDir + "helper1.smpl");
 			samplerHelper2.export(samplerBaseDir + "helper2.smpl");
 			samplerHelper3.export(samplerBaseDir + "helper3.smpl");
 		}
 		
 		public int findAlpha(long alphaN, long alphaD, long depth) {
+			//resize alphas to make sure division of small numbers still yields an acceptable result
+			alphaN <<= depth;
+			alphaD <<= depth;
+			
 			//find alpha in [0, 2**depth) such that alphaD*alpha>>(depth-1) is closest to alphaN (in absolute value)
-			long difference = Long.MAX_VALUE;
-			int result = -1;
+			
+			int result = 0;
+			for (int i = 0; i < depth; i++) {
+				result <<= 1;
+				if (alphaN >= alphaD) {
+					alphaN -= alphaD;
+					result += 1;
+				}
+				alphaD >>= 1;
+			}
+			
+			/*long difference = Long.MAX_VALUE;
 			int alphaRange = 1 << depth;
 			for (int i = 0; i < alphaRange; i++) {
 				long candidate = (alphaD*i)>>(depth-1);
@@ -312,7 +338,7 @@ public class Main {
 					difference = localDiff;
 					result = i;
 				}
-			}
+			}*/
 			//System.out.println("Diff is: " + difference);
 			return result;
 		}

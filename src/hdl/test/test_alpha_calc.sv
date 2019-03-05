@@ -19,6 +19,8 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
+`include "test_shared.svh"
+
 module test_alpha_calc;
 
 	parameter DATA_WIDTH=16;
@@ -61,7 +63,6 @@ module test_alpha_calc;
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
-		#(PERIOD/2)
 		rst = 0;
 		gen_x_enable = 1;
 		gen_xhat_enable = 1;
@@ -70,7 +71,7 @@ module test_alpha_calc;
 		drain_alpha_enable = 1;
 	end
 	
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH), .START_AT(512)) GEN_x
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X), .SKIP(2**BLOCK_SIZE_LOG)) GEN_x
 		(
 			.clk(clk), .rst(rst), .enable(gen_x_enable),
 			.output_valid(x_valid),
@@ -78,7 +79,7 @@ module test_alpha_calc;
 			.output_ready(x_ready)
 		);
 		
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH), .START_AT(256), .STEP(2)) GEN_xhat
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XHAT)) GEN_xhat
 		(
 			.clk(clk), .rst(rst), .enable(gen_xhat_enable),
 			.output_valid(xhat_valid),
@@ -86,7 +87,7 @@ module test_alpha_calc;
 			.output_ready(xhat_ready)
 		);
 
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH), .START_AT(640), .STEP(256)) GEN_xmean
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XMEAN)) GEN_xmean
 		(
 			.clk(clk), .rst(rst), .enable(gen_xmean_enable),
 			.output_valid(xmean_valid),
@@ -94,7 +95,7 @@ module test_alpha_calc;
 			.output_ready(xmean_ready)
 		);
 
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH), .START_AT(384), .STEP(512)) GEN_xhatmean
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XHATMEAN)) GEN_xhatmean
 		(
 			.clk(clk), .rst(rst), .enable(gen_xhatmean_enable),
 			.output_valid(xhatmean_valid),
@@ -103,7 +104,7 @@ module test_alpha_calc;
 		);
 
 	
-	helper_axis_drain #(.DATA_WIDTH(ALPHA_WIDTH)) DRAIN
+	helper_axis_checker #(.DATA_WIDTH(ALPHA_WIDTH), .FILE_NAME(`GOLDEN_ALPHA)) DRAIN
 		(
 			.clk(clk), .rst(rst), .enable(drain_alpha_enable),
 			.input_valid(alpha_valid),

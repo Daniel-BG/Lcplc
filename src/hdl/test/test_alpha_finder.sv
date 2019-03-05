@@ -19,6 +19,7 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
+`include "test_shared.svh"
 
 module test_alpha_finder;
 
@@ -53,14 +54,13 @@ module test_alpha_finder;
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
-		#(PERIOD/2)
 		rst = 0;
 		generator_0_enable = 1;
 		generator_1_enable = 1;
 		drain_enable = 1;
 	end
 	
-	helper_axis_generator #(.DATA_WIDTH(FINAL_WIDTH), .START_AT(1)) GEN_0
+	helper_axis_reader #(.DATA_WIDTH(FINAL_WIDTH), .FILE_NAME(`GOLDEN_ALPHAN)) GEN_0
 		(
 			.clk(clk), .rst(rst), .enable(generator_0_enable),
 			.output_valid(gen_0_valid),
@@ -68,7 +68,7 @@ module test_alpha_finder;
 			.output_ready(gen_0_ready)
 		);
 		
-	helper_axis_generator #(.DATA_WIDTH(FINAL_WIDTH), .START_AT(2)) GEN_1
+	helper_axis_reader #(.DATA_WIDTH(FINAL_WIDTH), .FILE_NAME(`GOLDEN_ALPHAD)) GEN_1
 		(
 			.clk(clk), .rst(rst), .enable(generator_1_enable),
 			.output_valid(gen_1_valid),
@@ -77,7 +77,7 @@ module test_alpha_finder;
 		);
 
 	
-	helper_axis_drain #(.DATA_WIDTH(ALPHA_WIDTH)) DRAIN
+	helper_axis_checker #(.DATA_WIDTH(ALPHA_WIDTH), .FILE_NAME(`GOLDEN_ALPHA)) DRAIN
 		(
 			.clk(clk), .rst(rst), .enable(drain_enable),
 			.input_valid(drain_valid),

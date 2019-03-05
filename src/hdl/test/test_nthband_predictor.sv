@@ -19,6 +19,9 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
+`include "test_shared.svh"
+
+
 module test_nthband_predictor;
 
 	parameter DATA_WIDTH=16;
@@ -69,7 +72,7 @@ module test_nthband_predictor;
 		checker_enable = 1;
 	end
 	
-	helper_axis_reader #(.DATA_WIDTH(ALPHA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/alpha.smpl")) GEN_alpha
+	helper_axis_reader #(.DATA_WIDTH(ALPHA_WIDTH), .FILE_NAME(`GOLDEN_ALPHA)) GEN_alpha
 		(
 			.clk(clk), .rst(rst), .enable(gen_alpha_enable),
 			.output_valid(alpha_valid),
@@ -77,7 +80,7 @@ module test_nthband_predictor;
 			.output_ready(alpha_ready)
 		);
 
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/xhat.smpl")) GEN_xhat
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XHAT)) GEN_xhat
 		(
 			.clk(clk), .rst(rst), .enable(gen_xhat_enable),
 			.output_valid(xhat_valid),
@@ -85,7 +88,7 @@ module test_nthband_predictor;
 			.output_ready(xhat_ready)
 		);
 
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/xmean.smpl")) GEN_xmean
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XMEAN)) GEN_xmean
 		(
 			.clk(clk), .rst(rst), .enable(gen_xmean_enable),
 			.output_valid(xmean_valid),
@@ -93,7 +96,7 @@ module test_nthband_predictor;
 			.output_ready(xmean_ready)
 		);
 
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/xhatmean.smpl")) GEN_xhatmean
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XHATMEAN)) GEN_xhatmean
 		(
 			.clk(clk), .rst(rst), .enable(gen_xhatmean_enable),
 			.output_valid(xhatmean_valid),
@@ -101,7 +104,7 @@ module test_nthband_predictor;
 			.output_ready(xhatmean_ready)
 		);
 
-	helper_axis_checker #(.SKIP(256), .DATA_WIDTH(DATA_WIDTH+1), .FILE_NAME("C:/Users/Daniel/Repositorios/Lcplc/test_data/prediction.smpl")) GEN_checker
+	helper_axis_checker #(.SKIP(256), .DATA_WIDTH(DATA_WIDTH+1), .FILE_NAME(`GOLDEN_PREDICTION)) GEN_checker
 		(
 			.clk        (clk),
 			.rst        (rst),
