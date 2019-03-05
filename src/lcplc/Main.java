@@ -138,7 +138,10 @@ public class Main {
 			Sampler<Long>    xmeanSampler		= new Sampler<Long>();
 			Sampler<Long>    xhatmeanSampler	= new Sampler<Long>();
 			Sampler<Integer> predictionSampler	= new Sampler<Integer>();
-			
+			Sampler<Long>	 samplerHelper1		= new Sampler<Long>();
+			Sampler<Long>	 samplerHelper2		= new Sampler<Long>();
+			Sampler<Long>	 samplerHelper3		= new Sampler<Long>();
+		
 			
 			
 			int[][][] decodedBlock = new int[bands][lines][samples];
@@ -213,7 +216,7 @@ public class Main {
 				//to stay in the [0, 2) range
 				int simpleAlphaScaled = findAlpha(simpleAlphaNacc, simpleAlphaDacc, 10);
 				alphaSampler.sample(simpleAlphaScaled);
-				long alphaScaleVal = 512;
+				long alphaScaleVal = 9; //512;
 				//mu is 16 bits wide, and should stay that way since we are averaging 16-bit values
 				long muScaled = currAcc / sampleCnt;
 				
@@ -232,7 +235,8 @@ public class Main {
 				int[][] savedxhat = new int[lines][samples];
 				for (int l = 0; l < lines; l++) {
 					for (int s = 0; s < samples; s++) {
-						long prediction = muScaled + (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled/alphaScaleVal;
+						long prediction = muScaled + (((decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled)>>alphaScaleVal);
+						
 						predictionSampler.sample((int) prediction);
 						savedPrediction[l][s] = (int) prediction;
 						int error = band[l][s] - (int) prediction;
@@ -291,6 +295,9 @@ public class Main {
 			xmeanSampler.export(samplerBaseDir + "xmean.smpl");
 			xhatmeanSampler.export(samplerBaseDir + "xhatmean.smpl");
 			predictionSampler.export(samplerBaseDir + "prediction.smpl");
+			samplerHelper1.export(samplerBaseDir + "helper1.smpl");
+			samplerHelper2.export(samplerBaseDir + "helper2.smpl");
+			samplerHelper3.export(samplerBaseDir + "helper3.smpl");
 		}
 		
 		public int findAlpha(long alphaN, long alphaD, long depth) {
@@ -377,7 +384,7 @@ public class Main {
 				long sampleCnt = lines*samples;
 				
 				long simpleAlphaScaled = bis.readBits(10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
-				long alphaScaleVal = 512;
+				long alphaScaleVal = 9; //512;
 				long muScaled = bis.readBits(16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 				
 				//is this block skipped or not?
@@ -386,7 +393,7 @@ public class Main {
 				acc.reset(); 
 				for (int l = 0; l < lines; l++) {
 					for (int s = 0; s < samples; s++) {
-						long prediction = muScaled + (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled/alphaScaleVal;
+						long prediction = muScaled + (((decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled)>>alphaScaleVal);
 						
 						if (coded) {
 							int mappedError;

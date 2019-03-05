@@ -77,7 +77,11 @@ architecture Behavioral of NTHBAND_PREDICTOR is
 	--prediction stage 1	
 	signal prediction_stage_1_input_b: std_logic_vector(DATA_WIDTH downto 0);
 	signal prediction_stage_1_data: std_logic_vector(DATA_WIDTH + ALPHA_WIDTH downto 0);
-	signal prediction_stage_1_out_valid, prediction_stage_1_out_ready: std_logic;
+	signal prediction_stage_1_valid, prediction_stage_1_ready: std_logic;
+	
+	--shift of stage 1 output
+	--signal prediction_stage_1_shifted_data: std_logic_vector(DATA_WIDTH + 1 downto 0);
+	--signal prediction_stage_1_shifted_ready, prediction_stage_1_shifted_valid: std_logic;
 	
 	--prediction stage 2
 	signal prediction_stage_2_input_b: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
@@ -184,9 +188,24 @@ begin
 			input_1_valid => alpha_rep_valid,
 			input_1_ready => alpha_rep_ready,
 			output_data   => prediction_stage_1_data,
-			output_valid  => prediction_stage_1_out_valid,
-			output_ready  => prediction_stage_1_out_ready
+			output_valid  => prediction_stage_1_valid,
+			output_ready  => prediction_stage_1_ready
 		);
+		
+	--shifter b4 final stage
+-- 	signed_shifter: entity work.POWER_OF_TWO_SIGNED_SHIFTER
+--		Generic map (
+--			DATA_WIDTH => prediction_stage_1_data'length,
+--			SHAMT => ALPHA_WIDTH - 1
+--		)
+--		Port map ( 
+--			input_data	=> prediction_stage_1_data,
+--			input_ready => prediction_stage_1_out_ready,
+--			input_valid => prediction_stage_1_out_valid,
+--			output_data	=> prediction_stage_1_shifted_data,
+--			output_ready=> prediction_stage_1_shifted_ready,
+--			output_valid=> prediction_stage_1_shifted_valid
+--		);
 	
 	--third stage		
 	prediction_stage_2: entity work.AXIS_ARITHMETIC_OP
@@ -201,9 +220,9 @@ begin
 		)
 		Port Map (
 			clk => clk, rst => rst,
-			input_0_data =>  prediction_stage_1_data(ALPHA_WIDTH + DATA_WIDTH downto ALPHA_WIDTH - 1),
-			input_0_valid => prediction_stage_1_out_valid,
-			input_0_ready => prediction_stage_1_out_ready,
+			input_0_data =>  prediction_stage_1_data(prediction_stage_1_data'high downto ALPHA_WIDTH - 1),
+			input_0_valid => prediction_stage_1_valid,
+			input_0_ready => prediction_stage_1_ready,
 			input_1_data  => xmean_rep_data,
 			input_1_valid => xmean_rep_valid,
 			input_1_ready => xmean_rep_ready,
