@@ -146,6 +146,7 @@ public class Main {
 			Sampler<Integer> kjSampler			= new Sampler<Integer>();
 			Sampler<Integer> xtildeSampler		= new Sampler<Integer>();
 			Sampler<Integer> dFlagSampler		= new Sampler<Integer>();
+			Sampler<Integer> errorSampler		= new Sampler<Integer>();
 			
 			Sampler<Long>	 samplerHelper1		= new Sampler<Long>();
 			Sampler<Long>	 samplerHelper2		= new Sampler<Long>();
@@ -165,6 +166,7 @@ public class Main {
 					xSampler.sample(block[0][l][s]);
 					//First sample is just coded raw since we have not initialized
 					//the counters/accumulators/predictors yet
+					int error = 0;
 					int mappedError;
 					int prediction;
 					int kj = 0;
@@ -183,7 +185,7 @@ public class Main {
 						prediction = Predictor.basic2DPrediction(decodedBlock[0], l, s);
 						
 						
-						int error = block[0][l][s] - (int) prediction;
+						error = block[0][l][s] - (int) prediction;
 						int qErr  = iutq.quantize(error);
 						error 	  = iutq.dequantize(qErr);
 						decodedBlock[0][l][s] = (int) prediction + error;
@@ -196,7 +198,7 @@ public class Main {
 						acc.add(Math.abs(error));		//update Rj after coding
 					}
 					
-					
+					errorSampler.sample(error);
 					samplerHelper3.sample(acc.getRunningSum());   
 					samplerHelper3.sample((long) acc.getRunningCount());
 					samplerHelper3.sample((long) findkj(acc));
@@ -298,6 +300,8 @@ public class Main {
 						
 						mappedErrorSampler.sample((int)mappedError);
 						xhatrawSampler.sample(savedxhat[l][s]);
+						
+						errorSampler.sample(error);
 					}
 				}
 				
@@ -345,6 +349,7 @@ public class Main {
 			kjSampler.export(samplerBaseDir + "kj.smpl");
 			xtildeSampler.export(samplerBaseDir + "xtilde.smpl");
 			dFlagSampler.export(samplerBaseDir + "dflag.smpl");
+			errorSampler.export(samplerBaseDir + "error.smpl");
 			samplerHelper1.export(samplerBaseDir + "helper1.smpl");
 			samplerHelper2.export(samplerBaseDir + "helper2.smpl");
 			samplerHelper3.export(samplerBaseDir + "helper3.smpl");
