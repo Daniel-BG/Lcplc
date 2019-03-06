@@ -167,6 +167,7 @@ public class Main {
 					//the counters/accumulators/predictors yet
 					int mappedError;
 					int prediction;
+					int kj = 0;
 					if (l == 0 && s == 0) {
 						expGolombZero.encode(block[0][l][s], bos);
 						
@@ -175,6 +176,7 @@ public class Main {
 						
 						decodedBlock[0][l][s] = block[0][l][s];
 						acc.add(0);
+						
 					//For every other sample, code following
 					//the predictive scheme
 					} else {
@@ -186,9 +188,7 @@ public class Main {
 						error 	  = iutq.dequantize(qErr);
 						decodedBlock[0][l][s] = (int) prediction + error;
 
-						
-						int kj = findkj(acc);
-						kjSampler.sample(kj);
+						kj = findkj(acc);
 						
 						//code mapped error
 						mappedError = Mapper.mapError(qErr);
@@ -196,8 +196,12 @@ public class Main {
 						acc.add(Math.abs(error));		//update Rj after coding
 					}
 					
-					samplerHelper3.sample(acc.getRunningSum());
+					
+					samplerHelper3.sample(acc.getRunningSum());   
 					samplerHelper3.sample((long) acc.getRunningCount());
+					samplerHelper3.sample((long) findkj(acc));
+					
+					kjSampler.sample(findkj(acc));
 					
 					xtildeSampler.sample(prediction);
 					predictionSampler.sample(prediction);
@@ -213,7 +217,8 @@ public class Main {
 			double thres = (double) CONST_GAMMA * delta * delta * sampleCnt * sampleCnt / 3.0;
 			System.out.println("Threshold is: " + thres);
 			
-
+			dFlagSampler.sample(0); //first sample can be either
+			
 			//compress rest of bands
 			for (int b = 1; b < bands; b++) {
 				band = block[b];
@@ -278,13 +283,14 @@ public class Main {
 						
 						if (l != 0 || s != 0) {
 							savedGolombParam[l][s] = findkj(acc);
-							kjSampler.sample(savedGolombParam[l][s]);
 						}
 						acc.add(Math.abs(error));		//update Rj after coding
 						
 						samplerHelper3.sample(acc.getRunningSum());
 						samplerHelper3.sample((long) acc.getRunningCount());
+						samplerHelper3.sample((long) findkj(acc));    
 						
+						kjSampler.sample(findkj(acc));    
 						
 						xSampler.sample(block[b][l][s]);
 						xtildeSampler.sample((int) prediction);

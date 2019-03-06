@@ -410,7 +410,7 @@ begin
 			THRESHOLD => THRESHOLD
 		)
 		Port map (
-			clk => clk, rst	=> rst, clear => '0',
+			clk => clk, rst	=> rst,
 			x_valid			=> x_delay_delay_valid,
 			x_ready			=> x_delay_delay_ready,
 			x_data			=> x_delay_delay_data,
@@ -439,10 +439,11 @@ begin
 	substitute_first_d_flag: entity work.AXIS_SUBSTITUTER 
 		Generic map (
 			DATA_WIDTH => 1,
-			INVALID_TRANSACTIONS => 1
+			INVALID_TRANSACTIONS => 1,
+			VALID_TRANSACTIONS => NUMBER_OF_BANDS - 1
 		)
 		Port map (
-			clk => clk, rst => rst, clear => '0',
+			clk => clk, rst => rst, 
 			input_ready => d_flag_ready,
 			input_valid => d_flag_valid,
 			input_data	=> d_flag_data_stdlv,

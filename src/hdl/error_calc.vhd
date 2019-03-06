@@ -148,10 +148,6 @@ architecture Behavioral of ERROR_CALC is
 	signal error_acc_data: std_logic_vector(PREDICTION_WIDTH + ACC_LOG - 1 downto 0);
 	signal error_acc_valid, error_acc_ready: std_logic;
 	
-	--kj filter
-	signal kj_unfiltered_data: std_logic_vector(ACC_LOG - 1 downto 0);
-	signal kj_unfiltered_valid, kj_unfiltered_ready: std_logic;
-	
 					
 begin
 
@@ -512,28 +508,10 @@ begin
 			j  => error_acc_cnt,
 			input_valid => error_acc_valid,
 			input_ready => error_acc_ready,
-			kj => kj_unfiltered_data,
-			output_valid => kj_unfiltered_valid,
-			output_ready => kj_unfiltered_ready
+			kj => kj_data,
+			output_valid => kj_valid,
+			output_ready => kj_ready
 		);
 		
-	--kj filtering (there is one more kj produced than necessary)
-	kj_filtering: entity work.AXIS_REDUCER
-		Generic map (
-			DATA_WIDTH => ACC_LOG,
-			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG - 1,
-			INVALID_TRANSACTIONS => 1,
-			START_VALID => true
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready	=> kj_unfiltered_ready,
-			input_valid	=> kj_unfiltered_valid,
-			input_data	=> kj_unfiltered_data,
-			output_ready=> kj_ready,
-			output_valid=> kj_valid,
-			output_data	=> kj_data
-		);
-
 
 end Behavioral;
