@@ -450,7 +450,7 @@ begin
 			clk => clk, rst => rst,
 			input_ready => error_quant_splitter_ready_1,
 			input_valid => error_quant_splitter_valid_1,
-			input => error_quant_splitter_data_1,
+			input_data => error_quant_splitter_data_1,
 			output_ready => merr_ready,
 			output_valid => merr_valid,
 			output => mapped_error_data_raw

@@ -171,7 +171,7 @@ public class Main {
 					if (l == 0 && s == 0) {
 						expGolombZero.encode(block[0][l][s], bos);
 						
-						mappedError = block[0][l][s];
+						mappedError = Mapper.mapError(block[0][l][s]);
 						prediction = 0;
 						
 						decodedBlock[0][l][s] = block[0][l][s];

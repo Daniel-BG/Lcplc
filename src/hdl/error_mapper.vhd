@@ -39,7 +39,7 @@ entity ERROR_MAPPER is
 		clk, rst: std_logic;
 		input_ready: out std_logic;
 		input_valid: in std_logic;
-		input: in std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_data: in std_logic_vector(DATA_WIDTH - 1 downto 0);
 		output_ready: in std_logic;
 		output_valid: out std_logic;
 		output: out std_logic_vector(DATA_WIDTH downto 0)
@@ -47,7 +47,7 @@ entity ERROR_MAPPER is
 end ERROR_MAPPER;
 
 architecture Behavioral of ERROR_MAPPER is
-	signal input_is_positive: std_logic;
+	signal input_is_positive: boolean;
 
 	signal input_sign_extended, input_neg: std_logic_vector(DATA_WIDTH downto 0);
 	signal input_neg_shifted: std_logic_vector(DATA_WIDTH downto 0);
@@ -59,15 +59,15 @@ begin
 	input_ready <= output_ready;
 	output_valid <= input_valid;
 	
-	input_is_positive <= not input(DATA_WIDTH - 1);
+	input_is_positive <= signed(input_data) > to_signed(0, input_data'length);
 	
-	input_sign_extended <= input(DATA_WIDTH - 1) & input;
+	input_sign_extended <= input_data(DATA_WIDTH - 1) & input_data;
 	input_neg <= std_logic_vector(-signed(input_sign_extended));
 	
 	input_neg_shifted <= input_neg(DATA_WIDTH - 1 downto 0) & '0';
-	input_shifted	  <= input    (DATA_WIDTH - 1 downto 0) & '0';
+	input_shifted	  <= input_data(DATA_WIDTH - 1 downto 0) & '0';
 	input_shifted_m1  <= std_logic_vector(unsigned(input_shifted) - to_unsigned(1, DATA_WIDTH + 1));
 	
-	output <= input_shifted_m1 when input_is_positive = '1' else input_neg_shifted;
+	output <= input_shifted_m1 when input_is_positive else input_neg_shifted;
 	
 end Behavioral;

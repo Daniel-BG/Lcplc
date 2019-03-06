@@ -183,9 +183,9 @@ module test_error_calc;
 			.xhatout_valid(xhatout_valid),   
 			.xhatout_ready(xhatout_ready),	
 			.xhatout_data(xhatout_data),	
-			.d_flag_valid(d_flag_valid),	
-			.d_flag_ready(d_flag_ready),	
-			.d_flag_data(d_flag_data) 	
+			.d_flag_valid(dflag_valid),	
+			.d_flag_ready(dflag_ready),	
+			.d_flag_data(dflag_data) 	
 		);
 
 endmodule
