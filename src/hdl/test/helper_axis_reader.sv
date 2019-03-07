@@ -9,7 +9,7 @@
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
-// Description: Simple data generator for AXIS bus (used in testing)
+// Description: Simple data reader for AXIS bus (taking values from file)
 // 
 // Dependencies: 
 // 
@@ -44,8 +44,6 @@ module helper_axis_reader(
 	assign output_data  = value;
 	assign output_valid = output_valid_pre & enable;
 
-
-
 	initial begin
 		fd = $fopen(FILE_NAME, "r");
 		//SKIP+1 so that value loads the first value already
@@ -61,11 +59,17 @@ module helper_axis_reader(
 		if (output_valid_pre == 1 && output_ready == 1 && enable == 1) begin
 			if ($feof(fd)) begin
 				output_valid_pre = 0;
-				$info("End of file reached!");
+				$info("End of file reached! %s", FILE_NAME);
 			end else begin
 				status = $fscanf(fd, "%d", value);
-				if (status != 1)
-					$error("Error when reading file");
+				if (status != 1) begin
+					if ($feof(fd)) begin 
+						$info("End of file reached! %s", FILE_NAME);
+					end else begin
+						$error("Unknown when reading file: %s", FILE_NAME);
+					end 
+					output_valid_pre = 0;
+				end 
 			end
 		end
 	end

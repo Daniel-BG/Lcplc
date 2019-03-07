@@ -45,7 +45,7 @@ entity NEXT_XHAT_PRECALC is
 		xtilde_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xtilde_ready	: out	std_logic;
 		xtilde_valid	: in	std_logic;
-		d_flag_data_raw	: in	std_logic;
+		d_flag_data		: in	std_logic;
 		d_flag_ready	: out	std_logic;
 		d_flag_valid	: in 	std_logic;
 		xhatout_data	: out	std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -82,7 +82,7 @@ architecture Behavioral of NEXT_XHAT_PRECALC is
 	signal xtildemean_valid, xtildemean_ready: std_logic;
 
 	--flag gen
-	signal d_flag_data: std_logic_vector(0 downto 0);
+	signal d_flag_data_stdlv: std_logic_vector(0 downto 0);
 	
 	--flag splitter
 	signal d_flag_0_valid, d_flag_0_ready, d_flag_1_valid, d_flag_1_ready: std_logic;
@@ -207,7 +207,7 @@ begin
 		);
 		
 	--threshold splitter
-	d_flag_data <= "0" when d_flag_data_raw = '0' else "1";
+	d_flag_data_stdlv <= "0" when d_flag_data = '0' else "1";
 	d_threshold_splitter: entity  work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH => 1
@@ -215,7 +215,7 @@ begin
 		Port map (
 			clk => clk, rst => rst,
 			input_valid		=> d_flag_valid,
-			input_data		=> d_flag_data,
+			input_data		=> d_flag_data_stdlv,
 			input_ready		=> d_flag_ready,
 			output_0_valid	=> d_flag_0_valid,
 			output_0_data	=> d_flag_0_data,

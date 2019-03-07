@@ -219,7 +219,7 @@ public class Main {
 			double thres = (double) CONST_GAMMA * delta * delta * sampleCnt * sampleCnt / 3.0;
 			System.out.println("Threshold is: " + thres);
 			
-			dFlagSampler.sample(0); //first sample can be either
+			dFlagSampler.sample(1); //first sample should be 1 to save xhatraw samples instead of empty values
 			
 			//compress rest of bands
 			for (int b = 1; b < bands; b++) {
