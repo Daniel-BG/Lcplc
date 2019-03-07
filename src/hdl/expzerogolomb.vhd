@@ -20,16 +20,9 @@
 
 
 library IEEE;
+use work.functions.all;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity EXP_ZERO_GOLOMB is
 	Generic (
@@ -40,7 +33,7 @@ entity EXP_ZERO_GOLOMB is
 		input_valid			: in	std_logic;
 		input_ready			: out	std_logic;
 		output_code			: out	std_logic_vector(DATA_WIDTH*2 downto 0);
-		output_length		: out	natural range 0 to DATA_WIDTH*2+1;
+		output_length		: out	std_logic_vector(bits(DATA_WIDTH) downto 0); -- natural range 0 to DATA_WIDTH*2+1;
 		output_valid		: out	std_logic;
 		output_ready		: in 	std_logic
 	);
@@ -67,8 +60,8 @@ begin
 	
 	output_code <= (DATA_WIDTH*2 downto DATA_WIDTH + 1 => '0') & input_plus_one;
 	output_valid <= input_valid;
-	input_Ready <= output_ready;
-	output_length <= final_bit_count;
+	input_ready <= output_ready;
+	output_length <= std_logic_vector(to_unsigned(final_bit_count, output_length'length));
 
 	--add 1 to input_data (unsigned)
 	--count its number of bits n

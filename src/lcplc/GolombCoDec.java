@@ -35,6 +35,9 @@ public class GolombCoDec {
 	 * Wrapper for {@link #setParameter(int)} and {@link #encode(int, BitOutputStream)}
 	 */
 	public void encode(int powerOfTwo, int value, BitOutputStream bos) throws IOException {
+		if (sampling) inputDataSampler.sample(value);
+		if (sampling) inputParameterSampler.sample(powerOfTwo);
+		
 		this.setParameter(powerOfTwo);
 		this.encode(value, bos);
 	}
@@ -54,14 +57,34 @@ public class GolombCoDec {
 			MAX_QUOT = quotient;
 			System.out.println(MAX_QUOT);
 		}
-		//write quotient
+		
+		//mimic the hardware behavior
+		while (quotient >= 32) {
+			bos.writeBits(-1, 32, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+			quotient -= 32;
+			if (sampling) codeSampler.sample(-1l);
+			if (sampling) quantSampler.sample(32);
+		}
+		if (quotient >= 16) {
+			bos.writeBits(-1, quotient, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+			if (sampling) codeSampler.sample(-1l);
+			if (sampling) quantSampler.sample(quotient);
+			quotient = 0;
+		}
+		
+		bos.writeBits((-1) << 1, quotient + 1, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+		bos.writeBits(remainder, this.powerOfTwo, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+		
+		if (sampling) codeSampler.sample(((-1l) << (this.powerOfTwo + 1)) | (long) remainder);
+		if (sampling) quantSampler.sample(quotient + 1 + this.powerOfTwo);
+		//end mimicking hardware behavior
+		
+		/*write quotient
 		while (quotient --> 0)
 			bos.writeBit(Bit.BIT_ONE);
 		bos.writeBit(Bit.BIT_ZERO);
 		
-
-		
-		bos.writeBits(remainder, this.powerOfTwo, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+		bos.writeBits(remainder, this.powerOfTwo, BitStreamConstants.ORDERING_LEFTMOST_FIRST);*/
 	}
 	
 	private static int MAX_QUOT = 0;
@@ -93,4 +116,28 @@ public class GolombCoDec {
 	}
 	
 	
+	
+	//SAMPLE STUFF
+	private boolean sampling = false;
+	private Sampler<Integer> inputDataSampler;
+	private Sampler<Integer> inputParameterSampler;
+	private Sampler<Long> codeSampler;
+	private Sampler<Integer> quantSampler;
+	
+	public void startSampling() {
+		sampling = true;
+		inputDataSampler = new Sampler<Integer>();
+		inputParameterSampler = new Sampler<Integer>();
+		codeSampler  = new Sampler<Long>();
+		quantSampler = new Sampler<Integer>();
+	}
+	
+	public void endSampling(String inputDataSamplerFile, String inputParameterSamplerFile, String codeSamplerFile, String quantSamplerFile) throws IOException {
+		sampling = false;
+		inputDataSampler.export(inputDataSamplerFile);
+		inputParameterSampler.export(inputParameterSamplerFile);
+		codeSampler.export(codeSamplerFile);
+		quantSampler.export(quantSamplerFile);
+	}
+	//END SAMPLE STUFF
 }

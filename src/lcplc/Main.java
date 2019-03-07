@@ -159,6 +159,9 @@ public class Main {
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
 			IntegerUniformThresholdQuantizer iutq = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE);
 			
+			expGolombZero.startSampling();
+			golombCoDec.startSampling();
+			
 			//compress first band
 			int[][] band = block[0];
 			for (int l = 0; l < lines; l++) {
@@ -353,6 +356,8 @@ public class Main {
 			samplerHelper1.export(samplerBaseDir + "helper1.smpl");
 			samplerHelper2.export(samplerBaseDir + "helper2.smpl");
 			samplerHelper3.export(samplerBaseDir + "helper3.smpl");
+			expGolombZero.endSampling(samplerBaseDir + "egz_input.smpl", samplerBaseDir + "egz_code.smpl", samplerBaseDir + "egz_quant.smpl");
+			golombCoDec.endSampling(samplerBaseDir + "gc_input.smpl", samplerBaseDir + "gc_param.smpl", samplerBaseDir + "gc_code.smpl", samplerBaseDir + "gc_quant.smpl");
 		}
 		
 		public int findAlpha(long alphaN, long alphaD, long depth) {

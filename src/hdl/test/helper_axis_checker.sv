@@ -76,7 +76,7 @@ module helper_axis_checker (
 		if (sync_valid == 1 && sync_ready == 1) begin
 			if (sync_data_0 != sync_data_1) begin
 				$info("Displaying info");
-				$display("Received value %d and was expecting %d", sync_data_0, sync_data_1);
+				$display("Received value 0x%h and was expecting 0x%h", sync_data_0, sync_data_1);
 			end
 		end
 	end

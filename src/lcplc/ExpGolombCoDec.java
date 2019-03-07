@@ -24,10 +24,37 @@ public class ExpGolombCoDec {
 		this(0);
 	}
 	
+	//SAMPLE STUFF
+	private boolean sampling = false;
+	private Sampler<Integer> inputSampler;
+	private Sampler<Long> codeSampler;
+	private Sampler<Integer> quantSampler;
+	
+	public void startSampling() {
+		sampling = true;
+		inputSampler = new Sampler<Integer>();
+		codeSampler  = new Sampler<Long>();
+		quantSampler = new Sampler<Integer>();
+	}
+	
+	public void endSampling(String inputSamplerFile, String codeSamplerFile, String quantSamplerFile) throws IOException {
+		sampling = false;
+		inputSampler.export(inputSamplerFile);
+		codeSampler.export(codeSamplerFile);
+		quantSampler.export(quantSamplerFile);
+	}
+	//END SAMPLE STUFF
+	
 	public void encode(int source, BitOutputStream bos) throws IOException {
+		if (sampling) inputSampler.sample(source);
+		
 		int base = source / (1 << order) + 1;
 		int baseBits = Utils.countBitsOf(base);
 		int cnt = baseBits;
+		
+		if (sampling) codeSampler.sample((long)base);
+		if (sampling) quantSampler.sample(cnt - 1 + baseBits);
+		
 		while(cnt-->1)
 			bos.writeBit(Bit.BIT_ZERO);
 		bos.writeBits(base, baseBits, BitStreamConstants.ORDERING_LEFTMOST_FIRST);

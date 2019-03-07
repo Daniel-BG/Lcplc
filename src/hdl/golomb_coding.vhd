@@ -20,16 +20,9 @@
 
 
 library IEEE;
+use work.functions.all;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity GOLOMB_CODING is
 	Generic (
@@ -50,7 +43,7 @@ entity GOLOMB_CODING is
 		input_value_valid	: in	std_logic;
 		input_value_ready	: out 	std_logic;
 		output_code			: out	std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
-		output_length		: out	natural range 0 to OUTPUT_WIDTH;
+		output_length		: out	std_logic_vector(bits(OUTPUT_WIDTH) - 1 downto 0);
 		output_ends_input	: out 	std_logic;
 		output_valid		: out	std_logic;
 		output_ready		: in 	std_logic
@@ -141,7 +134,7 @@ begin
 			else
 				state_curr <= state_next;
 				quotient_buff  <= quotient_buff_next;
-				remainder_buff <= remainder_buff;
+				remainder_buff <= remainder_buff_next;
 				param_buff <= param_buff_next;
 			end if;
 		end if;
@@ -165,7 +158,7 @@ begin
 		param_buff_next <= param_buff;
 		--outputs
 		output_code <= (others => '0');
-		output_length <= 0;
+		output_length <= (others => '0');
 		
 		if state_curr = IDLE then
 			joint_ready <= '1';
@@ -179,7 +172,7 @@ begin
 			output_valid <= '1';
 			if not need_more_cycles then
 				output_code <= output_code_last;
-				output_length <= output_length_last;
+				output_length <= std_logic_vector(to_unsigned(output_length_last, output_length'length));
 				output_ends_input <= '1';
 				joint_ready <= output_ready;
 				if joint_valid = '1' then
@@ -193,7 +186,7 @@ begin
 				end if;	
 			else
 				output_code <= output_code_temp;
-				output_length <= output_length_temp;
+				output_length <= std_logic_vector(to_unsigned(output_length_temp, output_length'length));
 				if output_ready = '1' then
 					--only update quotient if we send data ofc
 					quotient_buff_next <= quotient_temp;
@@ -216,7 +209,8 @@ begin
 			when quotient_buff(DATA_WIDTH - 1 downto MAX_1_OUT_LOG) /= (DATA_WIDTH - 1 downto MAX_1_OUT_LOG => '0') 
 		else (others => '0');
 	
-	output_code_last	<= std_logic_vector(shift_left(unsigned(base_out_one), param_buff + 1)) or ((OUTPUT_WIDTH - 1 downto DATA_WIDTH => '0') & quotient_buff);
+	output_code_last	<= std_logic_vector(shift_left(unsigned(base_out_one), param_buff + 1)) 
+		or std_logic_vector(resize(unsigned(remainder_buff), output_code_last'length)); -- ((OUTPUT_WIDTH - 1 downto DATA_WIDTH => '0') & remainder_buff);
 	output_length_last	<= param_buff + 1 + to_integer(unsigned(quotient_buff)); 	
 
 
