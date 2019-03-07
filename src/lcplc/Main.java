@@ -99,6 +99,18 @@ public class Main {
 				BitOutputStream bos = new BitOutputStream(adbaos);
 				this.compress(block, bands, lines, samples, bos);
 				
+				Sampler<Integer> outputSampler = new Sampler<Integer>();
+				
+				byte[] bytesoutput = adbaos.toByteArray();
+				for (int i = 0; i < bytesoutput.length; i+=4) {
+					if (i + 3 >= bytesoutput.length)
+						break;
+					int word = (bytesoutput[i] << 24) | (bytesoutput[i+1] << 16) | (bytesoutput[i+2] << 8) | bytesoutput[i];
+					outputSampler.sample(word);
+				}
+				outputSampler.export(samplerBaseDir + "output.smpl");
+				
+				
 				System.out.println("COMPR:  " + bos.getBitsOutput());
 				
 				bos.paddingFlush();
