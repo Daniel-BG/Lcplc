@@ -22,15 +22,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use work.functions.all;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity CODER is
 	Generic (
@@ -44,16 +36,23 @@ entity CODER is
 		--control
 		flush		: in	std_logic;
 		flushed		: out 	std_logic;
-		--inputs
+		--EHAT INPUT: total of 2**BLOCK_SIZE_LOG per BAND
+		--	first one is not a mapped error but a raw value that goes to the exp coder
+		--	but comes here for ease of use
 		ehat_data	: in	std_logic_vector(MAPPED_ERROR_WIDTH - 1 downto 0);
 		ehat_ready	: out	std_logic;
 		ehat_valid	: in 	std_logic;
+		--KJ INPUT: total of 2**BLOCK_SIZE_LOG - 1 per BAND
+		--	one less is needed than EHAT since the first goes to EXP coder and does not need param kj
 		kj_data		: in 	std_logic_vector(ACC_LOG - 1 downto 0);
 		kj_ready	: out	std_logic;
 		kj_valid	: in 	std_logic;
+		--D FLAG INPUT: one per BAND, if flag is 1 the block is coded, otherwise it is not
+		--	first flag should always be 1 since the first band is always coded
 		d_flag_data	: in	std_logic_vector(0 downto 0);
 		d_flag_ready: out	std_logic;
 		d_flag_valid: in 	std_logic;
+		--ALPHA INPUT: one
 		--outputs
 		--??????
 		output_data	: out	std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
@@ -104,8 +103,8 @@ architecture Behavioral of CODER is
 
 	--merger stuff
 	signal merger_input_0, merger_input_1, merger_input_2: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
-	signal merger_clear: std_logic;
 	signal merger_valid, merger_ready: std_logic;
+	signal merger_input_2_last: std_logic;
 	signal merger_data: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
 	signal merger_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
 	signal merger_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
@@ -128,13 +127,13 @@ begin
 	
 	comb: process(golomb_valid, golomb_ready, golomb_ends_input, counter_bitplane)
 	begin
-		merger_clear <= '0';
 		counter_bitplane_next <= counter_bitplane;
-		
+		merger_input_2_last <= '0';
+
 		if golomb_valid = '1' and golomb_ready = '1' and golomb_ends_input = '1' then
 			if counter_bitplane = 2**BLOCK_SIZE_LOG - 2 then -- -2 since 1 goes through the normal coder
 				counter_bitplane_next <= 0;
-				merger_clear <= '1'; --allow for next bitplane to go through
+				merger_input_2_last <= '1';
 			else
 				counter_bitplane_next <= counter_bitplane + 1;
 			end if;
@@ -306,23 +305,23 @@ begin
 	merger_input_2 <= golomb_length & golomb_code;
 	merger: entity work.AXIS_MERGER 
 		Generic map (
-			DATA_WIDTH => CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG, --space for both length and the bits themselves
-			FROM_PORT_ZERO => 1, 	--one from the flag code
-			FROM_PORT_ONE => 1		--one from exp coder, the rest from the golomb coder
+			DATA_WIDTH => CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG --space for both length and the bits themselves
 		)
 		Port map ( 
 			clk => clk, rst => rst,
-			clear => merger_clear,
 			--to input axi port
 			input_0_valid	=> d_flag_0_valid,
 			input_0_ready	=> d_flag_0_ready,
 			input_0_data	=> merger_input_0,
+			input_0_last 	=> '1',
 			input_1_valid	=> eg_valid,
 			input_1_ready	=> eg_ready,
 			input_1_data	=> merger_input_1,
+			input_1_last	=> '1',
 			input_2_valid	=> golomb_valid,
 			input_2_ready	=> golomb_ready,
 			input_2_data    => merger_input_2,
+			input_2_last	=> merger_input_2_last,
 			--to output axi ports
 			output_valid	=> merger_valid_pre,
 			output_ready	=> merger_ready_pre,
