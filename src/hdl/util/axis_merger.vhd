@@ -26,7 +26,8 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity AXIS_MERGER is
 	Generic (
-		DATA_WIDTH: integer := 16
+		DATA_WIDTH: integer := 16;
+		START_ON_PORT: integer := 0
 	);
 	Port ( 
 		clk, rst: in std_logic;
@@ -43,6 +44,10 @@ entity AXIS_MERGER is
 		input_2_ready	: out	std_logic;
 		input_2_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_2_last	: in 	std_logic;
+		input_3_valid	: in	std_logic;
+		input_3_ready	: out	std_logic;
+		input_3_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_3_last	: in 	std_logic;
 		--to output axi ports
 		output_valid	: out 	std_logic;
 		output_ready	: in 	std_logic;
@@ -51,7 +56,7 @@ entity AXIS_MERGER is
 end AXIS_MERGER;
 
 architecture Behavioral of AXIS_MERGER is
-	type merger_state_t is (READING_PORT_ZERO, READING_PORT_ONE, READING_PORT_TWO);
+	type merger_state_t is (READING_PORT_ZERO, READING_PORT_ONE, READING_PORT_TWO, READING_PORT_THREE);
 	signal state_curr, state_next: merger_state_t;
 	
 begin
@@ -61,7 +66,15 @@ begin
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				state_curr <= READING_PORT_ZERO;
+				if START_ON_PORT <= 0 then
+					state_curr <= READING_PORT_ZERO;
+				elsif START_ON_PORT = 1 then
+					state_curr <= READING_PORT_ONE;
+				elsif START_ON_PORT = 2 then
+					state_curr <= READING_PORT_TWO;
+				elsif START_ON_PORT >= 3 then
+					state_curr <= READING_PORT_THREE;					
+				end if;
 			else
 				state_curr <= state_next;
 			end if;
@@ -69,8 +82,8 @@ begin
 	end process;
 
 	comb: process(state_curr, 
-		input_0_valid, input_1_valid, input_2_valid,
-		input_0_data, input_1_data, input_2_data,
+		input_0_valid, input_1_valid, input_2_valid, input_3_valid,
+		input_0_data, input_1_data, input_2_data, input_3_data,
 		output_ready)
 	begin
 		state_next <= state_curr;
@@ -78,6 +91,7 @@ begin
 		input_0_ready <= '0';
 		input_1_ready <= '0';
 		input_2_ready <= '0';
+		input_3_ready <= '0';
 		output_valid  <= '0';
 		output_data   <= (others => '0');
 
@@ -106,6 +120,16 @@ begin
 			output_data   <= input_2_data;
 			if input_2_valid = '1' and output_ready = '1' then
 				if input_2_last = '1' then
+					state_next <= READING_PORT_THREE;
+				end if;
+			end if;
+		elsif state_curr = READING_PORT_THREE then
+			--stay here
+			input_3_ready <= output_ready;
+			output_valid  <= input_3_valid;
+			output_data   <= input_3_data;
+			if input_3_valid = '1' and output_ready = '1' then
+				if input_3_last = '1' then
 					state_next <= READING_PORT_ZERO;
 				end if;
 			end if;

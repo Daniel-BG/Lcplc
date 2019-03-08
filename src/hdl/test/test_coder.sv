@@ -27,6 +27,8 @@ module test_coder;
 	parameter ACC_LOG = 5;
 	parameter BLOCK_SIZE_LOG = 8;
 	parameter OUTPUT_WIDTH_LOG = 5;
+	parameter ALPHA_WIDTH = 10;
+	parameter DATA_WIDTH = 16;
 
 	parameter PERIOD=10;
 
@@ -48,6 +50,14 @@ module test_coder;
 	wire dflag_valid, dflag_ready;
 	wire [0:0] dflag_data;
 
+	reg gen_alpha_enable;
+	wire alpha_valid, alpha_ready;
+	wire [ALPHA_WIDTH-1:0] alpha_data;
+
+	reg gen_xmean_enable;
+	wire xmean_valid, xmean_ready;
+	wire [DATA_WIDTH-1:0] xmean_data;
+
 	//checkers
 	reg output_checker_enable;
 	wire output_valid, output_ready;
@@ -59,6 +69,8 @@ module test_coder;
 		gen_ehat_enable = 0;
 		gen_kj_enable = 0;
 		gen_dflag_enable = 0;
+		gen_alpha_enable = 0;
+		gen_xmean_enable = 0;
 		output_checker_enable = 0;
 
 		clk = 0;
@@ -69,6 +81,8 @@ module test_coder;
 		gen_ehat_enable = 1;
 		gen_kj_enable = 1;
 		gen_dflag_enable = 1;
+		gen_alpha_enable = 1;
+		gen_xmean_enable = 1;
 		output_checker_enable = 1;
 	end
 	
@@ -114,6 +128,22 @@ module test_coder;
 			.output_ready(dflag_ready)
 		);
 
+	helper_axis_reader #(.DATA_WIDTH(ALPHA_WIDTH), .FILE_NAME(`GOLDEN_ALPHA)) GEN_alpha
+		(
+			.clk(clk), .rst(rst), .enable(gen_alpha_enable),
+			.output_valid(alpha_valid),
+			.output_data(alpha_data),
+			.output_ready(alpha_ready)
+		);
+
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XMEAN)) GEN_xmean
+		(
+			.clk(clk), .rst(rst), .enable(gen_xmean_enable),
+			.output_valid(xmean_valid),
+			.output_data(xmean_data),
+			.output_ready(xmean_ready)
+		);
+
 	helper_axis_checker #(.DATA_WIDTH(2**OUTPUT_WIDTH_LOG), .FILE_NAME(`GOLDEN_OUTPUT)) GEN_checker_output
 		(
 			.clk        (clk), .rst        (rst), .enable     (output_checker_enable),
@@ -141,6 +171,12 @@ module test_coder;
 		.d_flag_data(dflag_data),
 		.d_flag_ready(dflag_ready),
 		.d_flag_valid(dflag_valid),
+		.alpha_ready(alpha_ready),
+		.alpha_valid(alpha_valid),
+		.alpha_data(alpha_data),
+		.xmean_ready(xmean_ready),
+		.xmean_valid(xmean_valid),
+		.xmean_data(xmean_data),
 		.output_data(output_data),
 		.output_valid(output_valid),
 		.output_ready(output_ready)

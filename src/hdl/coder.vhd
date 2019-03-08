@@ -29,7 +29,9 @@ entity CODER is
 		MAPPED_ERROR_WIDTH: integer := 19;
 		ACC_LOG: integer := 5;
 		BLOCK_SIZE_LOG: integer := 8;
-		OUTPUT_WIDTH_LOG: integer := 5
+		OUTPUT_WIDTH_LOG: integer := 5;
+		ALPHA_WIDTH: integer := 10;
+		DATA_WIDTH: integer := 16
 	);
 	Port (
 		clk, rst	: in 	std_logic;
@@ -52,7 +54,14 @@ entity CODER is
 		d_flag_data	: in	std_logic_vector(0 downto 0);
 		d_flag_ready: out	std_logic;
 		d_flag_valid: in 	std_logic;
-		--ALPHA INPUT: one
+		--ALPHA INPUT: one per band except first (last comes trimmed from outside)
+		alpha_data	: in 	std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+		alpha_ready : out 	std_logic;
+		alpha_valid	: in 	std_logic;
+		--XMEAN INPUT: one per band except first (first comes trimmed from outside)
+		xmean_data	: in 	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		xmean_ready : out 	std_logic;
+		xmean_valid : in 	std_logic;
 		--outputs
 		--??????
 		output_data	: out	std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
@@ -101,8 +110,14 @@ architecture Behavioral of CODER is
 	signal merger_valid_pre, merger_ready_pre: std_logic;
 	signal merger_data_pre: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
 
+	--alpha xmean stuff
+	signal alpha_xmean_sync_valid, alpha_xmean_sync_ready: std_logic;
+	signal alpha_xmean_sync_alpha: std_logic_vector(ALPHA_WIDTH-1 downto 0);
+	signal alpha_xmean_sync_xmean: std_logic_vector(DATA_WIDTH-1 downto 0);
+	signal alpha_xmean_data: std_logic_vector(ALPHA_WIDTH + DATA_WIDTH - 1 downto 0);
+
 	--merger stuff
-	signal merger_input_0, merger_input_1, merger_input_2: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
+	signal merger_input_0, merger_input_1, merger_input_2, merger_input_3: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
 	signal merger_valid, merger_ready: std_logic;
 	signal merger_input_2_last: std_logic;
 	signal merger_data: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
@@ -298,11 +313,39 @@ begin
 			output_ready	  => golomb_ready
 		);
 
+	--sync alpha and xmean
+	alpha_xmean_sync: entity work.AXIS_SYNCHRONIZER_2
+		generic map (
+			DATA_WIDTH_0 => ALPHA_WIDTH,
+			DATA_WIDTH_1 => DATA_WIDTH,
+			LATCH	     => false
+		)
+		port map (
+			clk => clk, rst => rst,
+			--to input axi port
+			input_0_valid => alpha_valid,
+			input_0_ready => alpha_ready,
+			input_0_data  => alpha_data,
+			input_1_valid => xmean_valid,
+			input_1_ready => xmean_ready, 
+			input_1_data  => xmean_data,
+			--to output axi ports
+			output_valid  => alpha_xmean_sync_valid,
+			output_ready  => alpha_xmean_sync_ready,
+			output_data_0 => alpha_xmean_sync_alpha,
+			output_data_1 => alpha_xmean_sync_xmean
+		);
+
+	alpha_xmean_data <= alpha_xmean_sync_alpha & alpha_xmean_sync_xmean;
+
+
+
 
 	--merger for both coders
 	merger_input_0 <= (CODING_LENGTH_MAX_LOG - 1 downto 1 => '0') & '1' & (CODING_LENGTH_MAX - 1 downto 1 => '0') & d_flag_0_data;
 	merger_input_1 <= eg_length & eg_code;
 	merger_input_2 <= golomb_length & golomb_code;
+	merger_input_3 <= std_logic_vector(to_unsigned(26, CODING_LENGTH_MAX_LOG)) & (CODING_LENGTH_MAX - 1 downto alpha_xmean_data'high + 1 => '0') & alpha_xmean_data;
 	merger: entity work.AXIS_MERGER 
 		Generic map (
 			DATA_WIDTH => CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG --space for both length and the bits themselves
@@ -322,6 +365,10 @@ begin
 			input_2_ready	=> golomb_ready,
 			input_2_data    => merger_input_2,
 			input_2_last	=> merger_input_2_last,
+			input_3_valid	=> alpha_xmean_sync_valid,
+			input_3_ready	=> alpha_xmean_sync_ready,
+			input_3_data	=> merger_input_3,
+			input_3_last	=> '1',
 			--to output axi ports
 			output_valid	=> merger_valid_pre,
 			output_ready	=> merger_ready_pre,
