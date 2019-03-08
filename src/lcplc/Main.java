@@ -105,7 +105,10 @@ public class Main {
 				for (int i = 0; i < bytesoutput.length; i+=4) {
 					if (i + 3 >= bytesoutput.length)
 						break;
-					int word = (bytesoutput[i] << 24) | (bytesoutput[i+1] << 16) | (bytesoutput[i+2] << 8) | bytesoutput[i];
+					int word = ((bytesoutput[i]   << 24) & 0xff000000) 
+							 | ((bytesoutput[i+1] << 16) & 0x00ff0000) 
+							 | ((bytesoutput[i+2] << 8 ) & 0x0000ff00) 
+							 | ((bytesoutput[i+3]      ) & 0x000000ff);
 					outputSampler.sample(word);
 				}
 				outputSampler.export(samplerBaseDir + "output.smpl");
@@ -187,8 +190,8 @@ public class Main {
 					int kj = 0;
 					if (l == 0 && s == 0) {
 						expGolombZero.encode(block[0][l][s], bos);
-						
-						mappedError = Mapper.mapError(block[0][l][s]);
+						//mimic hw by injecting here the first sample
+						mappedError = block[0][l][s]; //Mapper.mapError(block[0][l][s]); 
 						prediction = 0;
 						
 						decodedBlock[0][l][s] = block[0][l][s];

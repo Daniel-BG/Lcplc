@@ -41,25 +41,31 @@ begin
 
 	saturating <= saturating_in;
 
-	seq: process(clk)
-	begin
-		if rising_edge(clk) then
-			if rst = '1' then
-				counter <= 0;
-			elsif enable = '1' then
-				if counter = COUNT - 2 or COUNT = 1 then
-					saturating_in <= '1';
-				else
-					saturating_in <= '0';
-				end if;
-				if saturating_in = '1' then
+	gen_cnt_eq_1: if COUNT = 1 generate
+		saturating_in <= enable;
+	end generate;
+
+	gen_cnt_ge_2: if COUNT > 1 generate
+		seq: process(clk)
+		begin
+			if rising_edge(clk) then
+				if rst = '1' then
 					counter <= 0;
-				else
-					counter <= counter + 1;
+				elsif enable = '1' then
+					if counter = COUNT - 2 or COUNT = 1 then
+						saturating_in <= '1';
+					else
+						saturating_in <= '0';
+					end if;
+					if saturating_in = '1' then
+						counter <= 0;
+					else
+						counter <= counter + 1;
+					end if;
 				end if;
 			end if;
-		end if;
-	end process;
+		end process;
+end generate;
 
 
 end Behavioral;

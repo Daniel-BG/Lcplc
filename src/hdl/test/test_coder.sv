@@ -51,7 +51,7 @@ module test_coder;
 	//checkers
 	reg output_checker_enable;
 	wire output_valid, output_ready;
-	wire [OUTPUT_WIDTH-1:0] output_data;
+	wire [2**OUTPUT_WIDTH_LOG-1:0] output_data;
 	
 	always #(PERIOD/2) clk = ~clk;
 	
@@ -72,7 +72,7 @@ module test_coder;
 		output_checker_enable = 1;
 	end
 	
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_MERR)) GEN_ehat
+	helper_axis_reader #(.DATA_WIDTH(MAPPED_ERROR_WIDTH), .FILE_NAME(`GOLDEN_MERR)) GEN_ehat
 		(
 			.clk(clk), .rst(rst), .enable(gen_ehat_enable),
 			.output_valid(ehat_valid),
@@ -80,7 +80,7 @@ module test_coder;
 			.output_ready(ehat_ready)
 		);
 
-	helper_axis_reader #(.DATA_WIDTH(MAX_PARAM_VALUE_LOG), .FILE_NAME(`GOLDEN_KJ)) GEN_kj
+	helper_axis_reader #(.DATA_WIDTH(ACC_LOG), .FILE_NAME(`GOLDEN_KJ)) GEN_kj
 		(
 			.clk(clk), .rst(rst), .enable(gen_kj_enable),
 			.output_valid(kj_valid),
@@ -88,7 +88,25 @@ module test_coder;
 			.output_ready(kj_ready)
 		);
 
-	helper_axis_reader #(.DATA_WIDTH(MAX_PARAM_VALUE_LOG), .FILE_NAME(`GOLDEN_DFLAG)) GEN_dflag
+	wire kj_red_ready, kj_red_valid;
+	wire [ACC_LOG-1:0] kj_red_data;
+	AXIS_REDUCER #(
+		.DATA_WIDTH(ACC_LOG),
+		.VALID_TRANSACTIONS(255),
+		.INVALID_TRANSACTIONS(1),
+		.START_VALID(1)
+	) kj_reducer (
+		.clk(clk),
+		.rst(rst),
+		.input_ready(kj_ready),
+		.input_valid(kj_valid),
+		.input_data(kj_data),
+		.output_ready(kj_red_ready),
+		.output_valid(kj_red_valid),
+		.output_data(kj_red_data)
+	);
+
+	helper_axis_reader #(.DATA_WIDTH(ACC_LOG), .FILE_NAME(`GOLDEN_DFLAG)) GEN_dflag
 		(
 			.clk(clk), .rst(rst), .enable(gen_dflag_enable),
 			.output_valid(dflag_valid),
@@ -96,7 +114,7 @@ module test_coder;
 			.output_ready(dflag_ready)
 		);
 
-	helper_axis_checker #(.DATA_WIDTH(OUTPUT_WIDTH_LOG), .FILE_NAME(`GOLDEN_OUTPUT)) GEN_checker_output
+	helper_axis_checker #(.DATA_WIDTH(2**OUTPUT_WIDTH_LOG), .FILE_NAME(`GOLDEN_OUTPUT)) GEN_checker_output
 		(
 			.clk        (clk), .rst        (rst), .enable     (output_checker_enable),
 			.input_valid(output_valid),
@@ -117,9 +135,9 @@ module test_coder;
 		.ehat_data(ehat_data),
 		.ehat_ready(ehat_ready),
 		.ehat_valid(ehat_valid),
-		.kj_data(kj_data),
-		.kj_ready(kj_ready),
-		.kj_valid(kj_valid),
+		.kj_data(kj_red_data),
+		.kj_ready(kj_red_ready),
+		.kj_valid(kj_red_valid),
 		.d_flag_data(dflag_data),
 		.d_flag_ready(dflag_ready),
 		.d_flag_valid(dflag_valid),

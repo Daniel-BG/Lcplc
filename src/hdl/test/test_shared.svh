@@ -21,3 +21,4 @@
 `define GOLDEN_GC_PARAM		{`GOLDEN_ROOT_DIR, "gc_param", 		`GOLDEN_EXT}
 `define GOLDEN_GC_CODE		{`GOLDEN_ROOT_DIR, "gc_code", 		`GOLDEN_EXT}
 `define GOLDEN_GC_LENGTH	{`GOLDEN_ROOT_DIR, "gc_quant",		`GOLDEN_EXT}
+`define GOLDEN_OUTPUT		{`GOLDEN_ROOT_DIR, "output",		`GOLDEN_EXT}

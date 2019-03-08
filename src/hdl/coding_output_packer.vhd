@@ -84,6 +84,7 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	--delay for shift adjustment
 	signal len_cnt_rst_ready_buf, len_cnt_rst_valid_buf: std_logic;
 	signal len_cnt_rst_data_buf: std_logic_vector(COUNTER_WIDTH-1 downto 0);
+	signal len_cnt_rst_data_buf_ext: std_logic;
 	
 	--shift adjustments
 	signal adjust_data: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
@@ -141,10 +142,20 @@ begin
 			output_1_data  => sss_1_data,
 			output_1_ready => sss_1_ready
 		);
-	sss_0_data_code <= sss_0_data(sss_0_data'high downto sss_0_data'high - CODE_WIDTH + 1);
-	sss_1_data_code <= sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1);
+
 	sss_0_data_shift <= sss_0_data(BIT_AMT_WIDTH - 1 downto 0);
+	sss_0_data_code <= sss_0_data(sss_0_data'high downto sss_0_data'high - CODE_WIDTH + 1);
 	sss_1_data_shift <= sss_1_data(BIT_AMT_WIDTH - 1 downto 0);
+	
+	--TEMPORARY FIX UNTIL A MORE PIPELINED APPROACH IS MADE
+		--sss_1_data_code <= sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1);
+		sss_1_data_code <= 
+			sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1)
+			and
+			not std_logic_vector(shift_left(to_signed(-1, CODE_WIDTH), to_integer(unsigned(sss_1_data_shift))));
+	--
+
+	
 	
 	--split length into two partial sums 
 	length_splitter: entity work.AXIS_SPLITTER_3
@@ -246,9 +257,13 @@ begin
 			output_data =>len_cnt_rst_data_buf
 		);
 		
+	len_cnt_rst_data_buf_ext <= '1' when 
+		len_cnt_rst_data_buf(OUTPUT_WIDTH_LOG - 1 downto 0) = (OUTPUT_WIDTH_LOG - 1 downto 0 => '0')
+		else '0';
+
 	shift_add: entity work.AXIS_ARITHMETIC_OP
 		Generic map (
-			DATA_WIDTH_0 => OUTPUT_WIDTH_LOG,
+			DATA_WIDTH_0 => OUTPUT_WIDTH_LOG + 1,
 			DATA_WIDTH_1 => BIT_AMT_WIDTH,
 			OUTPUT_DATA_WIDTH => COUNTER_WIDTH,
 			IS_ADD => true,
@@ -258,7 +273,7 @@ begin
 		)
 		Port map(
 			clk => clk, rst => rst,
-			input_0_data  => len_cnt_rst_data_buf(OUTPUT_WIDTH_LOG - 1 downto 0),
+			input_0_data  => len_cnt_rst_data_buf_ext & len_cnt_rst_data_buf(OUTPUT_WIDTH_LOG - 1 downto 0),
 			input_0_valid => len_cnt_rst_valid_buf,
 			input_0_ready => len_cnt_rst_ready_buf,
 			input_1_data  => adjust_data,

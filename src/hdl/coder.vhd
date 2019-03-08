@@ -89,22 +89,26 @@ architecture Behavioral of CODER is
 	
 	--exp zero golomb coder
 	signal eg_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
-	signal eg_length: natural range 0 to CODING_LENGTH_MAX;
+	signal eg_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 	signal eg_valid, eg_ready: std_logic;
 	
 	--normal golomb
 	signal golomb_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
-	signal golomb_length: natural range 0 to CODING_LENGTH_MAX;
+	signal golomb_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 	signal golomb_valid, golomb_ready: std_logic;
 	signal golomb_ends_input: std_logic;
 	
+	--trasher for merger
+	signal merger_valid_pre, merger_ready_pre: std_logic;
+	signal merger_data_pre: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
+
 	--merger stuff
 	signal merger_input_0, merger_input_1, merger_input_2: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
 	signal merger_clear: std_logic;
 	signal merger_valid, merger_ready: std_logic;
 	signal merger_data: std_logic_vector(CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG - 1 downto 0);
 	signal merger_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
-	signal merger_length: natural range 0 to CODING_LENGTH_MAX;
+	signal merger_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 	
 	--control signals
 	signal counter_bitplane, counter_bitplane_next: natural range 0 to 2**BLOCK_SIZE_LOG - 1;
@@ -128,7 +132,7 @@ begin
 		counter_bitplane_next <= counter_bitplane;
 		
 		if golomb_valid = '1' and golomb_ready = '1' and golomb_ends_input = '1' then
-			if counter_bitplane = 2**BLOCK_SIZE_LOG - 1 then
+			if counter_bitplane = 2**BLOCK_SIZE_LOG - 2 then -- -2 since 1 goes through the normal coder
 				counter_bitplane_next <= 0;
 				merger_clear <= '1'; --allow for next bitplane to go through
 			else
@@ -298,8 +302,8 @@ begin
 
 	--merger for both coders
 	merger_input_0 <= (CODING_LENGTH_MAX_LOG - 1 downto 1 => '0') & '1' & (CODING_LENGTH_MAX - 1 downto 1 => '0') & d_flag_0_data;
-	merger_input_1 <= std_logic_vector(to_unsigned(eg_length, CODING_LENGTH_MAX_LOG)) & eg_code;
-	merger_input_2 <= std_logic_vector(to_unsigned(golomb_length, CODING_LENGTH_MAX_LOG)) & golomb_code;
+	merger_input_1 <= eg_length & eg_code;
+	merger_input_2 <= golomb_length & golomb_code;
 	merger: entity work.AXIS_MERGER 
 		Generic map (
 			DATA_WIDTH => CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG, --space for both length and the bits themselves
@@ -320,13 +324,29 @@ begin
 			input_2_ready	=> golomb_ready,
 			input_2_data    => merger_input_2,
 			--to output axi ports
-			output_valid	=> merger_valid,
-			output_ready	=> merger_ready,
-			output_data		=> merger_data
+			output_valid	=> merger_valid_pre,
+			output_ready	=> merger_ready_pre,
+			output_data		=> merger_data_pre
 		);
+
+	trasher: entity work.AXIS_TRASHER
+		Generic map (
+			DATA_WIDTH => CODING_LENGTH_MAX + CODING_LENGTH_MAX_LOG,
+			INVALID_TRANSACTIONS => 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready  => merger_ready_pre,
+			input_valid  => merger_valid_pre,
+			input_data   => merger_data_pre,
+			output_ready => merger_ready,
+			output_valid => merger_valid,
+			output_data  => merger_data
+		);
+
 	merger_code <= merger_data(CODING_LENGTH_MAX-1 downto 0);
-	merger_length <= to_integer(unsigned(merger_data(merger_data'high downto merger_data'high-CODING_LENGTH_MAX_LOG + 1)));
-		
+	merger_length <= merger_data(merger_data'high downto merger_data'high-CODING_LENGTH_MAX_LOG + 1);
+
 	packer: entity work.CODING_OUTPUT_PACKER
 		Generic map (
 			CODE_WIDTH => CODING_LENGTH_MAX,
