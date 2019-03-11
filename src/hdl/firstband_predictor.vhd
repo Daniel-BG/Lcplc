@@ -34,26 +34,26 @@ entity FIRSTBAND_PREDICTOR is
 		x_valid			: in  std_logic;
 		x_ready			: out std_logic;
 		x_data			: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		x_last_row		: in  std_logic;	--1 if the current sample is the last of its row
+		x_last_block	: in  std_logic;	--1 if the current sample is the last of its block
 		--output mapped error, coding parameter and xhat out value
 		--output prediction
 		prediction_ready: in std_logic;
 		prediction_valid: out std_logic;
-		prediction_data : out std_logic_vector(DATA_WIDTH downto 0)
+		prediction_data : out std_logic_vector(DATA_WIDTH - 1 downto 0)
 	);
 end FIRSTBAND_PREDICTOR;
 
 architecture Behavioral of FIRSTBAND_PREDICTOR is
 	type firstband_state_t is (IDLE, PREDICTING);
 	signal state_curr, state_next: firstband_state_t;
+	signal first_sample: boolean;
+	signal first_row: boolean;
+	signal first_col: boolean;
 
 	--queue system for previous samples
 	signal current_sample, left_sample, upper_sample: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal shift_enable: std_logic;
-	
-	--counter stuff
-	signal counter_enable: std_logic;
-	signal counter_saturating: std_logic;
-	signal counter_x, counter_y: natural range 0 to 2**(BLOCK_SIZE_LOG/2) - 1;
 
 	--prediction
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
@@ -61,14 +61,25 @@ begin
 
 	seq: process(clk)
 	begin
-		if rising_Edge(clk) then
+		if rising_edge(clk) then
 			if rst = '1' then
 				state_curr <= IDLE;
+				first_row    <= true;
+				first_col    <= true;
 			else
 				state_curr <= state_next;
 				if shift_enable = '1' then
 					current_sample <= x_data;
 					left_sample <= current_sample;
+					if x_last_row = '1' and x_last_block = '1' then
+						first_row <= true;
+						first_col <= true;
+					elsif x_last_row = '1' then
+						first_row <= false;
+						first_col <= true;
+					else
+						first_col <= false;
+					end if;
 				end if;
 			end if;
 		end if;
@@ -111,29 +122,15 @@ begin
 			end if;
 		end if;
 	end process;
-
-	counter_enable <= '1' when shift_enable = '1' and state_curr /= IDLE else '0';
-
-	counter: entity work.TWO_DIMENSIONAL_COORDINATE_TRACKER
-		Generic map (
-			X_SIZE => 2**(BLOCK_SIZE_LOG/2),
-			Y_SIZE => 2**(BLOCK_SIZE_LOG/2)
-		)
-		Port map (
-			clk => clk, rst => rst, enable => counter_enable,
-			saturating => open,
-			x_coord => counter_x,
-			y_coord => counter_y
-		);
 		
-	prediction_gen: process(counter_x, counter_y, upper_Sample, left_sample, upleft_addition)
+	prediction_gen: process(first_col, first_row, upper_Sample, left_sample, upleft_addition)
 	begin
-		if counter_x = 0 and counter_y = 0 then
+		if first_col and first_row then
 			prediction_data <= (others => '0');
 			--prediction <= (prediction'high downto current_sample'high+1 => '0') & current_sample;
-		elsif counter_x = 0 then
+		elsif first_col then
 			prediction_data <= std_logic_vector(resize(unsigned(upper_sample), prediction_data'length));
-		elsif counter_y = 0 then
+		elsif first_row then
 			prediction_data <= std_logic_vector(resize(unsigned(left_sample), prediction_data'length));
 		else
 			prediction_data <= std_logic_vector(resize(unsigned(upleft_addition(upleft_addition'high downto 1)), prediction_data'length));
