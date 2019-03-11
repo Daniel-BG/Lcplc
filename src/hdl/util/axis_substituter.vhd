@@ -77,7 +77,8 @@ begin
 	input_ready <= output_ready;
 	output_valid <= input_valid;
 	
-	comb: process(state_curr, output_ready, input_valid,counter_saturating, input_data, input_sub)
+	comb: process(state_curr, output_ready, input_valid,counter_saturating, input_data, input_sub, 
+		counter_saturating_valid, counter_saturating_invalid)
 	begin
 		state_next <= state_curr;
 		counter_enable <= '0';

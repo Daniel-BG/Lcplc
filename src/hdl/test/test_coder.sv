@@ -120,7 +120,7 @@ module test_coder;
 		.output_data(kj_red_data)
 	);
 
-	helper_axis_reader #(.DATA_WIDTH(ACC_LOG), .FILE_NAME(`GOLDEN_DFLAG)) GEN_dflag
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_DFLAG)) GEN_dflag
 		(
 			.clk(clk), .rst(rst), .enable(gen_dflag_enable),
 			.output_valid(dflag_valid),

@@ -28,7 +28,8 @@ use work.FUNCTIONS.ALL;
 entity AXIS_SHIFTER is
 	Generic (
 		SHIFT_WIDTH	: integer := 7;
-		DATA_WIDTH	: integer := 69;
+		INPUT_WIDTH : integer := 39;
+		OUTPUT_WIDTH: integer := 70;
 		BITS_PER_STAGE: integer := 7;
 		LEFT		: boolean := true;
 		ARITHMETIC	: boolean := false;
@@ -39,10 +40,10 @@ entity AXIS_SHIFTER is
 		shift_data		: in 	std_logic_vector(SHIFT_WIDTH - 1 downto 0);
 		shift_ready		: out   std_logic;
 		shift_valid		: in 	std_logic;
-		input_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_data		: in	std_logic_vector(INPUT_WIDTH - 1 downto 0);
 		input_ready		: out	std_logic;
 		input_valid		: in	std_logic;
-		output_data		: out 	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		output_data		: out 	std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 		output_ready	: in	std_logic;
 		output_valid	: out	std_logic
 	);
@@ -53,15 +54,15 @@ architecture Behavioral of AXIS_SHIFTER is
 
 	--synchronizer signals
 	signal synced_shift	: std_logic_vector(SHIFT_WIDTH - 1 downto 0);
-	signal synced_data	: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal synced_data 	: std_logic_vector(INPUT_WIDTH - 1 downto 0);
 	signal synced_valid, synced_ready: std_logic;
 
 	--shifting signals
-	type data_storage_t is array(0 to STAGES) of std_logic_vector(DATA_WIDTH - 1 downto 0);
+	type data_storage_t is array(0 to STAGES) of std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 	signal memory_curr: data_storage_t;
-	type data_storage_t_1 is array(1 to STAGES) of std_logic_vector(DATA_WIDTH - 1 downto 0);
+	type data_storage_t_1 is array(1 to STAGES) of std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 	signal memory_next: data_storage_t_1;
-	type data_storage_t_swm1 is array(0 to STAGES-1) of std_logic_vector(DATA_WIDTH - 1 downto 0);
+	type data_storage_t_swm1 is array(0 to STAGES-1) of std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 	signal shifted_values: data_storage_t_swm1;
 	
 	type shiftamt_storage_t is array(0 to STAGES-1) of std_logic_vector(SHIFT_WIDTH - 1 downto 0);
@@ -74,7 +75,7 @@ begin
 	sync_inputs: entity work.AXIS_SYNCHRONIZER_2
 		Generic map (
 			DATA_WIDTH_0 => SHIFT_WIDTH, 
-			DATA_WIDTH_1 => DATA_WIDTH,
+			DATA_WIDTH_1 => INPUT_WIDTH,
 			LATCH 		 => LATCH_INPUT_SYNC
 		)
 		Port map (
@@ -154,7 +155,7 @@ begin
 	
 	seq: process(clk, rst, synced_data, synced_shift, synced_valid, enable)
 	begin
-		memory_curr(0) <= synced_data;
+		memory_curr(0) <= std_logic_vector(resize(unsigned(synced_data), OUTPUT_WIDTH));
 		shiftamt_curr(0) <= synced_shift;
 		if enable = '1' and synced_valid = '1' then
 			valid(0) <= '1';

@@ -54,7 +54,7 @@ entity CODER is
 		d_flag_data	: in	std_logic_vector(0 downto 0);
 		d_flag_ready: out	std_logic;
 		d_flag_valid: in 	std_logic;
-		--ALPHA INPUT: one per band except first (last comes trimmed from outside)
+		--ALPHA INPUT: one per band except last (last comes trimmed from outside)
 		alpha_data	: in 	std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 		alpha_ready : out 	std_logic;
 		alpha_valid	: in 	std_logic;

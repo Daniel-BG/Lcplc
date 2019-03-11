@@ -77,13 +77,13 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	
 	--partial sums
 	signal len_cnt_data: std_logic_vector(COUNTER_WIDTH-1 downto 0);
-	signal len_cnt_rst_data: std_logic_vector(COUNTER_WIDTH-1 downto 0);
+	signal len_cnt_rst_data: std_logic_vector(OUTPUT_WIDTH_LOG - 1 downto 0);
 	signal len_cnt_valid, len_cnt_ready: std_logic;
 	signal len_cnt_rst_valid, len_cnt_rst_ready: std_logic;
 	
 	--delay for shift adjustment
 	signal len_cnt_rst_ready_buf, len_cnt_rst_valid_buf: std_logic;
-	signal len_cnt_rst_data_buf: std_logic_vector(COUNTER_WIDTH-1 downto 0);
+	signal len_cnt_rst_data_buf: std_logic_vector(OUTPUT_WIDTH_LOG - 1 downto 0);
 	
 	--shift adjustments
 	signal adjust_data: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
@@ -96,7 +96,7 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	signal sss_1_data_code_buf: std_logic_vector(CODE_WIDTH - 1 downto 0);
 	
 	--shifted results /presults
-	signal shifted_data, data_code_extended: std_logic_vector(SHIFTED_WIDTH - 1 downto 0);
+	signal shifted_data: std_logic_vector(SHIFTED_WIDTH - 1 downto 0);
 	signal shifted_ready, shifted_valid: std_logic;
 	
 	--delay before segmenter
@@ -105,6 +105,7 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	
 	--segmenter things
 	signal segmenter_data: std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
+	signal segmenter_data_ends: std_logic_vector(2**OUTPUT_WIDTH_LOG downto 0);
 	--signal segmenter_buffered: std_logic;
 	signal segmenter_ends_word, segmenter_ready, segmenter_valid: std_logic;
 
@@ -182,15 +183,15 @@ begin
 	--partial sums (one starting @reset value, the other @reset plus first)
 	partial_sum_reset: entity work.AXIS_PARTIAL_SUM
 		Generic map(
-			INPUT_WIDTH_LOG		=> BIT_AMT_WIDTH,
-			COUNTER_WIDTH_LOG	=> COUNTER_WIDTH,
-			RESET_VALUE			=> 2**COUNTER_WIDTH-1,
+			INPUT_WIDTH_LOG		=> OUTPUT_WIDTH_LOG,
+			COUNTER_WIDTH_LOG	=> OUTPUT_WIDTH_LOG,
+			RESET_VALUE			=> 2**OUTPUT_WIDTH_LOG-1,
 			START_ON_RESET		=> true,
 			IS_ADD				=> false
 		)
 		Port map (
 			clk => clk, rst	=> rst,
-			input_data		=> length_0_data,
+			input_data		=> length_0_data(OUTPUT_WIDTH_LOG - 1 downto 0),
 			input_valid		=> length_0_valid,
 			input_ready		=> length_0_ready,
 			output_data 	=> len_cnt_rst_data,
@@ -244,14 +245,14 @@ begin
 	--delay for sum w/reset
 	len_cnt_rst_buf: entity work.AXIS_FIFO
 		Generic map (
-			DATA_WIDTH => COUNTER_WIDTH,
+			DATA_WIDTH => OUTPUT_WIDTH_LOG,
 			FIFO_DEPTH => 2 + FIFO_SLACK
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_ready =>len_cnt_rst_ready,
 			input_valid =>len_cnt_rst_valid,
-			input_data  =>len_cnt_rst_data,
+			input_data  =>len_cnt_rst_data(OUTPUT_WIDTH_LOG - 1 downto 0),
 			output_ready=>len_cnt_rst_ready_buf,
 			output_valid=>len_cnt_rst_valid_buf,
 			output_data =>len_cnt_rst_data_buf
@@ -269,7 +270,7 @@ begin
 		)
 		Port map(
 			clk => clk, rst => rst,
-			input_0_data  => len_cnt_rst_data_buf(OUTPUT_WIDTH_LOG - 1 downto 0),
+			input_0_data  => len_cnt_rst_data_buf,
 			input_0_valid => len_cnt_rst_valid_buf,
 			input_0_ready => len_cnt_rst_ready_buf,
 			input_1_data  => adjust_data,
@@ -299,11 +300,11 @@ begin
 		);
 		
 	--shifter
-	data_code_extended <= (SHIFTED_WIDTH - 1 downto CODE_WIDTH => '0') & sss_1_data_code_buf;
 	shifter: entity work.AXIS_SHIFTER 
 		Generic map (
 			SHIFT_WIDTH	=> COUNTER_WIDTH,
-			DATA_WIDTH  => SHIFTED_WIDTH,
+			INPUT_WIDTH => CODE_WIDTH,
+			OUTPUT_WIDTH=> SHIFTED_WIDTH,
 			LEFT	    => true,
 			ARITHMETIC	=> false,
 			BITS_PER_STAGE => 4
@@ -313,7 +314,7 @@ begin
 			shift_data		=> final_shift_data,
 			shift_ready		=> final_shift_ready,
 			shift_valid		=> final_shift_valid,
-			input_data		=> data_code_extended, 
+			input_data		=> sss_1_data_code_buf, 
 			input_ready		=> sss_1_ready_buf,
 			input_valid		=> sss_1_valid_buf,
 			output_data		=> shifted_data,
@@ -362,6 +363,7 @@ begin
 		);
 
 	--remove critical path here
+	segmenter_data_ends <= segmenter_data & segmenter_ends_word;
 	segmenter_merger_delay: entity work.AXIS_LATCHED_CONNECTION
 		Generic map(
 			DATA_WIDTH => 2**OUTPUT_WIDTH_LOG + 1
@@ -370,7 +372,7 @@ begin
 			clk => clk, rst => rst,
 			input_ready => segmenter_ready,
 			input_valid => segmenter_valid,
-			input_data  => segmenter_data & segmenter_ends_word,
+			input_data  => segmenter_data_ends,
 			output_ready => segmenter_ready_buf,
 			output_valid => segmenter_valid_buf,
 			output_data  => segmenter_data_ends_buf

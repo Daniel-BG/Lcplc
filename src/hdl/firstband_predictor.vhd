@@ -43,7 +43,7 @@ entity FIRSTBAND_PREDICTOR is
 end FIRSTBAND_PREDICTOR;
 
 architecture Behavioral of FIRSTBAND_PREDICTOR is
-	type firstband_state_t is (IDLE, PREDICTING_FIRST, AWAITING_REST, PREDICTING_REST);
+	type firstband_state_t is (IDLE, PREDICTING);
 	signal state_curr, state_next: firstband_state_t;
 
 	--queue system for previous samples
@@ -96,34 +96,17 @@ begin
 			x_ready <= '1';
 			if x_valid = '1' then
 				shift_enable <= '1';
-				state_next <= PREDICTING_FIRST;
+				state_next <= PREDICTING;
 			end if;
-		elsif state_curr = PREDICTING_FIRST then
+		elsif state_curr = PREDICTING then
 			prediction_valid <= '1';
 			if prediction_ready = '1' then
 				x_ready <= '1';
 				if x_valid = '1' then
 					shift_enable <= '1';
-					state_next <= PREDICTING_REST;
+					state_next <= PREDICTING;
 				else
-					state_next <= AWAITING_REST;
-				end if;
-			end if;
-		elsif state_curr = AWAITING_REST then
-			x_ready <= '1';
-			if x_valid = '1' then
-				shift_enable <= '1';
-				state_next <= PREDICTING_REST;
-			end if;
-		elsif state_curr = PREDICTING_REST then
-			prediction_valid <= '1';
-			if prediction_ready = '1' then
-				x_ready <= '1';
-				if x_valid = '1' then
-					shift_enable <= '1';
-					state_next <= PREDICTING_REST;
-				else
-					state_next <= AWAITING_REST;
+					state_next <= IDLE;
 				end if;
 			end if;
 		end if;

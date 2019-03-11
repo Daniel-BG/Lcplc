@@ -84,8 +84,8 @@ architecture Behavioral of LCPLC is
 	signal xmean_valid, xmean_ready: std_logic;
 	
 	--mean split (alpha and nth pred)
-	signal xmean_0_valid, xmean_0_ready, xmean_1_valid, xmean_1_ready: std_logic;
-	signal xmean_0_data, xmean_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xmean_0_valid, xmean_0_ready, xmean_1_valid, xmean_1_ready, xmean_2_valid, xmean_2_ready: std_logic;
+	signal xmean_0_data, xmean_1_data, xmean_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--fifo delay for x values
 	signal x_delay_ready, x_delay_valid: std_logic;
@@ -98,6 +98,12 @@ architecture Behavioral of LCPLC is
 	--alpha result
 	signal alpha_ready, alpha_valid: std_logic;
 	signal alpha_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+	
+	--alpha splitter
+	signal alpha_0_ready, alpha_0_valid: std_logic;
+	signal alpha_0_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+	signal alpha_1_ready, alpha_1_valid: std_logic;
+	signal alpha_1_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 	
 	--prediction other bands
 	signal prediction_rest_ready, prediction_rest_valid: std_logic;
@@ -148,6 +154,12 @@ architecture Behavioral of LCPLC is
 	--xhatout mean splitter
 	signal xhatoutmean_0_valid, xhatoutmean_0_ready, xhatoutmean_1_valid,xhatoutmean_1_ready: std_logic;
 	signal xhatoutmean_0_data, xhatoutmean_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	
+	--reducers before coder
+	signal alpha_1_ready_red, alpha_1_valid_red: std_logic;
+	signal alpha_1_data_red: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+	signal xmean_2_valid_red, xmean_2_ready_red: std_logic;
+	signal xmean_2_data_red: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--final delays
 	signal merr_delay_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
@@ -272,7 +284,7 @@ begin
 		);
 		
 	--xmean splitter (alpha and nth prediciton)
-	splitter_xmean: entity work.AXIS_SPLITTER_2
+	splitter_xmean: entity work.AXIS_SPLITTER_3
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH
 		)
@@ -287,7 +299,10 @@ begin
 			output_0_data	=> xmean_0_data,
 			output_1_valid	=> xmean_1_valid,
 			output_1_ready	=> xmean_1_ready,
-			output_1_data	=> xmean_1_data
+			output_1_data	=> xmean_1_data,
+			output_2_valid  => xmean_2_valid,
+			output_2_ready  => xmean_2_ready,
+			output_2_data   => xmean_2_data
 		);
 		
 	--buffer for samples for alpha
@@ -334,6 +349,26 @@ begin
 			alpha_data		=> alpha_data
 		);
 		
+	--alpha_splitter
+	alpha_split: entity work.AXIS_SPLITTER_2
+		Generic map (
+			DATA_WIDTH => ALPHA_WIDTH
+		)
+		Port map (
+			clk => clk, rst	=> rst,
+			--to input axi port
+			input_valid		=> alpha_valid,
+			input_data		=> alpha_data,
+			input_ready		=> alpha_ready,
+			--to output axi ports
+			output_0_valid	=> alpha_0_valid,
+			output_0_data	=> alpha_0_data,
+			output_0_ready	=> alpha_0_ready,
+			output_1_valid	=> alpha_1_valid,
+			output_1_data	=> alpha_1_data,
+			output_1_ready	=> alpha_1_ready
+		);
+		
 	--nth band predictor
 	nthband_predictor: entity work.NTHBAND_PREDICTOR
 		Generic map (
@@ -352,9 +387,9 @@ begin
 			xhatmean_valid	=> xhatoutmean_1_valid,
 			xhatmean_ready	=> xhatoutmean_1_ready,
 			xhatmean_data	=> xhatoutmean_1_data,
-			alpha_valid     => alpha_valid,
-			alpha_ready		=> alpha_ready,
-			alpha_data		=> alpha_data,
+			alpha_valid     => alpha_0_valid,
+			alpha_ready		=> alpha_0_ready,
+			alpha_data		=> alpha_0_data,
 			--output prediction
 			prediction_ready => prediction_rest_ready,
 			prediction_valid => prediction_rest_valid,
@@ -487,7 +522,7 @@ begin
 			xtilde_data		=> xtilde_data,
 			xtilde_ready	=> xtilde_ready,
 			xtilde_valid	=> xtilde_valid,
-			d_flag_data_raw	=> d_flag_0_valid,
+			d_flag_data		=> d_flag_0_valid,
 			d_flag_ready	=> d_flag_0_ready,
 			d_flag_valid	=> d_flag_0_valid,
 			xhatout_data	=> xhatout_data,
@@ -591,6 +626,41 @@ begin
 			output_valid=> kj_delay_valid
 		);
 		
+	--reducers for coder inputs
+	alpha_red: entity work.AXIS_REDUCER
+		Generic map (
+			DATA_WIDTH => ALPHA_WIDTH,
+			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG - 1,
+			INVALID_TRANSACTIONS => 1,
+			START_VALID => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready     => alpha_1_ready,
+			input_valid		=> alpha_1_valid,
+			input_data		=> alpha_1_data,
+			output_ready	=> alpha_1_ready_red,
+			output_valid	=> alpha_1_valid_red,
+			output_data		=> alpha_1_data_red
+		);
+		
+	xmean_red: entity work.AXIS_REDUCER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG - 1,
+			INVALID_TRANSACTIONS => 1,
+			START_VALID => false
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready     => xmean_2_ready,
+			input_valid		=> xmean_2_valid,
+			input_data		=> xmean_2_data,
+			output_ready	=> xmean_2_ready_red,
+			output_valid	=> xmean_2_valid_red,
+			output_data		=> xmean_2_data_red
+		);
+		
 	--coder
 	coder: entity work.CODER 
 		Generic map (
@@ -614,8 +684,14 @@ begin
 			d_flag_data	=> d_flag_1_data_stdlv,
 			d_flag_ready=> d_flag_1_ready,
 			d_flag_valid=> d_flag_1_valid,
+			alpha_data	=> alpha_1_data_red,
+			alpha_ready => alpha_1_ready_red,
+			alpha_valid	=> alpha_1_valid_red,
+			--XMEAN INPUT: one per band except first (first comes trimmed from outside)
+			xmean_data	=> xmean_2_data_red,
+			xmean_ready => xmean_2_ready_red,
+			xmean_valid => xmean_2_valid_red,
 			--outputs
-			--??????
 			output_data	=> output_data,
 			output_valid=> output_valid,
 			output_ready=> output_ready
