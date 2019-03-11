@@ -24,6 +24,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.data_types.all;
 
 entity ALPHA_FINDER is
 	generic (
@@ -70,20 +71,24 @@ begin
 		generic map (
 			DATA_WIDTH_0 => DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG,
 			DATA_WIDTH_1 => DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG,
-			LATCH => true
+			LATCH => true,
+			LAST_POLICY => PASS_ZERO
 		)
 		port map (
 			clk => clk, rst => rst,
 			input_0_valid => alphan_valid,
 			input_0_ready => alphan_ready,
 			input_0_data  => alphan_data,
+			input_0_last  => '0',
 			input_1_valid => alphad_valid,
 			input_1_ready => alphad_ready,
 			input_1_data  => alphad_data,
+			input_1_last  => '0',
 			output_valid  => input_valid,
 			output_ready  => input_ready,
 			output_data_0 => input_data_alphan,
-			output_data_1 => input_data_alphad
+			output_data_1 => input_data_alphad,
+			output_last   => open
 		);
 
 	seq: process(clk, rst)

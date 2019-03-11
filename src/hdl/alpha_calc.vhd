@@ -94,7 +94,7 @@ begin
 	xhat_last_data <= xhat_last & xhat_data;
 	xhat_splitter: entity work.AXIS_SPLITTER_3
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH
+			DATA_WIDTH => DATA_WIDTH + 1
 		)
 		Port map (
 			clk => clk, rst => rst,

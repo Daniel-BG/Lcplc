@@ -45,7 +45,6 @@ architecture Behavioral of AXIS_HOLDER is
 	signal state_curr, state_next: state_holder_t;
 
 	signal buf, buf_next: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal primed: boolean;
 begin
 
 	seq: process(clk)
@@ -63,10 +62,13 @@ begin
 
 	output_data <= buf;
 
-	comb: process(state_curr, input_valid, clear_valid, output_ready, clear_data)
+	comb: process(state_curr, input_valid, clear_valid, output_ready, clear_data, buf, input_data)
 	begin
 		input_ready <= '0';
 		buf_next <= buf;
+		clear_ready <= '0';
+		state_next <= state_curr;
+		output_valid <= '0';
 
 		if state_curr = EMPTY then
 			input_ready <= '1';

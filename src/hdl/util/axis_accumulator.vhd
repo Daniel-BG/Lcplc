@@ -54,7 +54,7 @@ architecture Behavioral of AXIS_ACCUMULATOR is
 	signal accumulator, accumulator_next, accumulator_plus_input: std_logic_vector(ACCUMULATOR_WIDTH - 1 downto 0);
 begin
 
-	assert MAX_COUNT >= 2 report "Max count should be greater or equal than 2" severity error; 
+	assert COUNT_LOG >= 2 report "Max count should be greater or equal than 2" severity error; 
 
 	gen_acc_plus_signed: if IS_SIGNED generate
 		accumulator_plus_input <= std_logic_vector(signed(accumulator) + resize(signed(input_data), ACCUMULATOR_WIDTH));
@@ -76,7 +76,7 @@ begin
 		end if;
 	end process;
 	
-	comb: process(acc_state_curr, accumulator, accumulator_plus_input, output_ready, input_valid)
+	comb: process(acc_state_curr, accumulator, accumulator_plus_input, output_ready, input_valid, input_last)
 	begin
 		acc_state_next <= acc_state_curr;
 		accumulator_next <= accumulator;
