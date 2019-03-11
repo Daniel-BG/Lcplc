@@ -199,7 +199,7 @@ begin
 	ehat_control_repeater: entity work.AXIS_DATA_REPEATER
 		Generic map (
 			DATA_WIDTH => 1,
-			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG - 1
+			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
 		)
 		Port map (
 			clk => clk, rst => rst,

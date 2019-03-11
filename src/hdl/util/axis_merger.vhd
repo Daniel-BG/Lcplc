@@ -84,6 +84,7 @@ begin
 	comb: process(state_curr, 
 		input_0_valid, input_1_valid, input_2_valid, input_3_valid,
 		input_0_data, input_1_data, input_2_data, input_3_data,
+		input_0_last, input_1_last, input_2_last, input_3_last,
 		output_ready)
 	begin
 		state_next <= state_curr;
