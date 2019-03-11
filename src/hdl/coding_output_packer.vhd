@@ -199,11 +199,12 @@ begin
 			output_ready	=> len_cnt_rst_ready
 		);
 		
+	--use this to indicate the last occupied position in buffers down the line
 	partial_sum_no_reset: entity work.AXIS_PARTIAL_SUM
 		Generic map(
 			INPUT_WIDTH_LOG		=> BIT_AMT_WIDTH,
 			COUNTER_WIDTH_LOG	=> COUNTER_WIDTH,
-			RESET_VALUE			=> 2**COUNTER_WIDTH-1,
+			RESET_VALUE			=> 2**COUNTER_WIDTH, 
 			START_ON_RESET		=> false,
 			IS_ADD				=> false
 		)
@@ -273,7 +274,7 @@ begin
 		)
 		Port map(
 			clk => clk, rst => rst,
-			input_0_data  => len_cnt_rst_data_buf_ext & len_cnt_rst_data_buf(OUTPUT_WIDTH_LOG - 1 downto 0),
+			input_0_data  => '0' & len_cnt_rst_data_buf(OUTPUT_WIDTH_LOG - 1 downto 0),
 			input_0_valid => len_cnt_rst_valid_buf,
 			input_0_ready => len_cnt_rst_ready_buf,
 			input_1_data  => adjust_data,

@@ -162,6 +162,7 @@ begin
 				end if;
 			end if;
 		elsif state_curr = BUFFERED then
+			--output is always valid, but we need to decide what we output
 			output_valid <= '1';
 			output_data <= input_data_buff(input_data_buff'high downto input_data_buff'high - 2**WORD_WIDTH_LOG + 1);
 			
@@ -183,11 +184,11 @@ begin
 							input_position_buff_next <= input_position;
 							input_data_buff_next <= input_data;
 							state_next <= BUFFERED;
-						else
-							state_next <= WORKING;
+						else	
 							output_data <= input_data_buff(input_data_buff'high downto input_data_buff'high - 2**WORD_WIDTH_LOG + 1)
 										or input_data(input_data'high downto input_data'high - 2**WORD_WIDTH_LOG + 1);
 							if input_position_counter = inner_counter then
+								state_next <= WORKING;
 								if input_position_end_flag then
 									output_ends_word <= '1';
 									inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
