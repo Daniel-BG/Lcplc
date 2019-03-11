@@ -22,6 +22,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.data_types.all;
 
 entity AXIS_MULTIPLIER is
 	Generic (
@@ -30,19 +31,23 @@ entity AXIS_MULTIPLIER is
 		OUTPUT_WIDTH: integer := 32;
 		SIGN_EXTEND_0	: boolean := true;
 		SIGN_EXTEND_1	: boolean := true;
-		SIGNED_OP		: boolean := true
+		SIGNED_OP		: boolean := true;
+		LAST_POLICY		: last_policy_t := PASS_ZERO
 	);
 	Port(
 		clk, rst: in std_logic;
 		input_0_data	: in  std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
 		input_0_valid	: in  std_logic;
 		input_0_ready	: out std_logic;
+		input_0_last	: in  std_logic;
 		input_1_data	: in  std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
 		input_1_valid	: in  std_logic;
 		input_1_ready	: out std_logic;
+		input_1_last    : in  std_logic;
 		output_data		: out std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 		output_valid	: out std_logic;
-		output_ready	: in  std_logic
+		output_ready	: in  std_logic;
+		output_last		: out std_logic
 	);
 end AXIS_MULTIPLIER;
 
@@ -50,6 +55,7 @@ architecture Behavioral of AXIS_MULTIPLIER is
 	signal joint_valid, joint_ready: std_logic;
 	signal joint_data_0: std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
 	signal joint_data_1: std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
+	signal joint_last: std_logic;
 	
 	function max(X, Y: integer; SIGNED_OP: boolean)
 		return integer is
@@ -94,20 +100,24 @@ begin
 	data_joiner: entity work.AXIS_SYNCHRONIZER_2
 		generic map (
 			DATA_WIDTH_0 => DATA_WIDTH_0,
-			DATA_WIDTH_1 => DATA_WIDTH_1
+			DATA_WIDTH_1 => DATA_WIDTH_1,
+			LAST_POLICY  => LAST_POLICY
 		)
 		port map (
 			clk => clk, rst => rst,
 			input_0_valid => input_0_valid,
 			input_0_ready => input_0_ready,
 			input_0_data  => input_0_data,
+			input_0_last  => input_0_last,
 			input_1_valid => input_1_valid,
 			input_1_ready => input_1_ready,
 			input_1_data  => input_1_data,
+			input_1_last  => input_1_last,
 			output_valid  => joint_valid,
 			output_ready  => joint_ready,
 			output_data_0 => joint_data_0,
-			output_data_1 => joint_data_1
+			output_data_1 => joint_data_1,
+			output_last   => joint_last
 		);
 	
 	input_0_zero_extend: if not SIGN_EXTEND_0 generate
@@ -140,9 +150,11 @@ begin
 				input_b => final_input_1,
 				input_valid => joint_valid,
 				input_ready => joint_ready,
+				input_last  => joint_last,
 				output => final_output,
 				output_valid => output_valid,
-				output_ready => output_ready
+				output_ready => output_ready,
+				output_last => output_last
 			);
 	end generate;
 	
@@ -155,9 +167,11 @@ begin
 				input_b => final_input_1,
 				input_valid => joint_valid,
 				input_ready => joint_ready,
+				input_last  => joint_last,
 				output => final_output,
 				output_valid => output_valid,
-				output_ready => output_ready
+				output_ready => output_ready,
+				output_last => output_last
 			);
 	end generate;
 	

@@ -8,8 +8,9 @@
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: Separate samples to two different ports. You can set how many go 
---		to each port until the next is selected
+-- Description: Separate input samples. Sample start funneling through port 0 until
+--		last is asserted, that sample is the last to go through port 0, and then
+--		they start going through port 1. Again when last is asserted this changes.
 -- 
 -- Dependencies: 
 -- 
@@ -24,9 +25,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity AXIS_SEPARATOR is
 	Generic (
-		DATA_WIDTH: integer := 16;
-		TO_PORT_ZERO: integer := 1;
-		TO_PORT_ONE: integer := 255
+		DATA_WIDTH: integer := 16
 	);
 	Port ( 
 		clk, rst: in std_logic;
@@ -34,6 +33,7 @@ entity AXIS_SEPARATOR is
 		input_valid		: in	std_logic;
 		input_ready		: out	std_logic;
 		input_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_last		: in 	std_logic;
 		--to output axi ports
 		output_0_valid	: out 	std_logic;
 		output_0_ready	: in 	std_logic;
@@ -48,28 +48,9 @@ architecture Behavioral of AXIS_SEPARATOR is
 	type separator_state_t is (PORT_ZERO, PORT_ONE);
 	signal state_curr, state_next: separator_state_t;
 	
-	signal counter_zero_saturating: std_logic;
-	signal counter_one_saturating: std_logic;
-	signal saturating: std_logic_vector(1 downto 0);
-
-	signal counter_enable: std_logic;
 begin
 	output_0_data <= input_data;
 	output_1_data <= input_data;
-
-	--counters
-	counters: entity work.STOPPED_COUNTER
-		Generic map (
-			STOPS => (TO_PORT_ZERO, TO_PORT_ONE)
-		)
-		Port map (
-			clk => clk, rst => rst,
-			enable => counter_enable,
-			saturating => saturating
-		);
-
-	counter_zero_saturating <= saturating(0);
-	counter_one_saturating  <= saturating(1);
 
 	seq: process(clk)
 	begin
@@ -82,10 +63,9 @@ begin
 		end if;
 	end process;
 	
-	comb: process(state_curr, output_0_ready, output_1_ready, input_valid, counter_zero_saturating, counter_one_saturating)
+	comb: process(state_curr, output_0_ready, output_1_ready, input_valid)
 	begin
 		state_next <= state_curr;
-		counter_enable <= '0';
 		
 		if state_curr = PORT_ZERO then
 			input_ready <= output_0_ready;
@@ -93,8 +73,7 @@ begin
 			output_1_valid <= '0';
 			--check if a transaction is made
 			if input_valid = '1' and output_0_ready = '1' then
-				counter_enable <= '1';
-				if counter_zero_saturating = '1' then
+				if input_last = '1' then
 					state_next <= PORT_ONE;
 				end if;
 			end if;
@@ -104,8 +83,7 @@ begin
 			output_0_valid <= '0';
 			--check if a transaction is made
 			if input_valid = '1' and output_1_ready = '1' then
-				counter_enable <= '1';
-				if counter_one_saturating = '1' then
+				if input_last = '1' then
 					state_next <= PORT_ZERO;
 				end if;
 			end if;

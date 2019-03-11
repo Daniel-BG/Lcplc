@@ -35,7 +35,7 @@ entity FIRSTBAND_PREDICTOR is
 		x_ready			: out std_logic;
 		x_data			: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		x_last_row		: in  std_logic;	--1 if the current sample is the last of its row
-		x_last_block	: in  std_logic;	--1 if the current sample is the last of its block
+		x_last_slice	: in  std_logic;	--1 if the current sample is the last of its block
 		--output mapped error, coding parameter and xhat out value
 		--output prediction
 		prediction_ready: in std_logic;
@@ -71,7 +71,7 @@ begin
 				if shift_enable = '1' then
 					current_sample <= x_data;
 					left_sample <= current_sample;
-					if x_last_row = '1' and x_last_block = '1' then
+					if x_last_row = '1' and x_last_slice = '1' then
 						first_row <= true;
 						first_col <= true;
 					elsif x_last_row = '1' then

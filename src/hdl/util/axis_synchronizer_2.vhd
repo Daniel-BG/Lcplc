@@ -23,12 +23,14 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use work.data_types.all;
 
 entity AXIS_SYNCHRONIZER_2 is
 	Generic (
 		DATA_WIDTH_0: integer := 32;
 		DATA_WIDTH_1: integer := 32;
-		LATCH: boolean := true
+		LATCH: boolean := true;
+		LAST_POLICY: last_policy_t := PASS_ZERO
 	);
 	Port (
 		clk, rst: in std_logic;
@@ -36,38 +38,47 @@ entity AXIS_SYNCHRONIZER_2 is
 		input_0_valid: in  std_logic;
 		input_0_ready: out std_logic;
 		input_0_data : in  std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
+		input_0_last : in  std_logic;
 		input_1_valid: in  std_logic;
 		input_1_ready: out std_logic; 
 		input_1_data : in  std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
+		input_1_last : in  std_logic;
 		--to output axi ports
-		output_valid	: out 	STD_LOGIC;
-		output_ready	: in 	STD_LOGIC;
+		output_valid	: out std_logic;
+		output_ready	: in  std_logic;
 		output_data_0	: out std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
-		output_data_1	: out std_logic_vector(DATA_WIDTH_1 - 1 downto 0)
+		output_data_1	: out std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
+		output_last		: out std_logic
 	);
 end AXIS_SYNCHRONIZER_2;
 
 architecture Behavioral of AXIS_SYNCHRONIZER_2 is
+	signal output_last_0, output_last_1: std_logic;
 begin
 
 	gen_latched_version: if LATCH generate
 		latched_version: entity work.AXIS_SYNCHRONIZER_LATCHED_2
 		generic map (
 				DATA_WIDTH_0 => DATA_WIDTH_0,
-				DATA_WIDTH_1 => DATA_WIDTH_1
+				DATA_WIDTH_1 => DATA_WIDTH_1,
+				LAST_POLICY  => LAST_POLICY
 			)
 		port map (
 				clk => clk, rst => rst,
 				input_0_valid => input_0_valid,
 				input_0_ready => input_0_ready,
 				input_0_data  => input_0_data,
+				input_0_last  => input_0_last,
 				input_1_valid => input_1_valid,
 				input_1_ready => input_1_ready,
 				input_1_data  => input_1_data,
+				input_1_last  => input_1_last,
 				output_valid  => output_valid,
 				output_ready  => output_ready,
 				output_data_0 => output_data_0,
-				output_data_1 => output_data_1
+				output_data_1 => output_data_1,
+				output_last_0 => output_last_0,
+				output_last_1 => output_last_1
 			);
 	end generate;
 
@@ -75,21 +86,33 @@ begin
 		passthrough_version: entity work.AXIS_SYNCHRONIZER_PASSTHROUGH_2
 		generic map (
 				DATA_WIDTH_0 => DATA_WIDTH_0,
-				DATA_WIDTH_1 => DATA_WIDTH_1
+				DATA_WIDTH_1 => DATA_WIDTH_1,
+				LAST_POLICY  => LAST_POLICY
 			)
 		port map (
 				clk => clk, rst => rst,
 				input_0_valid => input_0_valid,
 				input_0_ready => input_0_ready,
 				input_0_data  => input_0_data,
+				input_0_last  => input_0_last,
 				input_1_valid => input_1_valid,
 				input_1_ready => input_1_ready,
 				input_1_data  => input_1_data,
+				input_1_last  => input_1_last,
 				output_valid  => output_valid,
 				output_ready  => output_ready,
 				output_data_0 => output_data_0,
-				output_data_1 => output_data_1
+				output_data_1 => output_data_1,
+				output_last_0 => output_last_0,
+				output_last_1 => output_last_1
 			);
 	end generate;
+	
+	
+	gen_pass_0  : if LAST_POLICY = PASS_ZERO generate	output_last <= output_last_0; end generate;
+	gen_pass_1  : if LAST_POLICY = PASS_ONE  generate	output_last <= output_last_1; end generate;
+	gen_pass_or : if LAST_POLICY = OR_ALL    generate	output_last <= output_last_0 or  output_last_1; end generate;
+	gen_pass_and: if LAST_POLICY = AND_ALL   generate	output_last <= output_last_0 and output_last_1; end generate;
+		
 	
 end Behavioral;

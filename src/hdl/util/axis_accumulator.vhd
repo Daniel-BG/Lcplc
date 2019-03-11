@@ -25,12 +25,12 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.functions.all;
 
 entity AXIS_ACCUMULATOR is
 	Generic (
 		DATA_WIDTH			: integer := 36;
-		ACC_COUNT_LOG		: integer := 8;
-		ACC_COUNT			: integer := 256;
+		COUNT_LOG			: integer := 8;
 		IS_SIGNED			: boolean := true
 	);
 	Port (
@@ -38,7 +38,8 @@ entity AXIS_ACCUMULATOR is
 		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_valid	: in  std_logic;
 		input_ready	: out std_logic;
-		output_data	: out std_logic_vector(ACC_COUNT_LOG + DATA_WIDTH - 1 downto 0);
+		input_last	: in std_logic;
+		output_data	: out std_logic_vector(COUNT_LOG + DATA_WIDTH - 1 downto 0);
 		output_valid: out std_logic;
 		output_ready: in  std_logic
 	);
@@ -46,24 +47,14 @@ end AXIS_ACCUMULATOR;
 
 architecture Behavioral of AXIS_ACCUMULATOR is
 	--counter signals
-	signal counter_enable, counter_saturating: std_logic;
-	
 	type acc_state_t is (READING, OUTPUTTING);
 	signal acc_state_curr, acc_state_next: acc_state_t;
 	
-	constant ACCUMULATOR_WIDTH: integer := DATA_WIDTH + ACC_COUNT_LOG;
+	constant ACCUMULATOR_WIDTH: integer := DATA_WIDTH + COUNT_LOG;
 	signal accumulator, accumulator_next, accumulator_plus_input: std_logic_vector(ACCUMULATOR_WIDTH - 1 downto 0);
 begin
 
-	counter: entity work.COUNTER 
-		Generic map (
-			COUNT => ACC_COUNT
-		)
-		Port map ( 
-			clk => clk, rst => rst,
-			enable		=> counter_enable,
-			saturating	=> counter_saturating
-		);
+	assert MAX_COUNT >= 2 report "Max count should be greater or equal than 2" severity error; 
 
 	gen_acc_plus_signed: if IS_SIGNED generate
 		accumulator_plus_input <= std_logic_vector(signed(accumulator) + resize(signed(input_data), ACCUMULATOR_WIDTH));
@@ -85,20 +76,18 @@ begin
 		end if;
 	end process;
 	
-	comb: process(acc_state_curr, accumulator, accumulator_plus_input, output_ready, input_valid, counter_saturating)
+	comb: process(acc_state_curr, accumulator, accumulator_plus_input, output_ready, input_valid)
 	begin
 		acc_state_next <= acc_state_curr;
 		accumulator_next <= accumulator;
 		input_ready <= '0';
 		output_valid <= '0';
-		counter_enable <= '0';
 	
 		if acc_state_curr = READING then
 			input_ready <= '1';
 			if input_valid = '1' then
 				accumulator_next <= accumulator_plus_input;
-				counter_enable <= '1';
-				if counter_saturating = '1' then
+				if input_last = '1' then
 					acc_state_next <= OUTPUTTING;
 				end if;
 			end if; 

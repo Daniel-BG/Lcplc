@@ -27,7 +27,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity AXIS_AVERAGER_POW2 is
 	Generic (
 		DATA_WIDTH: integer := 36;
-		ELEMENT_COUNT_LOG: integer := 8;
+		COUNT_LOG: integer := 8;
 		IS_SIGNED: boolean := true
 	);
 	Port (
@@ -35,6 +35,7 @@ entity AXIS_AVERAGER_POW2 is
 		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_valid	: in  std_logic;
 		input_ready	: out std_logic;
+		input_last	: in  std_logic;
 		output_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
 		output_valid: out std_logic;
 		output_ready: in  std_logic
@@ -42,14 +43,13 @@ entity AXIS_AVERAGER_POW2 is
 end AXIS_AVERAGER_POW2;
 
 architecture Behavioral of AXIS_AVERAGER_POW2 is
-	signal output_tmp: std_logic_vector(DATA_WIDTH + ELEMENT_COUNT_LOG - 1 downto 0);
+	signal output_tmp: std_logic_vector(DATA_WIDTH + COUNT_LOG - 1 downto 0);
 begin
 
 	accumulator: entity work.AXIS_ACCUMULATOR
 		Generic map (
 			DATA_WIDTH  => DATA_WIDTH,
-			ACC_COUNT_LOG => ELEMENT_COUNT_LOG,
-			ACC_COUNT => 2**ELEMENT_COUNT_LOG,
+			COUNT_LOG => COUNT_LOG,
 			IS_SIGNED	=> IS_SIGNED
 		)
 		Port map (
@@ -57,11 +57,12 @@ begin
 			input_data => input_data,
 			input_valid => input_valid,
 			input_ready	=> input_ready,
+			input_last  => input_last,
 			output_data => output_tmp,
 			output_valid => output_valid,
 			output_ready => output_ready
 		);
 		
-	output_data <= output_tmp(DATA_WIDTH + ELEMENT_COUNT_LOG - 1 downto ELEMENT_COUNT_LOG);
+	output_data <= output_tmp(DATA_WIDTH + COUNT_LOG - 1 downto COUNT_LOG);
 
 end Behavioral;

@@ -8,7 +8,8 @@
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
+-- Description: Results are either valid or invalid until last is asserted (and
+--		flip every time it asserts). Valid results are funneled to the output
 -- 
 -- Dependencies: 
 -- 
@@ -25,8 +26,6 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity AXIS_REDUCER is
 	Generic (
 		DATA_WIDTH: integer := 32;
-		VALID_TRANSACTIONS: integer := 255;
-		INVALID_TRANSACTIONS: integer := 1;
 		START_VALID: boolean := true
 	);
 	Port (
@@ -34,6 +33,7 @@ entity AXIS_REDUCER is
 		input_ready:	out	std_logic;
 		input_valid:	in	std_logic;
 		input_data: 	in	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_last:		in  std_logic;
 		output_ready:	in 	std_logic;
 		output_valid:	out	std_logic;
 		output_data:	out	std_logic_vector(DATA_WIDTH - 1 downto 0)
@@ -47,9 +47,7 @@ begin
 	gen_valid: if START_VALID generate
 		separator: entity work.AXIS_SEPARATOR
 			Generic map (
-				DATA_WIDTH => DATA_WIDTH,
-				TO_PORT_ZERO => VALID_TRANSACTIONS,
-				TO_PORT_ONE  => INVALID_TRANSACTIONS
+				DATA_WIDTH => DATA_WIDTH
 			)
 			Port map ( 
 				clk => clk, rst => rst,
@@ -57,6 +55,7 @@ begin
 				input_valid		=> input_valid,
 				input_ready		=> input_ready,
 				input_data		=> input_data,
+				input_last 		=> input_last,
 				--to output axi ports
 				output_0_valid	=> output_valid,
 				output_0_ready	=> output_ready,
@@ -70,9 +69,7 @@ begin
 	gen_invalid: if not START_VALID generate
 		separator: entity work.AXIS_SEPARATOR
 			Generic map (
-				DATA_WIDTH => DATA_WIDTH,
-				TO_PORT_ZERO => INVALID_TRANSACTIONS,
-				TO_PORT_ONE  => VALID_TRANSACTIONS
+				DATA_WIDTH => DATA_WIDTH
 			)
 			Port map ( 
 				clk => clk, rst => rst,
@@ -80,6 +77,7 @@ begin
 				input_valid		=> input_valid,
 				input_ready		=> input_ready,
 				input_data		=> input_data,
+				input_last 		=> input_last,
 				--to output axi ports
 				output_0_valid	=> open,
 				output_0_ready	=> '1',
