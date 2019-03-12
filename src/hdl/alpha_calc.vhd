@@ -29,7 +29,7 @@ use work.data_types.all;
 entity ALPHA_CALC is
 	Generic (
 		constant DATA_WIDTH: positive := 16;
-		constant BLOCK_SIZE_LOG : positive := 8;
+		constant MAX_SIZE_LOG : positive := 8;
 		constant ALPHA_WIDTH: positive := 10
 	);
 	Port (
@@ -85,7 +85,7 @@ architecture Behavioral of ALPHA_CALC is
 	signal alphad_mult_valid, alphan_mult_valid, alphad_mult_ready, alphan_mult_ready, alphan_mult_last, alphad_mult_last: std_logic;
 	
 	--accumulator outputs 
-	signal alphan_acc_data, alphad_acc_data: std_logic_vector(DATA_WIDTH*2 + 1 + BLOCK_SIZE_LOG downto 0);
+	signal alphan_acc_data, alphad_acc_data: std_logic_vector(DATA_WIDTH*2 + 1 + MAX_SIZE_LOG downto 0);
 	signal alphan_acc_valid, alphan_acc_ready, alphad_acc_valid, alphad_acc_ready: std_logic;
 	
 begin
@@ -287,7 +287,7 @@ begin
 	alphan_accumulator: entity work.AXIS_ACCUMULATOR
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH*2 + 2,
-			COUNT_LOG => BLOCK_SIZE_LOG,
+			COUNT_LOG => MAX_SIZE_LOG,
 			IS_SIGNED => true
 		)
 		Port map (
@@ -305,7 +305,7 @@ begin
 	alphad_accumulator: entity work.AXIS_ACCUMULATOR
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH*2 + 2,
-			COUNT_LOG => BLOCK_SIZE_LOG,
+			COUNT_LOG => MAX_SIZE_LOG,
 			IS_SIGNED => true
 		)
 		Port map (
@@ -323,7 +323,7 @@ begin
 	alpha_calculation: entity work.ALPHA_FINDER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
+			BLOCK_SIZE_LOG => MAX_SIZE_LOG,
 			ALPHA_WIDTH => ALPHA_WIDTH
 		)
 		Port map (
