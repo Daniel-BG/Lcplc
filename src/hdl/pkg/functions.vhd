@@ -5,6 +5,7 @@ package FUNCTIONS is
 	function maxval(a, b: integer) return integer;
 	function sum(a: integer_vector) return integer;
 	function partsum(a: integer_vector; numelems: integer) return integer;
+	function unsignedlen(invalue: integer; is_signed: boolean) return integer;
 	
 end FUNCTIONS;
 
@@ -57,4 +58,13 @@ package body FUNCTIONS is
 		end loop;
 		return res;
 	end function;
+
+    function unsignedlen(invalue: integer; is_signed: boolean) return integer is
+    begin
+        if is_signed then
+            return invalue + 1;
+        else
+            return invalue;
+        end if;
+    end function;
 end FUNCTIONS;
