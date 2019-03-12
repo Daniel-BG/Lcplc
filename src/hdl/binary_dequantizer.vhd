@@ -18,18 +18,9 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity BINARY_DEQUANTIZER is
 	Generic (
@@ -40,12 +31,14 @@ entity BINARY_DEQUANTIZER is
 	);
 	Port (
 		clk, rst: std_logic;
-		input_ready: out std_logic;
-		input_valid: in std_logic;
-		input: in std_logic_vector(DATA_WIDTH - 1 downto 0);
-		output_ready: in std_logic;
+		input_ready	: out std_logic;
+		input_valid	: in  std_logic;
+		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_last  : in  std_logic;
+		output_ready: in  std_logic;
 		output_valid: out std_logic;
-		output: out std_logic_vector(DATA_WIDTH - 1 downto 0)
+		output_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
+		output_last : out std_logic
 	);
 end BINARY_DEQUANTIZER;
 
@@ -64,13 +57,14 @@ begin
 	--no segmentation done yet
 	output_valid <= input_valid;
 	input_ready  <= output_ready;
+	output_last  <= input_last;
 
-	input_sign_extended <= input(DATA_WIDTH - 1) & input;
-	abs_val <= input_sign_extended when input(DATA_WIDTH - 1) = '0' else std_logic_vector(-signed(input_sign_extended));
+	input_sign_extended <= input_data(DATA_WIDTH - 1) & input_data;
+	abs_val <= input_sign_extended when input_data(DATA_WIDTH - 1) = '0' else std_logic_vector(-signed(input_sign_extended));
 	
 	shifted_down <= abs_val(DATA_WIDTH downto UPSHIFT - DOWNSHIFT_MINUS_1 - 1) & (UPSHIFT - DOWNSHIFT_MINUS_1 - 2 downto 0 => '0');
 
-	pre_out <= shifted_down when input(DATA_WIDTH - 1) = '0' else std_logic_vector(-signed(shifted_down));
-	output <= pre_out(DATA_WIDTH - 1 downto 0);
+	pre_out <= shifted_down when input_data(DATA_WIDTH - 1) = '0' else std_logic_vector(-signed(shifted_down));
+	output_data <= pre_out(DATA_WIDTH - 1 downto 0);
 
 end Behavioral;

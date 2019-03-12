@@ -24,33 +24,37 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.functions.all;
 
 entity SLIDING_ACCUMULATOR is
 	Generic (
 		DATA_WIDTH: integer := 16;
 		BLOCK_SIZE_LOG: integer := 8;
-		ACC_LOG: integer := 5
+		ACCUMULATOR_WINDOW: integer := 32
 	);
 	Port (
-		clk, rst: in std_logic;
-		input_data: in std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_valid: in std_logic;
-		input_ready: out std_logic;
-		output_cnt: out std_logic_vector(ACC_LOG downto 0);
-		output_data: out std_logic_vector(DATA_WIDTH + ACC_LOG - 1 downto 0);
+		clk, rst 	: in  std_logic;
+		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_valid	: in  std_logic;
+		input_ready	: out std_logic;
+		input_last	: in  std_logic;
+		output_cnt	: out std_logic_vector(bits(ACCUMULATOR_WINDOW) - 1 downto 0);
+		output_data	: out std_logic_vector(DATA_WIDTH + bits(ACCUMULATOR_WINDOW-1) - 1 downto 0);
 		output_valid: out std_logic;
-		output_ready: in std_logic
+		output_ready: in  std_logic
 	);
 end SLIDING_ACCUMULATOR;
 
 architecture Behavioral of SLIDING_ACCUMULATOR  is
+	constant ACC_WINDOW_BITS: integer := bits(ACCUMULATOR_WINDOW);
+	constant ACC_WINDOW_M1_BITS: integer := bits(ACCUMULATOR_WINDOW-1);
+
 	type sliding_acc_state_t is (IDLE, PRIMED, EMPTYING);
 	signal state_curr, state_next: sliding_acc_state_t;
 
-	signal accumulator, accumulator_next: std_logic_vector(DATA_WIDTH + ACC_LOG - 1 downto 0);
+	signal accumulator, accumulator_next: std_logic_vector(DATA_WIDTH + ACC_WINDOW_M1_BITS - 1 downto 0);
 
-	signal counter, counter_next: natural range 0 to 2**ACC_LOG;
-	signal reset_counter, reset_counter_next: natural range 0 to 2**BLOCK_SIZE_LOG;
+	signal counter, counter_next: natural range 0 to ACCUMULATOR_WINDOW;
 
 	--input queue signals
 	signal write_en, read_en: std_logic;
@@ -70,18 +74,16 @@ begin
 			if rst = '1' then
 				state_curr <= IDLE;
 				counter <= 0;
-				reset_counter <= 0;
 				accumulator <= (others => '0');
 			else
 				state_curr <= state_next;
 				counter <= counter_next;
-				reset_counter <= reset_counter_next;
 				accumulator <= accumulator_next;
 			end if;
 		end if;
 	end process;
 
-	comb: process(state_curr, counter, reset_counter, input_valid, accumulator, input_data, input_queued, output_ready)
+	comb: process(state_curr, counter, input_valid, accumulator, input_data, input_queued, output_ready, input_last)
 	begin
 		force_rst_sample_queue <= '0';
 		state_next <= state_curr;
@@ -89,51 +91,49 @@ begin
 		output_valid <= '0';
 		read_en <= '0';
 		write_en <= '0';
-		reset_counter_next <= reset_counter;
 		counter_next <= counter;
 		accumulator_next <= accumulator;
 
 		if state_curr = IDLE then
 			input_ready <= '1';
 			if input_valid = '1' then
+				if input_last = '1' then
+					state_next <= EMPTYING;
+				end if;
 				write_en <= '1';
-				reset_counter_next <= reset_counter + 1;
 				state_next <= PRIMED;
-				if counter = 2**ACC_LOG then
+				if counter = ACCUMULATOR_WINDOW then
 					read_en <= '1';
-					accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_LOG - 1 downto 0 => '0') & input_data) - unsigned((ACC_LOG - 1 downto 0 => '0') & input_queued));
+					accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data) - unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_queued));
 				else
 					counter_next <= counter + 1;
-					accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_LOG - 1 downto 0 => '0') & input_data));
+					accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data));
 				end if;
 			end if;
 		elsif state_curr = PRIMED then
 			output_valid <= '1';
 			if output_ready = '1' then
-				if reset_counter = 2**BLOCK_SIZE_LOG then
-					state_next <= EMPTYING;
-				else
-					input_ready <= '1';
-					if input_valid = '1' then
-						write_en <= '1';
-						reset_counter_next <= reset_counter + 1;
-						if counter = 2**ACC_LOG then
-							read_en <= '1';
-							accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_LOG - 1 downto 0 => '0') & input_data) - unsigned((ACC_LOG - 1 downto 0 => '0') & input_queued));
-						else
-							counter_next <= counter + 1;
-							accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_LOG - 1 downto 0 => '0') & input_data));
-						end if;
-					else
-						state_next <= IDLE;
+				input_ready <= '1';
+				if input_valid = '1' then
+					if input_last = '1' then
+						state_next <= EMPTYING;
 					end if;
+					write_en <= '1';
+					if counter = ACCUMULATOR_WINDOW then
+						read_en <= '1';
+						accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data) - unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_queued));
+					else
+						counter_next <= counter + 1;
+						accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data));
+					end if;
+				else
+					state_next <= IDLE;
 				end if;
 			end if;
 		elsif state_curr = EMPTYING then
 			force_rst_sample_queue <= '1';
 			accumulator_next <= (others => '0');
 			counter_next <= 0;
-			reset_counter_next <= 0;
 			state_next <= IDLE;
 		end if;
 	end process;
@@ -142,7 +142,7 @@ begin
 	sample_queue: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			FIFO_DEPTH => 2**ACC_LOG 
+			FIFO_DEPTH => ACCUMULATOR_WINDOW 
 		)
 		Port map (
 			clk => clk, rst => rst_sample_queue,
@@ -168,7 +168,7 @@ begin
 			output_valid=> open
 		);
 	
-	output_cnt	<= std_logic_vector(to_unsigned(counter, ACC_LOG + 1));
+	output_cnt	<= std_logic_vector(to_unsigned(counter, ACC_WINDOW_BITS));
 	output_data	<= accumulator;
 	
 	

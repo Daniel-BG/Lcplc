@@ -189,13 +189,24 @@ public class Main {
 					int prediction;
 					int kj = 0;
 					if (l == 0 && s == 0) {
-						expGolombZero.encode(block[0][l][s], bos);
+						/*expGolombZero.encode(block[0][l][s], bos);
 						//mimic hw by injecting here the first sample
 						mappedError = block[0][l][s]; //Mapper.mapError(block[0][l][s]); 
 						prediction = 0;
 						
 						decodedBlock[0][l][s] = block[0][l][s];
-						acc.add(0);
+						acc.add(0);*/
+						
+						int quant = iutq.quantize(block[0][l][s]);
+						int dequant = iutq.dequantize(quant);
+						
+						expGolombZero.encode(quant, bos);
+						//mimic hw by injecting here the first sample
+						mappedError = quant; //Mapper.mapError(block[0][l][s]); 
+						prediction = 0;
+						
+						decodedBlock[0][l][s] = dequant;
+						acc.add(dequant);
 						
 					//For every other sample, code following
 					//the predictive scheme
@@ -441,8 +452,13 @@ public class Main {
 			for (int l = 0; l < lines; l++) {
 				for (int s = 0; s < samples; s++) {
 					if (l == 0 && s == 0) {
-						decodedBand[l][s] = expGolombZero.decode(bis);
-						acc.add(0);
+						/*decodedBand[l][s] = expGolombZero.decode(bis);
+						acc.add(0);*/
+						
+						int quant = expGolombZero.decode(bis);
+						int dequant = iutq.dequantize(quant);
+						decodedBlock[0][l][s] = dequant;
+						acc.add(dequant);
 					} else {
 						int prediction = Predictor.basic2DPrediction(decodedBand, l, s);
 						

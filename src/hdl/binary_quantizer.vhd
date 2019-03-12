@@ -18,18 +18,9 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity BINARY_QUANTIZER is
 	Generic (
@@ -40,12 +31,14 @@ entity BINARY_QUANTIZER is
 	);
 	Port (
 		clk, rst: std_logic;
-		input_ready: out std_logic;
-		input_valid: in std_logic;
-		input: in std_logic_vector(DATA_WIDTH - 1 downto 0);
-		output_ready: in std_logic;
+		input_ready	: out std_logic;
+		input_valid	: in  std_logic;
+		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_last	: in  std_logic;
+		output_ready: in  std_logic;
 		output_valid: out std_logic;
-		output: out std_logic_vector(DATA_WIDTH - 1 downto 0)
+		output_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
+		output_last : out std_logic
 	);
 end BINARY_QUANTIZER;
 
@@ -57,12 +50,12 @@ architecture Behavioral of BINARY_QUANTIZER is
 	signal downshifted, downshifted_inverse: std_logic_vector(DATA_WIDTH downto 0);
 begin
 	
-	--no segmentation done yet
 	output_valid <= input_valid;
 	input_ready  <= output_ready;
+	output_last  <= input_last;
 
-	input_sign_extended <= input(DATA_WIDTH - 1) & input;
-	abs_val <= input_sign_extended when input(DATA_WIDTH - 1) = '0' else std_logic_vector(-signed(input_sign_extended));
+	input_sign_extended <= input_data(DATA_WIDTH - 1) & input_data;
+	abs_val <= input_sign_extended when input_data(DATA_WIDTH - 1) = '0' else std_logic_vector(-signed(input_sign_extended));
 
 	shifted_up <= abs_val & (UPSHIFT - 1 downto 0 => '0');
 	added_downshift <= std_logic_vector(unsigned(shifted_up) + to_unsigned(2**DOWNSHIFT_MINUS_1, DATA_WIDTH + UPSHIFT + 1));
@@ -75,5 +68,6 @@ begin
 	end generate;
 	
 	downshifted_inverse <= std_logic_vector(-signed(downshifted));
-	output <= downshifted(DATA_WIDTH - 1 downto 0) when input(DATA_WIDTH - 1) = '0' else downshifted_inverse(DATA_WIDTH - 1 downto 0);
+	output_data <= downshifted(DATA_WIDTH - 1 downto 0) when input_data(DATA_WIDTH - 1) = '0' else downshifted_inverse(DATA_WIDTH - 1 downto 0);
+	
 end Behavioral;

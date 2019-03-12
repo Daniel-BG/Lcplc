@@ -35,15 +35,18 @@ entity AXIS_INTERVAL_CLAMPER is
 		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_valid	: in  std_logic;
 		input_ready	: out std_logic;
+		input_last  : in  std_logic;
 		output_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
 		output_valid: out std_logic;
-		output_ready: in  std_logic
+		output_ready: in  std_logic;
+		output_last : out std_logic
 	);
 end AXIS_INTERVAL_CLAMPER;
 
 architecture Behavioral of AXIS_INTERVAL_CLAMPER is
 	signal output_reg: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal output_valid_reg: std_logic;
+	signal output_last_reg: std_logic;
 	
 	signal op_enable: std_logic;
 	
@@ -76,13 +79,16 @@ begin
 			if rst = '1' then
 				output_valid_reg <= '0';
 				output_reg <= (others => '0');
+				output_last_reg <= '0';
 			elsif op_enable = '1' then
 				output_reg <= result;
 				output_valid_reg <= input_valid;
+				output_last_reg <= input_last;
 			end if;
 		end if;
 	end process;
 				 
+	output_last  <= output_last_reg;
 	output_valid <= output_valid_reg;
 	input_ready  <= op_enable;
 	output_data  <= output_reg;

@@ -18,18 +18,9 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity ERROR_MAPPER is
 	Generic (
@@ -37,12 +28,14 @@ entity ERROR_MAPPER is
 	);
 	Port (
 		clk, rst: std_logic;
-		input_ready: out std_logic;
-		input_valid: in std_logic;
-		input_data: in std_logic_vector(DATA_WIDTH - 1 downto 0);
-		output_ready: in std_logic;
+		input_ready	: out std_logic;
+		input_valid	: in  std_logic;
+		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_last	: in  std_logic;
+		output_ready: in  std_logic;
 		output_valid: out std_logic;
-		output: out std_logic_vector(DATA_WIDTH downto 0)
+		output_data	: out std_logic_vector(DATA_WIDTH downto 0);
+		output_last : out std_logic
 	);
 end ERROR_MAPPER;
 
@@ -56,7 +49,8 @@ architecture Behavioral of ERROR_MAPPER is
 	
 begin
 
-	input_ready <= output_ready;
+	output_last  <= input_last;
+	input_ready  <= output_ready;
 	output_valid <= input_valid;
 	
 	input_is_positive <= signed(input_data) > to_signed(0, input_data'length);
@@ -68,6 +62,6 @@ begin
 	input_shifted	  <= input_data(DATA_WIDTH - 1 downto 0) & '0';
 	input_shifted_m1  <= std_logic_vector(unsigned(input_shifted) - to_unsigned(1, DATA_WIDTH + 1));
 	
-	output <= input_shifted_m1 when input_is_positive else input_neg_shifted;
+	output_data <= input_shifted_m1 when input_is_positive else input_neg_shifted;
 	
 end Behavioral;

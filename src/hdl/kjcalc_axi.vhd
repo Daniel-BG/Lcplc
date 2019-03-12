@@ -18,49 +18,44 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+use work.functions.all;
 
 entity KJCALC_AXI is
 	Generic (
-		ACC_LOG: integer := 5;
+		EXTRA_RJ_WIDTH: integer := 5;
+		J_WIDTH: integer := 6;
 		DATA_WIDTH: integer := 16
 	);
 	Port (
-		clk, rst: in std_logic;
-		rj: in std_logic_vector(DATA_WIDTH + ACC_LOG - 1 downto 0);
-		j: in std_logic_vector(ACC_LOG downto 0);
-		input_valid: in std_logic;
-		input_ready: out std_logic;
-		kj: out std_logic_vector(ACC_LOG - 1 downto 0);
+		clk, rst 	: in  std_logic;
+		input_rj	: in  std_logic_vector(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0);
+		input_j 	: in  std_logic_vector(J_WIDTH - 1 downto 0);
+		input_valid	: in  std_logic;
+		input_ready : out std_logic;
+		output_kj 	: out std_logic_vector(bits(EXTRA_RJ_WIDTH+DATA_WIDTH) - 1 downto 0);
 		output_valid: out std_logic;
-		output_ready: in std_logic
+		output_ready: in  std_logic
 	);
 end KJCALC_AXI;
 
 architecture Behavioral of KJCALC_AXI is
+	constant OUT_WIDTH: integer := bits(EXTRA_RJ_WIDTH+DATA_WIDTH);
+
 	signal input_ready_local: std_logic;
 		
-	signal rj_shifted: std_logic_vector(DATA_WIDTH + ACC_LOG - 1 downto 0);
+	signal rj_shifted: std_logic_vector(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0);
 	signal middle_busy: std_logic;
-	signal rj_shifted_latch: std_logic_vector(DATA_WIDTH + ACC_LOG - 1 downto 0);
+	signal rj_shifted_latch: std_logic_vector(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0);
 	
 	signal output_busy: std_logic;
-	signal output_kj      : std_logic_vector(ACC_LOG - 1 downto 0);
-	signal output_kj_latch: std_logic_vector(ACC_LOG - 1 downto 0);
+	signal output_kj_pre  : std_logic_vector(OUT_WIDTH - 1 downto 0);
+	signal output_kj_latch: std_logic_vector(OUT_WIDTH - 1 downto 0);
 begin
 
-	kj <= output_kj_latch;
+	output_kj <= output_kj_latch;
 	
 	input_ready_local <= '1' when middle_busy = '0' or output_busy = '0' or output_ready = '1' 
 						 else '0';
@@ -83,19 +78,19 @@ begin
 					middle_busy <= '1';
 					rj_shifted_latch <= rj_shifted;
 					output_busy <= middle_busy;
-					output_kj_latch <= output_kj;
+					output_kj_latch <= output_kj_pre;
 				--control new inputs via AXI in port
 				elsif input_ready_local = '1' and input_valid = '1' then
 					middle_busy <= '1';
 					rj_shifted_latch <= rj_shifted;
 					if middle_busy = '1' then
 						output_busy <= middle_busy;
-						output_kj_latch <= output_kj;
+						output_kj_latch <= output_kj_pre;
 					end if;
 				--control outputs via AXI out port
 				elsif output_busy = '0' or output_ready = '1' then
 					output_busy <= middle_busy;
-					output_kj_latch <= output_kj;
+					output_kj_latch <= output_kj_pre;
 					middle_busy <= '0';
 				end if;
 			end if;
@@ -103,13 +98,13 @@ begin
 	end process;
 
 
-	calc_rj_shift: process(rj, j) 
-		variable rj_shifted_tmp: std_logic_vector(DATA_WIDTH + ACC_LOG - 1 downto 0);
+	calc_rj_shift: process(input_rj, input_j) 
+		variable rj_shifted_tmp: std_logic_vector(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0);
 	begin
 		rj_shifted_tmp := (others => '0');
-		for i in ACC_LOG downto 0 loop
-			if j(i) = '1' then
-				rj_shifted_tmp := (i - 1 downto 0 => '0') & rj(DATA_WIDTH + ACC_LOG - 1 downto i);
+		for i in J_WIDTH-1 downto 0 loop
+			if input_j(i) = '1' then
+				rj_shifted_tmp := (i - 1 downto 0 => '0') & input_rj(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto i);
 				exit;
 			end if;
 		end loop;
@@ -118,17 +113,17 @@ begin
 	end process;
 	
 	calc_kj: process(rj_shifted_latch)
-		variable kj_tmp: std_logic_vector(ACC_LOG - 1 downto 0);
+		variable kj_tmp: std_logic_vector(OUT_WIDTH - 1 downto 0);
 	begin
-		kj_tmp := std_logic_vector(to_unsigned(1, ACC_LOG));
-		for i in DATA_WIDTH + ACC_LOG - 1 downto 0 loop
+		kj_tmp := std_logic_vector(to_unsigned(1, OUT_WIDTH));
+		for i in DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0 loop
 			if rj_shifted_latch(i) = '1' then
-				kj_tmp := std_logic_vector(to_unsigned(i+1, ACC_LOG));
+				kj_tmp := std_logic_vector(to_unsigned(i+1, OUT_WIDTH));
 				exit;
 			end if;
 		end loop;
 		
-		output_kj <= kj_tmp;
+		output_kj_pre <= kj_tmp;
 	end process;
 
 
