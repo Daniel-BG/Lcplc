@@ -18,24 +18,15 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+use work.data_types.all;
 
 entity NTHBAND_PREDICTOR is
 	Generic (
 		DATA_WIDTH: positive := 16;
-		ALPHA_WIDTH: positive := 10;
-		BLOCK_SIZE_LOG: positive := 8
+		ALPHA_WIDTH: positive := 10
 	);
 	Port (
 		clk, rst		: in  std_logic;
@@ -46,6 +37,7 @@ entity NTHBAND_PREDICTOR is
 		xhat_valid		: in  std_logic;
 		xhat_ready		: out std_logic;
 		xhat_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		xhat_last		: in  std_logic;
 		xmean_valid		: in  std_logic;
 		xmean_ready		: out std_logic;
 		xmean_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -54,16 +46,25 @@ entity NTHBAND_PREDICTOR is
 		xhatmean_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		alpha_valid     : in  std_logic;
 		alpha_ready		: out std_logic;
-		alpha_data		: in std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+		alpha_data		: in  std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 		--output prediction
-		prediction_ready: in std_logic;
+		prediction_ready: in  std_logic;
 		prediction_valid: out std_logic;
-		prediction_data : out std_logic_vector(DATA_WIDTH + 2 downto 0)
+		prediction_data : out std_logic_vector(DATA_WIDTH + 2 downto 0);
+		prediction_last : out std_logic
 	);
 end NTHBAND_PREDICTOR;
 
 architecture Behavioral of NTHBAND_PREDICTOR is
 	constant PREDICTION_WIDTH: integer := DATA_WIDTH + 3;
+
+	--input splitter
+	signal xhat_last_data: std_logic_vector(DATA_WIDTH downto 0);
+	signal xhat_0_ready, xhat_1_ready, xhat_2_ready, xhat_3_ready: std_logic;
+	signal xhat_0_valid, xhat_1_valid, xhat_2_valid, xhat_3_valid: std_logic;
+	signal xhat_0_last, xhat_1_last, xhat_2_last, xhat_3_last: std_logic;
+	signal xhat_0_data, xhat_1_data, xhat_2_data, xhat_3_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xhat_0_last_data, xhat_1_last_data, xhat_2_last_data, xhat_3_last_data: std_logic_vector(DATA_WIDTH downto 0);
 	
 	--input repeaters
 	signal xmean_rep_ready, xmean_rep_valid, xhatmean_rep_ready, xhatmean_rep_valid, alpha_rep_ready, alpha_rep_valid: std_logic;
@@ -72,12 +73,12 @@ architecture Behavioral of NTHBAND_PREDICTOR is
 	
 	--prediction stage 0	
 	signal prediction_stage_0_data: std_logic_vector(DATA_WIDTH downto 0);
-	signal prediction_stage_0_out_valid, prediction_stage_0_out_ready: std_logic;
+	signal prediction_stage_0_out_valid, prediction_stage_0_out_ready, prediction_stage_0_out_last: std_logic;
 	
 	--prediction stage 1	
 	signal prediction_stage_1_input_b: std_logic_vector(DATA_WIDTH downto 0);
 	signal prediction_stage_1_data: std_logic_vector(DATA_WIDTH + ALPHA_WIDTH downto 0);
-	signal prediction_stage_1_valid, prediction_stage_1_ready: std_logic;
+	signal prediction_stage_1_valid, prediction_stage_1_ready, prediction_stage_1_last: std_logic;
 	
 	--shift of stage 1 output
 	--signal prediction_stage_1_shifted_data: std_logic_vector(DATA_WIDTH + 1 downto 0);
@@ -91,54 +92,94 @@ architecture Behavioral of NTHBAND_PREDICTOR is
 begin
 
 	-------------------
-	--INPUT REPEATERS--
+	--INPUT  SPLITTER--
 	-------------------
-	
-	xmean_repeater: entity work.AXIS_DATA_REPEATER
+	xhat_last_data <= xhat_last & xhat_data;
+	xhat_splitter: entity work.AXIS_SPLITTER_4
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
+			DATA_WIDTH => DATA_WIDTH + 1 --one extra for flag
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_ready => xmean_ready,
-			input_valid => xmean_valid,
-			input_data  => xmean_data,
-			output_ready=> xmean_rep_ready,
-			output_valid=> xmean_rep_valid,
-			output_data => xmean_rep_data
+			input_valid		=> xhat_valid,
+			input_data		=> xhat_last_data,
+			input_ready		=> xhat_ready,
+			output_0_valid	=> xhat_0_valid,
+			output_0_data	=> xhat_0_last_data,
+			output_0_ready	=> xhat_0_ready,
+			output_1_valid	=> xhat_1_valid,
+			output_1_data	=> xhat_1_last_data,
+			output_1_ready	=> xhat_1_ready,
+			output_2_valid	=> xhat_2_valid,
+			output_2_data	=> xhat_2_last_data,
+			output_2_ready	=> xhat_2_ready,
+			output_3_valid	=> xhat_3_valid,
+			output_3_data	=> xhat_3_last_data,
+			output_3_ready	=> xhat_3_ready
+		);
+	xhat_0_last <= xhat_0_last_data(xhat_0_last_data'high);
+	xhat_0_data <= xhat_0_last_data(xhat_0_data'high downto 0);
+	xhat_1_last <= xhat_1_last_data(xhat_1_last_data'high);
+	xhat_1_data <= xhat_1_last_data(xhat_1_data'high downto 0);
+	xhat_2_last <= xhat_2_last_data(xhat_2_last_data'high);
+	xhat_2_data <= xhat_2_last_data(xhat_2_data'high downto 0);
+	xhat_3_last <= xhat_3_last_data(xhat_3_last_data'high);
+	xhat_3_data <= xhat_3_last_data(xhat_3_data'high downto 0);
+
+	-------------------
+	--INPUT   HOLDERS--
+	-------------------
+
+	xmean_holder: entity work.AXIS_HOLDER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			clear_ready		=> xhat_0_ready,
+			clear_valid		=> xhat_0_valid,
+			clear_data		=> xhat_0_last,
+			input_ready		=> xmean_ready,
+			input_valid		=> xmean_valid,
+			input_data		=> xmean_data,
+			output_ready	=> xmean_rep_ready,
+			output_valid	=> xmean_rep_valid,
+			output_data		=> xmean_rep_data
 		);
 
-	xhatmean_repeater: entity work.AXIS_DATA_REPEATER
+	xhatmean_holder: entity work.AXIS_HOLDER
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
+			DATA_WIDTH => DATA_WIDTH
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_ready => xhatmean_ready,
-			input_valid => xhatmean_valid,
-			input_data  => xhatmean_data,
-			output_ready=> xhatmean_rep_ready,
-			output_valid=> xhatmean_rep_valid,
-			output_data => xhatmean_rep_data
+			clear_ready		=> xhat_1_ready,
+			clear_valid		=> xhat_1_valid,
+			clear_data		=> xhat_1_last,
+			input_ready		=> xhatmean_ready,
+			input_valid		=> xhatmean_valid,
+			input_data		=> xhatmean_data,
+			output_ready	=> xhatmean_rep_ready,
+			output_valid	=> xhatmean_rep_valid,
+			output_data		=> xhatmean_rep_data
 		);
-		
-	alpha_repeater: entity work.AXIS_DATA_REPEATER
+
+	alpha_holder: entity work.AXIS_HOLDER
 		Generic map (
-			DATA_WIDTH => ALPHA_WIDTH,
-			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
+			DATA_WIDTH => ALPHA_WIDTH
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_ready => alpha_ready,
-			input_valid => alpha_valid,
-			input_data  => alpha_data,
-			output_ready=> alpha_rep_ready,
-			output_valid=> alpha_rep_valid,
-			output_data => alpha_rep_data
+			clear_ready		=> xhat_2_ready,
+			clear_valid		=> xhat_2_valid,
+			clear_data		=> xhat_2_last,
+			input_ready		=> alpha_ready,
+			input_valid		=> alpha_valid,
+			input_data		=> alpha_data,
+			output_ready	=> alpha_rep_ready,
+			output_valid	=> alpha_rep_valid,
+			output_data		=> alpha_rep_data
 		);
-		
 		
 	--------------
 	--PREDICTION--
@@ -153,19 +194,23 @@ begin
 			IS_ADD => false,
 			SIGN_EXTEND_0 => false,
 			SIGN_EXTEND_1 => false,
-			SIGNED_OP => true
+			SIGNED_OP => true,
+			LAST_POLICY => PASS_ZERO
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_0_data  => xhat_data,
-			input_0_valid => xhat_valid,
-			input_0_ready => xhat_ready,
+			input_0_data  => xhat_3_data,
+			input_0_valid => xhat_3_valid,
+			input_0_ready => xhat_3_ready,
+			input_0_last  => xhat_3_last,
 			input_1_data  => xhatmean_rep_data,
 			input_1_valid => xhatmean_rep_valid,
 			input_1_ready => xhatmean_rep_ready,
+			input_1_last  => '0',
 			output_data   => prediction_stage_0_data,
 			output_valid  => prediction_stage_0_out_valid,
-			output_ready  => prediction_stage_0_out_ready
+			output_ready  => prediction_stage_0_out_ready,
+			output_last   => prediction_stage_0_out_last
 		);
 		
 	--second stage
@@ -177,19 +222,23 @@ begin
 			OUTPUT_WIDTH => DATA_WIDTH + 1 + ALPHA_WIDTH,
 			SIGN_EXTEND_0 => true,
 			SIGN_EXTEND_1 => false,
-			SIGNED_OP => true
+			SIGNED_OP => true,
+			LAST_POLICY => PASS_ZERO
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_0_data  => prediction_stage_0_data,
 			input_0_valid => prediction_stage_0_out_valid,
 			input_0_ready => prediction_stage_0_out_ready,
+			input_0_last  => prediction_stage_0_out_last,
 			input_1_data  => alpha_rep_data,
 			input_1_valid => alpha_rep_valid,
 			input_1_ready => alpha_rep_ready,
+			input_1_last  => '0',
 			output_data   => prediction_stage_1_data,
 			output_valid  => prediction_stage_1_valid,
-			output_ready  => prediction_stage_1_ready
+			output_ready  => prediction_stage_1_ready,
+			output_last   => prediction_stage_1_last
 		);
 		
 	--shifter b4 final stage
@@ -216,19 +265,23 @@ begin
 			IS_ADD => true,
 			SIGN_EXTEND_0 => true,
 			SIGN_EXTEND_1 => false,
-			SIGNED_OP => true
+			SIGNED_OP => true,
+			LAST_POLICY => PASS_ZERO
 		)
 		Port Map (
 			clk => clk, rst => rst,
-			input_0_data =>  prediction_stage_1_data(prediction_stage_1_data'high downto ALPHA_WIDTH - 1),
+			input_0_data  => prediction_stage_1_data(prediction_stage_1_data'high downto ALPHA_WIDTH - 1),
 			input_0_valid => prediction_stage_1_valid,
 			input_0_ready => prediction_stage_1_ready,
+			input_0_last  => prediction_stage_1_last,
 			input_1_data  => xmean_rep_data,
 			input_1_valid => xmean_rep_valid,
 			input_1_ready => xmean_rep_ready,
+			input_1_last  => '0',
 			output_data   => prediction_data,
 			output_valid  => prediction_valid,
-			output_ready  => prediction_ready
+			output_ready  => prediction_ready,
+			output_last   => prediction_last
 		);
 
 end Behavioral;
