@@ -21,14 +21,15 @@
 
 
 module test_axis_2in_1out;
-	parameter DATA_WIDTH_0=39;
-	parameter DATA_WIDTH_1=6;
-	parameter OUT_WIDTH=40; //DATA_WIDTH_0+DATA_WIDTH_1;
+	parameter DATA_WIDTH_0=24;
+	parameter DATA_WIDTH_1=9;
+	parameter OUT_WIDTH=33; //DATA_WIDTH_0+DATA_WIDTH_1;
 	parameter PERIOD=10;
 	parameter USE_JOINER=0;
 	parameter USE_FILTER=0;
-	parameter USE_COMBINER=1;
+	parameter USE_COMBINER=0;
 	parameter USE_SHIFTER=0;
+	parameter USE_DIVIDER=1;
 	parameter ELIMINATE_ON_UP=1;
 	
 	reg clk, rst;
@@ -67,7 +68,7 @@ module test_axis_2in_1out;
 		drain_enable = 1;
 	end
 	
-	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_0)) GEN_0
+	helper_axis_generator #(.DATA_WIDTH(DATA_WIDTH_0), .START_AT(12345)) GEN_0
 		(
 			.clk(clk), .rst(rst), .enable(generator_0_enable),
 			.output_valid(gen_0_valid),
@@ -146,6 +147,24 @@ module test_axis_2in_1out;
 				.input_ready(gen_0_ready),
 				.output_valid(joiner_valid),
 				.output_data(joiner_data_0),
+				.output_ready(joiner_ready)
+			);
+		assign joiner_data_1 = 0;
+	end
+	
+	if (USE_DIVIDER==1) begin: divider
+		axis_divider #(.DIVIDEND_WIDTH(DATA_WIDTH_0), .DIVISOR_WIDTH(DATA_WIDTH_1)) DIVIDER
+			(
+				.clk(clk), .rst(rst),
+				.dividend_data(gen_0_data),
+				.dividend_ready(gen_0_ready),
+				.dividend_valid(gen_0_valid),
+				.divisor_data(gen_1_data),
+				.divisor_ready(gen_1_ready),
+				.divisor_valid(gen_1_valid),
+				.output_data(joiner_data_0),
+				.output_err(),
+				.output_valid(joiner_valid),
 				.output_ready(joiner_ready)
 			);
 		assign joiner_data_1 = 0;
