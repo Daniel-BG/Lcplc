@@ -25,6 +25,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.FUNCTIONS.ALL;
 use work.data_types.all;
+use work.constants.all;
 
 entity AXIS_SHIFTER is
 	Generic (
@@ -42,11 +43,11 @@ entity AXIS_SHIFTER is
 		shift_data		: in 	std_logic_vector(SHIFT_WIDTH - 1 downto 0);
 		shift_ready		: out   std_logic;
 		shift_valid		: in 	std_logic;
-		shift_last		: in 	std_logic;
+		shift_last		: in 	std_logic := '0';
 		input_data		: in	std_logic_vector(INPUT_WIDTH - 1 downto 0);
 		input_ready		: out	std_logic;
 		input_valid		: in	std_logic;
-		input_last  	: in  	std_logic;
+		input_last  	: in  	std_logic := '0';
 		output_data		: out 	std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 		output_ready	: in	std_logic;
 		output_valid	: out	std_logic;
@@ -72,6 +73,8 @@ architecture Behavioral of AXIS_SHIFTER is
 	
 	type shiftamt_storage_t is array(0 to STAGES-1) of std_logic_vector(SHIFT_WIDTH - 1 downto 0);
 	signal shiftamt_curr, shiftamt_final: shiftamt_storage_t;
+	
+	--attribute KEEP of shiftamt_curr: signal is KEEP_DEFAULT;
 	
 	signal valid: std_logic_vector(STAGES downto 0);
 	signal last: std_logic_vector(STAGES downto 0);

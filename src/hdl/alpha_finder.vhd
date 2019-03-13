@@ -40,9 +40,9 @@ entity ALPHA_FINDER is
 		alphad_data:	in 	std_logic_vector(DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG - 1 downto 0);
 		alphad_ready:	out	std_logic;
 		alphad_valid:	in 	std_logic;
-		output_data: out std_logic_vector(ALPHA_WIDTH - 1 downto 0);
-		output_ready: in std_logic;
-		output_valid: out std_logic
+		output_data: 	out std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+		output_ready: 	in  std_logic;
+		output_valid: 	out std_logic
 	);
 end ALPHA_FINDER;
 

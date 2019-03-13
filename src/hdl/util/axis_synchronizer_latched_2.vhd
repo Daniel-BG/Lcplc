@@ -25,6 +25,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use work.data_types.all;
+use work.constants.all;
 
 entity AXIS_SYNCHRONIZER_LATCHED_2 is
 	Generic (
@@ -59,6 +60,7 @@ architecture Behavioral of AXIS_SYNCHRONIZER_LATCHED_2 is
 	signal buf_i_1, buf_o_1: std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
 	
 	signal buf_i_0_last, buf_o_0_last, buf_i_1_last, buf_o_1_last: std_logic;
+	--attribute KEEP of buf_i_0_last, buf_o_0_last, buf_i_1_last, buf_o_1_last: signal is KEEP_DEFAULT;
 	
 	signal input_0_ready_in, input_1_ready_in: std_logic;
 	signal output_valid_in: std_logic;

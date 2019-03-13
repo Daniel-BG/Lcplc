@@ -26,6 +26,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.data_types.all;
+use work.constants.all;
 
 entity AXIS_ARITHMETIC_OP is
 	Generic (
@@ -44,11 +45,11 @@ entity AXIS_ARITHMETIC_OP is
 		input_0_data	: in  std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
 		input_0_valid	: in  std_logic;
 		input_0_ready	: out std_logic;
-		input_0_last	: in  std_logic;
+		input_0_last	: in  std_logic := '0';
 		input_1_data	: in  std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
 		input_1_valid	: in  std_logic;
 		input_1_ready	: out std_logic;
-		input_1_last	: in  std_logic;
+		input_1_last	: in  std_logic := '0';
 		output_data		: out std_logic_vector(OUTPUT_DATA_WIDTH - 1 downto 0);
 		output_valid	: out std_logic;
 		output_ready	: in  std_logic;
@@ -67,6 +68,8 @@ architecture Behavioral of AXIS_ARITHMETIC_OP is
 	signal output_reg: std_logic_vector(OUTPUT_DATA_WIDTH - 1 downto 0);
 	signal output_valid_reg: std_logic;
 	signal output_last_reg: std_logic;
+	
+	--attribute KEEP of output_last_reg: signal is KEEP_DEFAULT;
 	
 	signal op_enable: std_logic;
 	

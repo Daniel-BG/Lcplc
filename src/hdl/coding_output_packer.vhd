@@ -67,6 +67,7 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	signal sss_1_data_code: std_logic_vector(CODE_WIDTH - 1 downto 0);
 	signal sss_0_data_shift: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
 	signal sss_1_data_shift: std_logic_vector(BIT_AMT_WIDTH - 1 downto 0);
+	signal sss_1_data_shift_ntrl: natural range 0 to CODE_WIDTH;
 	signal sss_0_last_length: std_logic_vector(BIT_AMT_WIDTH downto 0);
 	
 	--length splitter
@@ -149,14 +150,19 @@ begin
 		);
 
 	sss_0_data_shift <= sss_0_data(BIT_AMT_WIDTH - 1 downto 0);
-	sss_0_data_code <= sss_0_data(sss_0_data'high downto sss_0_data'high - CODE_WIDTH + 1);
+	sss_0_data_code  <= sss_0_data(sss_0_data'high downto sss_0_data'high - CODE_WIDTH + 1);
 	sss_1_data_shift <= sss_1_data(BIT_AMT_WIDTH - 1 downto 0);
 	--TEMPORARY FIX UNTIL A MORE PIPELINED APPROACH IS MADE
 		--sss_1_data_code <= sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1);
+	sss_1_data_shift_ntrl <= to_integer(unsigned(sss_1_data_shift));
 	sss_1_data_code <= 
-		sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1)
-		and
-		not std_logic_vector(shift_left(to_signed(-1, CODE_WIDTH), to_integer(unsigned(sss_1_data_shift))));
+		sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1);
+--		and
+--		not std_logic_vector(
+--			shift_left(
+--				to_signed(-1, CODE_WIDTH),
+--				sss_1_data_shift_ntrl)
+--			);
 	--
 
 	

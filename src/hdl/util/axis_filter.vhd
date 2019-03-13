@@ -44,6 +44,7 @@ end AXIS_FILTER;
 
 
 architecture Behavioral of AXIS_FILTER is
+
 	--synced signals
 	signal synced_valid, synced_ready: std_logic;
 	signal synced_data: std_logic_vector(DATA_WIDTH - 1 downto 0);

@@ -62,7 +62,7 @@ begin
 		end if;
 	end process;
 	
-	comb: process(state_curr, output_0_ready, output_1_ready, input_valid)
+	comb: process(state_curr, output_0_ready, output_1_ready, input_valid, input_last)
 	begin
 		state_next <= state_curr;
 		

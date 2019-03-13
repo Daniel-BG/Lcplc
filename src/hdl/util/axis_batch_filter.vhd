@@ -21,6 +21,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use work.constants.all;
 
 entity AXIS_BATCH_FILTER is
 	Generic (
@@ -32,7 +33,7 @@ entity AXIS_BATCH_FILTER is
 		input_valid		: in	std_logic;
 		input_ready		: out	std_logic;
 		input_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_last		: in 	std_logic;
+		input_last		: in 	std_logic := '0';
 		flag_valid		: in	std_logic;
 		flag_ready		: out	std_logic;
 		flag_data		: in	std_logic_vector(0 downto 0);
@@ -50,8 +51,12 @@ architecture Behavioral of AXIS_BATCH_FILTER is
 	signal state_curr, state_next: batch_filter_state_t;
 
 	signal flag_buf, flag_buf_next: std_logic;
+	--attribute KEEP of flag_buf: signal is KEEP_DEFAULT;
+	
 	signal filter: boolean;
 begin
+
+	output_data <= input_data;
 
 	gen_filter_on_up: if ELIMINATE_ON_UP generate
 		filter <= flag_buf = '1';
@@ -74,7 +79,7 @@ begin
 		end if;
 	end process seq;
 
-	comb: process(state_curr, flag_valid, filter, input_valid, output_ready, input_last)
+	comb: process(state_curr, flag_valid, filter, input_valid, output_ready, input_last, flag_buf, flag_data)
 	begin
 		flag_ready <= '0';
 		input_ready <= '0';
@@ -87,7 +92,7 @@ begin
 		if state_curr = IDLE then
 			flag_ready <= '1';
 			if flag_valid = '1' then
-				flag_buf_next <= flag_data;
+				flag_buf_next <= flag_data(0);
 				state_next <= FILTERING;
 			end if;
 		elsif (state_curr = FILTERING) then

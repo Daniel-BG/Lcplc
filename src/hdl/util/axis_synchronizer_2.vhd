@@ -38,11 +38,11 @@ entity AXIS_SYNCHRONIZER_2 is
 		input_0_valid: in  std_logic;
 		input_0_ready: out std_logic;
 		input_0_data : in  std_logic_vector(DATA_WIDTH_0 - 1 downto 0);
-		input_0_last : in  std_logic;
+		input_0_last : in  std_logic := '0';
 		input_1_valid: in  std_logic;
 		input_1_ready: out std_logic; 
 		input_1_data : in  std_logic_vector(DATA_WIDTH_1 - 1 downto 0);
-		input_1_last : in  std_logic;
+		input_1_last : in  std_logic := '0';
 		--to output axi ports
 		output_valid	: out std_logic;
 		output_ready	: in  std_logic;

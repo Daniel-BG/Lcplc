@@ -85,6 +85,8 @@ architecture Behavioral of CODER is
 	signal ehat_splitter_0_data, ehat_splitter_1_data: std_logic_vector(MAPPED_ERROR_WIDTH - 1 downto 0);
     signal ehat_splitter_0_last_i, ehat_splitter_0_last_b, ehat_splitter_0_last_s: std_logic;
 	signal ehat_splitter_1_last_i, ehat_splitter_1_last_b, ehat_splitter_1_last_s: std_logic;
+	signal ehat_splitter_1_last_s_stdlv: std_logic_vector(0 downto 0);
+	
 
 	--diverter signals
 	signal diverter_input_data: std_logic_vector(MAPPED_ERROR_WIDTH + 2 downto 0);
@@ -141,6 +143,7 @@ architecture Behavioral of CODER is
 	signal state_curr, state_next: coder_ctrl_state_t;
 	
 	--control signals
+	signal control_input_data, control_output_data: std_logic_vector(1 downto 0); --2 flags
 	signal control_ready, control_valid: std_logic;
 	signal control_end_block, control_end_image: std_logic;
 	
@@ -400,7 +403,32 @@ begin
 			output_ready=> xmean_alpha_ready,
 			output_data	=> xmean_alpha_data
 		);
-		
+
+	---------------
+	--  CONTROL  --
+	---------------
+	control_input_data <= ehat_splitter_1_last_i & ehat_splitter_1_last_b;
+	ehat_splitter_1_last_s_stdlv <= "1" when ehat_splitter_1_last_s = '1' else "0";
+	control_filter: entity work.AXIS_FILTER
+		Generic map (
+			DATA_WIDTH => 2,
+			ELIMINATE_ON_UP => false
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid		=> ehat_splitter_1_valid,
+			input_ready		=> ehat_splitter_1_ready,
+			input_data		=> control_input_data,
+			flag_valid		=> ehat_splitter_1_valid,
+			flag_ready		=> open,
+			flag_data		=> ehat_splitter_1_last_s_stdlv,
+			--to output axi ports
+			output_valid	=> control_valid,
+			output_ready	=> control_ready,
+			output_data		=> control_output_data
+		);
+	control_end_image <= control_output_data(1);
+	control_end_block <= control_output_data(0);
 
 	seq : process (rst, clk)
 	begin
@@ -419,8 +447,9 @@ begin
 
 
 	comb: process (state_curr, control_valid, control_end_block, control_end_image, 
-		packer_ready,
-		eg_valid)
+		packer_ready, control_end_image_buff, control_end_block_buff,
+		eg_valid, eg_code, eg_length, golomb_valid, golomb_code, golomb_length, golomb_last,
+		d_flag_3_valid, d_flag_3_data, xmean_alpha_valid, xmean_alpha_data)
 	begin
 		state_next    <= state_curr;
 		control_ready <= '0';
