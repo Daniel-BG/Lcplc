@@ -28,6 +28,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.data_types.all;
+use work.constants.all;
 
 entity AXIS_COMPARATOR is
 	--for lower than just invert the inputs
@@ -36,18 +37,19 @@ entity AXIS_COMPARATOR is
 		IS_SIGNED: 	boolean := true;
 		IS_EQUAL: 	boolean := true;
 		IS_GREATER: boolean := true;
-		LAST_POLICY: last_policy_t := PASS_ZERO
+		LAST_POLICY: last_policy_t := PASS_ZERO;
+		SYNCHRONIZE: boolean := true --if false, control signals for port 1 are ignored
 	);
 	Port(
 		clk, rst: in std_logic;
 		input_0_data : in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_0_valid: in  std_logic;
 		input_0_ready: out std_logic;
-		input_0_last : in  std_logic;
+		input_0_last : in  std_logic := '0';
 		input_1_data : in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_1_valid: in  std_logic;
 		input_1_ready: out std_logic;
-		input_1_last : in  std_logic;
+		input_1_last : in  std_logic := '0';
 		output_data	 : out std_logic;
 		output_valid : out std_logic;
 		output_ready : in  std_logic;
@@ -64,36 +66,48 @@ architecture Behavioral of AXIS_COMPARATOR is
 	signal output_reg: std_logic;
 	signal output_valid_reg: std_logic;
 	signal output_last_reg: std_logic;
+	attribute KEEP of output_last_reg: signal is KEEP_DEFAULT;
 	
 	signal op_enable: std_logic;
 	
 	signal result: std_logic;
 begin
 
-	input_synchronizer: entity work.AXIS_SYNCHRONIZER_2
-		Generic map (
-			DATA_WIDTH_0 => DATA_WIDTH,
-			DATA_WIDTH_1 => DATA_WIDTH,
-			LAST_POLICY  => LAST_POLICY
-		)
-		Port map (
-			clk => clk, rst => rst,
-			--to input axi port
-			input_0_valid => input_0_valid,
-			input_0_ready => input_0_ready,
-			input_0_data  => input_0_data,
-			input_0_last  => input_0_last,
-			input_1_valid => input_1_valid,
-			input_1_ready => input_1_ready,
-			input_1_data  => input_1_data,
-			input_1_last  => input_1_last,
-			--to output axi ports
-			output_valid  => input_sync_valid,
-			output_ready  => input_sync_ready,
-			output_data_0 => input_sync_data_0,
-			output_data_1 => input_sync_data_1,
-			output_last   => input_sync_last
-		);
+	gen_unsync: if not SYNCHRONIZE generate
+		input_sync_valid <= input_0_valid;
+		input_0_ready    <= input_sync_ready;
+		input_1_ready    <= input_sync_ready;
+		input_sync_data_0<= input_0_data;
+		input_sync_data_1<= input_1_data;
+		input_sync_last	 <= input_0_last;
+	end generate;
+
+	gen_sync: if SYNCHRONIZE generate
+		input_synchronizer: entity work.AXIS_SYNCHRONIZER_2
+			Generic map (
+				DATA_WIDTH_0 => DATA_WIDTH,
+				DATA_WIDTH_1 => DATA_WIDTH,
+				LAST_POLICY  => LAST_POLICY
+			)
+			Port map (
+				clk => clk, rst => rst,
+				--to input axi port
+				input_0_valid => input_0_valid,
+				input_0_ready => input_0_ready,
+				input_0_data  => input_0_data,
+				input_0_last  => input_0_last,
+				input_1_valid => input_1_valid,
+				input_1_ready => input_1_ready,
+				input_1_data  => input_1_data,
+				input_1_last  => input_1_last,
+				--to output axi ports
+				output_valid  => input_sync_valid,
+				output_ready  => input_sync_ready,
+				output_data_0 => input_sync_data_0,
+				output_data_1 => input_sync_data_1,
+				output_last   => input_sync_last
+			);
+	end generate;
 
 	op_enable <= '1' when output_valid_reg = '0' or output_ready = '1' else '0';
 

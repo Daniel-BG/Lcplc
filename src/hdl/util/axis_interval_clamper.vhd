@@ -22,6 +22,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.constants.all;
 
 entity AXIS_INTERVAL_CLAMPER is
 	Generic (
@@ -45,6 +46,8 @@ end AXIS_INTERVAL_CLAMPER;
 
 architecture Behavioral of AXIS_INTERVAL_CLAMPER is
 	signal output_reg: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	attribute KEEP of output_reg: signal is KEEP_DEFAULT;
+
 	signal output_valid_reg: std_logic;
 	signal output_last_reg: std_logic;
 	

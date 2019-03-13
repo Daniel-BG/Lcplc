@@ -8,8 +8,9 @@
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
--- Description: 
--- 
+-- Description: Precalculate xhat mean via xtilde and xhatraw so that it is already
+--		calculated when the flag comes in
+--
 -- Dependencies: 
 -- 
 -- Revision:
@@ -21,15 +22,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
 
 entity NEXT_XHAT_PRECALC is
 	Generic (
@@ -42,9 +35,11 @@ entity NEXT_XHAT_PRECALC is
 		xhat_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xhat_ready		: out	std_logic;
 		xhat_valid		: in	std_logic;
+		xhat_last		: in 	std_logic;
 		xtilde_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xtilde_ready	: out	std_logic;
 		xtilde_valid	: in	std_logic;
+		xtilde_last		: in 	std_logic;
 		d_flag_data		: in	std_logic;
 		d_flag_ready	: out	std_logic;
 		d_flag_valid	: in 	std_logic;
@@ -60,11 +55,11 @@ end NEXT_XHAT_PRECALC;
 architecture Behavioral of NEXT_XHAT_PRECALC is
 
 	--xhat splitter
-	signal xhat_split_0_valid, xhat_split_0_ready, xhat_split_1_valid, xhat_split_1_ready: std_logic;
+	signal xhat_split_0_valid, xhat_split_0_ready, xhat_split_1_valid, xhat_split_1_ready, xhat_split_1_last: std_logic;
 	signal xhat_split_0_data, xhat_split_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 
 	--xtilde splitter
-	signal xtilde_split_0_valid, xtilde_split_0_ready, xtilde_split_1_valid, xtilde_split_1_ready: std_logic;
+	signal xtilde_split_0_valid, xtilde_split_0_ready, xtilde_split_1_valid, xtilde_split_1_ready, xtilde_split_1_last: std_logic;
 	signal xtilde_split_0_data, xtilde_split_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--xhat and xtilde fifos
@@ -111,13 +106,15 @@ begin
 			input_valid => xhat_valid,
 			input_data  => xhat_data,
 			input_ready => xhat_ready,
+			input_last  => xhat_last,
 			--to output axi ports
 			output_0_valid => xhat_split_0_valid,
 			output_0_data  => xhat_split_0_data,
 			output_0_ready => xhat_split_0_ready,
 			output_1_valid => xhat_split_1_valid,
 			output_1_data  => xhat_split_1_data,
-			output_1_ready => xhat_split_1_ready
+			output_1_ready => xhat_split_1_ready,
+			output_1_last  => xhat_split_1_last
 		);
 		
 	xtilde_splitter: entity work.AXIS_SPLITTER_2
@@ -130,13 +127,15 @@ begin
 				input_valid => xtilde_valid,
 				input_data  => xtilde_data,
 				input_ready => xtilde_ready,
+				input_last  => xtilde_last,
 				--to output axi ports
 				output_0_valid => xtilde_split_0_valid,
 				output_0_data  => xtilde_split_0_data,
 				output_0_ready => xtilde_split_0_ready,
 				output_1_valid => xtilde_split_1_valid,
 				output_1_data  => xtilde_split_1_data,
-				output_1_ready => xtilde_split_1_ready
+				output_1_ready => xtilde_split_1_ready,
+				output_1_last  => xtilde_split_1_last
 			);
 			
 	--FIFOS
@@ -174,10 +173,10 @@ begin
 		);
 		
 	--mean calcs
-	xhat_acc: entity work.AXIS_AVERAGER_POW2 
+	xhat_acc: entity work.AXIS_AVERAGER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			ELEMENT_COUNT_LOG => BLOCK_SIZE_LOG,
+			COUNT_LOG => BLOCK_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (
@@ -185,15 +184,16 @@ begin
 			input_data	=> xhat_split_1_data,
 			input_valid => xhat_split_1_valid,
 			input_ready => xhat_split_1_ready,
+			input_last  => xhat_split_1_last,
 			output_data => xhatmean_data,
 			output_valid=> xhatmean_valid,
 			output_ready=> xhatmean_ready
 		);
 		
-	xtilde_acc: entity work.AXIS_AVERAGER_POW2 
+	xtilde_acc: entity work.AXIS_AVERAGER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			ELEMENT_COUNT_LOG => BLOCK_SIZE_LOG,
+			COUNT_LOG => BLOCK_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (
@@ -201,6 +201,7 @@ begin
 			input_data	=> xtilde_split_1_data,
 			input_valid => xtilde_split_1_valid,
 			input_ready => xtilde_split_1_ready,
+			input_last  => xtilde_split_1_last,
 			output_data => xtildemean_data,
 			output_valid=> xtildemean_valid,
 			output_ready=> xtildemean_ready

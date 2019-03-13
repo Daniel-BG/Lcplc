@@ -253,15 +253,12 @@ begin
 			input_0_data  => std_logic_vector(to_unsigned(CODE_WIDTH, BIT_AMT_WIDTH)),
 			input_0_valid => '1',
 			input_0_ready => open,
-			input_0_last  => '0',
 			input_1_data  => length_2_data,
 			input_1_valid => length_2_valid,
 			input_1_ready => length_2_ready,
-			input_1_last  => '0',
 			output_data	  => adjust_data,
 			output_valid  => adjust_valid,
-			output_ready  => adjust_ready,
-			output_last   => open
+			output_ready  => adjust_ready
 		);
 		
 	--delay for sum w/reset

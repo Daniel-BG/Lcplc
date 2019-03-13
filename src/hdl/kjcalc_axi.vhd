@@ -22,6 +22,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.functions.all;
+use work.constants.all;
 
 entity KJCALC_AXI is
 	Generic (
@@ -49,6 +50,7 @@ architecture Behavioral of KJCALC_AXI is
 	signal rj_shifted: std_logic_vector(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0);
 	signal middle_busy: std_logic;
 	signal rj_shifted_latch: std_logic_vector(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0);
+	attribute KEEP of rj_shifted_latch: signal is KEEP_DEFAULT;
 	
 	signal output_busy: std_logic;
 	signal output_kj_pre  : std_logic_vector(OUT_WIDTH - 1 downto 0);

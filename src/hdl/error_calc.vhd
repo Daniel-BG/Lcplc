@@ -326,22 +326,20 @@ begin
 			DATA_WIDTH => (DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG,
 			IS_SIGNED => false,
 			IS_EQUAL => false,
-			IS_GREATER => true
+			IS_GREATER => true,
+			SYNCHRONIZE => false
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_0_data  => distortion_data,
 			input_0_valid => distortion_valid,
 			input_0_ready => distortion_ready,
-			input_0_last  => '0',
 			input_1_data  => d_flag_thres,
-			input_1_valid => distortion_valid,
+			input_1_valid => '1',
 			input_1_ready => open,
-			input_1_last  => '0',
 			output_data	  => d_flag_data,
 			output_valid  => d_flag_valid,
-			output_ready  => d_flag_ready,
-			output_last   => open
+			output_ready  => d_flag_ready
 		);
 	--1 on flag means it is greater than the threshold
 		

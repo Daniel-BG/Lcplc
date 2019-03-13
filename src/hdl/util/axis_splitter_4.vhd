@@ -31,7 +31,7 @@ entity AXIS_SPLITTER_4 is
 		input_valid		: in	STD_LOGIC;
 		input_data		: in	STD_LOGIC_VECTOR (DATA_WIDTH - 1 downto 0);
 		input_ready		: out	STD_LOGIC;
-		input_last		: in 	std_logic;
+		input_last		: in 	std_logic := '0';
 		--to output axi ports
 		output_0_valid	: out 	std_logic;
 		output_0_data	: out 	STD_LOGIC_VECTOR(DATA_WIDTH - 1 downto 0);

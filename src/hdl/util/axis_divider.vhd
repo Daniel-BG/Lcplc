@@ -145,7 +145,7 @@ begin
 
 	dividend_minus_divisor <= std_logic_vector(unsigned(dividend_buf) - unsigned(divisor_buf));
 
-	comb: process(state_curr, joint_valid, joint_dividend, joint_divisor,
+	comb: process(state_curr, joint_valid, joint_dividend, joint_divisor, dividend_minus_divisor,
 		dividend_bitcnt, divisor_bitcnt, divisor_buf, dividend_buf, result, shamt,
 		dividend_buf_signed, divisor_buf_signed, output_ready)
 	begin

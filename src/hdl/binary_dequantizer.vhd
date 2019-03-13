@@ -21,6 +21,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.constants.all;
 
 entity BINARY_DEQUANTIZER is
 	Generic (
@@ -50,6 +51,7 @@ architecture Behavioral of BINARY_DEQUANTIZER is
 	signal shifted_down: std_logic_vector(DATA_WIDTH downto 0);
 
 	signal pre_out: std_logic_vector(DATA_WIDTH downto 0);
+	attribute KEEP of pre_out: signal is KEEP_DEFAULT;
 	
 begin
 
