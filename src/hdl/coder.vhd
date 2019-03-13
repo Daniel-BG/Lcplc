@@ -75,8 +75,8 @@ end CODER;
 architecture Behavioral of CODER is
 	--coding constants
 	constant CODING_LENGTH_MAX: integer := MAPPED_ERROR_WIDTH*2+1;
-	constant CODING_LENGTH_MAX_LOG: integer := bits(CODING_LENGTH_MAX);
-	constant KJ_WIDTH: integer := bits(bits(ACCUMULATOR_WINDOW-1)+DATA_WIDTH);
+	constant CODING_LENGTH_MAX_LOG: integer := 6; --bits(CODING_LENGTH_MAX);
+	constant KJ_WIDTH: integer := 5; --bits(bits(ACCUMULATOR_WINDOW-1)+DATA_WIDTH);
 	
 	--ehat_splitter
 	signal ehat_splitter_input_data: std_logic_vector(MAPPED_ERROR_WIDTH + 2 downto 0);
@@ -453,13 +453,20 @@ begin
 	begin
 		state_next    <= state_curr;
 		control_ready <= '0';
+		--bufs
+		control_end_block_buff_next <= control_end_block;
+		control_end_image_buff_next <= control_end_image;
 		--internal components
 		eg_ready      <= '0';
+		d_flag_3_ready<= '0';
+		xmean_alpha_ready <= '0';
+		golomb_ready  <= '0';
 		--packer
 		packer_valid  <= '0';
 		packer_code   <= (others => '0');
 		packer_length <= (others => '0');
 		packer_last   <= '0';
+
 
 		if state_curr = IDLE_FIRST then
 			control_ready <= '1';

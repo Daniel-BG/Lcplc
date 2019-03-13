@@ -47,8 +47,8 @@ architecture Behavioral of AXIS_SPLITTER_BASE is
 	signal buf0, buf1: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal buf0_last, buf1_last: std_logic;
 	
-	--attribute KEEP of buf0_last: signal is KEEP_DEFAULT;
-	--attribute KEEP of buf1_last: signal is KEEP_DEFAULT;
+	attribute KEEP of buf0_last: signal is KEEP_DEFAULT;
+	attribute KEEP of buf1_last: signal is KEEP_DEFAULT;
 	
 	--buffer flags
 	signal buf0_full: std_logic;

@@ -74,7 +74,7 @@ architecture Behavioral of AXIS_SHIFTER is
 	type shiftamt_storage_t is array(0 to STAGES-1) of std_logic_vector(SHIFT_WIDTH - 1 downto 0);
 	signal shiftamt_curr, shiftamt_final: shiftamt_storage_t;
 	
-	--attribute KEEP of shiftamt_curr: signal is KEEP_DEFAULT;
+	attribute KEEP of shiftamt_curr: signal is KEEP_DEFAULT;
 	
 	signal valid: std_logic_vector(STAGES downto 0);
 	signal last: std_logic_vector(STAGES downto 0);

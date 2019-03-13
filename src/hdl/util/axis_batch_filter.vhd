@@ -51,7 +51,7 @@ architecture Behavioral of AXIS_BATCH_FILTER is
 	signal state_curr, state_next: batch_filter_state_t;
 
 	signal flag_buf, flag_buf_next: std_logic;
-	--attribute KEEP of flag_buf: signal is KEEP_DEFAULT;
+	attribute KEEP of flag_buf: signal is KEEP_DEFAULT;
 	
 	signal filter: boolean;
 begin

@@ -69,7 +69,7 @@ architecture Behavioral of AXIS_ARITHMETIC_OP is
 	signal output_valid_reg: std_logic;
 	signal output_last_reg: std_logic;
 	
-	--attribute KEEP of output_last_reg: signal is KEEP_DEFAULT;
+	attribute KEEP of output_last_reg: signal is KEEP_DEFAULT;
 	
 	signal op_enable: std_logic;
 	
