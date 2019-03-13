@@ -24,6 +24,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.FUNCTIONS.ALL;
+use work.data_types.all;
 
 entity AXIS_SHIFTER is
 	Generic (
@@ -33,19 +34,23 @@ entity AXIS_SHIFTER is
 		BITS_PER_STAGE: integer := 7;
 		LEFT		: boolean := true;
 		ARITHMETIC	: boolean := false;
-		LATCH_INPUT_SYNC: boolean := true
+		LATCH_INPUT_SYNC: boolean := true;
+		LAST_POLICY: last_policy_t := PASS_ONE
 	);
 	Port ( 
 		clk, rst		: in	std_logic;
 		shift_data		: in 	std_logic_vector(SHIFT_WIDTH - 1 downto 0);
 		shift_ready		: out   std_logic;
 		shift_valid		: in 	std_logic;
+		shift_last		: in 	std_logic;
 		input_data		: in	std_logic_vector(INPUT_WIDTH - 1 downto 0);
 		input_ready		: out	std_logic;
 		input_valid		: in	std_logic;
+		input_last  	: in  	std_logic;
 		output_data		: out 	std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 		output_ready	: in	std_logic;
-		output_valid	: out	std_logic
+		output_valid	: out	std_logic;
+		output_last		: out 	std_logic
 	);
 end AXIS_SHIFTER;
 
@@ -55,7 +60,7 @@ architecture Behavioral of AXIS_SHIFTER is
 	--synchronizer signals
 	signal synced_shift	: std_logic_vector(SHIFT_WIDTH - 1 downto 0);
 	signal synced_data 	: std_logic_vector(INPUT_WIDTH - 1 downto 0);
-	signal synced_valid, synced_ready: std_logic;
+	signal synced_valid, synced_ready, synced_last: std_logic;
 
 	--shifting signals
 	type data_storage_t is array(0 to STAGES) of std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
@@ -69,6 +74,7 @@ architecture Behavioral of AXIS_SHIFTER is
 	signal shiftamt_curr, shiftamt_final: shiftamt_storage_t;
 	
 	signal valid: std_logic_vector(STAGES downto 0);
+	signal last: std_logic_vector(STAGES downto 0);
 	signal enable: std_logic;
 begin
 
@@ -76,20 +82,24 @@ begin
 		Generic map (
 			DATA_WIDTH_0 => SHIFT_WIDTH, 
 			DATA_WIDTH_1 => INPUT_WIDTH,
-			LATCH 		 => LATCH_INPUT_SYNC
+			LATCH 		 => LATCH_INPUT_SYNC,
+			LAST_POLICY  => LAST_POLICY
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_0_valid => shift_valid,
 			input_0_ready => shift_ready,
 			input_0_data  => shift_data,
+			input_0_last  => shift_last,
 			input_1_valid => input_valid,
 			input_1_ready => input_ready,
 			input_1_data  => input_data,
+			input_1_last  => input_last,
 			output_valid  => synced_valid,
 			output_ready  => synced_ready,
 			output_data_0 => synced_shift,
-			output_data_1 => synced_data
+			output_data_1 => synced_data,
+			output_last   => synced_last
 		);
 
 
@@ -98,6 +108,7 @@ begin
 	--or when i have nothing to output
 	enable <= '1' when output_ready = '1' or valid(STAGES) = '0' else '0';
 	
+	output_last  <= last(STAGES);
 	output_valid <= valid(STAGES);
 	synced_ready <= enable;
 	output_data <= memory_curr(STAGES);
@@ -153,10 +164,11 @@ begin
 --		--valid(0) <= '1' when enable = '1' and synced_valid = '1' else '0';
 --	end process;
 	
-	seq: process(clk, rst, synced_data, synced_shift, synced_valid, enable)
+	seq: process(clk, rst, synced_data, synced_shift, synced_valid, enable, synced_last)
 	begin
 		memory_curr(0) <= std_logic_vector(resize(unsigned(synced_data), OUTPUT_WIDTH));
 		shiftamt_curr(0) <= synced_shift;
+		last(0) <= synced_last;
 		if enable = '1' and synced_valid = '1' then
 			valid(0) <= '1';
 		else
@@ -166,12 +178,14 @@ begin
 		if rising_edge(clk) then
 			if rst = '1' then	
 				valid(valid'high downto 1) <= (others => '0');
+				last (last'high  downto 1) <= (others => '0');
 			else
 				if enable = '1' then
 					--do all necessary shifting
 					for i in 1 to STAGES loop
 						memory_curr(i) <= memory_next(i);
 						valid(i) <= valid(i-1);
+						last (i) <= last (i-1);
 					end loop;
 					for i in 1 to STAGES - 1 loop
 						shiftamt_curr(i) <= shiftamt_curr(i-1);

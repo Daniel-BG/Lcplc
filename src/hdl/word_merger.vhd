@@ -22,15 +22,6 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
 entity WORD_MERGER is
 	Generic (
 		WORD_WIDTH: integer := 32
@@ -41,10 +32,11 @@ entity WORD_MERGER is
 		input_ends_word : in	std_logic;
 		input_valid		: in 	std_logic;
 		input_ready		: out	std_logic;
+		input_last 		: in 	std_logic;
 		output_data		: out	std_logic_vector(WORD_WIDTH-1 downto 0);
 		output_valid	: out	std_logic;
 		output_ready	: in 	std_logic;
-		flush			: in 	std_logic
+		output_last		: out 	std_logic
 	);
 end WORD_MERGER;
 
@@ -72,7 +64,8 @@ begin
 	
 	output_data <= input_data or data_buf;
 	input_ready <= output_ready;
-	output_valid <= (input_ends_word and input_valid) or flush;
+	output_valid <= ((input_ends_word or input_last) and input_valid);
+	output_last <= input_last;
 
 
 end Behavioral;

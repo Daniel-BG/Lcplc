@@ -23,6 +23,7 @@ library IEEE;
 use work.functions.all;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.data_types.all;
 
 entity GOLOMB_CODING is
 	Generic (
@@ -32,19 +33,22 @@ entity GOLOMB_CODING is
 		OUTPUT_WIDTH: integer := 39;
 		--these two are just for performance reasons to operate over powers of two
 		SLACK_LOG: integer := 4;
-		MAX_1_OUT_LOG: integer := 5
+		MAX_1_OUT_LOG: integer := 5;
+		LAST_POLICY: last_policy_t := AND_ALL
 	);
 	Port (
 		clk, rst			: in	std_logic;
 		input_param_data	: in	std_logic_vector(MAX_PARAM_VALUE_LOG - 1 downto 0);
 		input_param_valid	: in	std_logic;
 		input_param_ready	: out 	std_logic;
+		input_param_last    : in 	std_logic;
 		input_value_data	: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_value_valid	: in	std_logic;
 		input_value_ready	: out 	std_logic;
+		input_value_last	: in 	std_logic;
 		output_code			: out	std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
 		output_length		: out	std_logic_vector(bits(OUTPUT_WIDTH) - 1 downto 0);
-		output_ends_input	: out 	std_logic;
+		output_last 		: out 	std_logic;
 		output_valid		: out	std_logic;
 		output_ready		: in 	std_logic
 	);
@@ -52,7 +56,7 @@ end GOLOMB_CODING;
 
 architecture Behavioral of GOLOMB_CODING is
 	--join signals first
-	signal joint_valid, joint_ready: std_logic;
+	signal joint_valid, joint_ready, joint_last: std_logic;
 	signal joint_param_data_raw: std_logic_vector(MAX_PARAM_VALUE_LOG - 1 downto 0);
 	signal joint_param_data: natural range 0 to MAX_PARAM_VALUE;
 	signal joint_value_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -69,6 +73,7 @@ architecture Behavioral of GOLOMB_CODING is
 	signal quotient_buff, quotient_buff_next, remainder_buff, remainder_buff_next: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal quotient_buff_extended: std_logic_vector(DATA_WIDTH downto 0);
 	signal param_buff, param_buff_next: natural range 0 to MAX_PARAM_VALUE;
+	signal last_buff, last_buff_next: std_logic;
 	
 	--checkers
 	signal need_more_cycles: boolean;
@@ -97,20 +102,24 @@ begin
 	data_joiner: entity work.AXIS_SYNCHRONIZER_2
 		generic map (
 			DATA_WIDTH_0 => MAX_PARAM_VALUE_LOG,
-			DATA_WIDTH_1 => DATA_WIDTH
+			DATA_WIDTH_1 => DATA_WIDTH,
+			LAST_POLICY  => LAST_POLICY
 		)
 		port map (
 			clk => clk, rst => rst,
 			input_0_valid => input_param_valid,
 			input_0_ready => input_param_ready,
 			input_0_data  => input_param_data,
+			input_0_last  => input_param_last,
 			input_1_valid => input_value_valid,
 			input_1_ready => input_value_ready,
 			input_1_data  => input_value_data,
+			input_1_last  => input_value_last,
 			output_valid  => joint_valid,
 			output_ready  => joint_ready,
 			output_data_0 => joint_param_data_raw,
-			output_data_1 => joint_value_data
+			output_data_1 => joint_value_data,
+			output_last   => joint_last
 		);
 	
 	joint_param_data <= to_integer(unsigned(joint_param_data_raw));
@@ -131,11 +140,14 @@ begin
 				state_curr <= IDLE;
 				quotient_buff  <= (others => '0');
 				remainder_buff <= (others => '0');
+				param_buff <= 0;
+				last_buff <= '0';
 			else
 				state_curr <= state_next;
 				quotient_buff  <= quotient_buff_next;
 				remainder_buff <= remainder_buff_next;
 				param_buff <= param_buff_next;
+				last_buff <= last_buff_next;
 			end if;
 		end if;
 	end process;
@@ -145,20 +157,22 @@ begin
 		joint_valid, 
 		quotient, remainder, joint_param_data, 
 		need_more_cycles,
+		last_buff, joint_last,
 		quotient_buff, remainder_buff, param_buff, 
 		quotient_temp, output_code_last, output_length_last, output_ready, output_code_temp, output_length_temp)
 	begin
 		state_next <= state_curr;
 		joint_ready <= '0';
 		output_valid <= '0';
-		output_ends_input <= '0';
 		--buffers
 		quotient_buff_next <= quotient_buff;
 		remainder_buff_next <= remainder_buff;
 		param_buff_next <= param_buff;
+		last_buff_next <= last_buff;
 		--outputs
-		output_code <= (others => '0');
+		output_code   <= (others => '0');
 		output_length <= (others => '0');
+		output_last   <= '0';
 		
 		if state_curr = IDLE then
 			joint_ready <= '1';
@@ -167,19 +181,21 @@ begin
 				remainder_buff_next <= remainder;
 				param_buff_next <= joint_param_data;
 				state_next <= QUOTREM_READ;
+				last_buff_next <= joint_last;
 			end if;
 		elsif state_curr = QUOTREM_READ then
 			output_valid <= '1';
 			if not need_more_cycles then
 				output_code <= output_code_last;
 				output_length <= std_logic_vector(to_unsigned(output_length_last, output_length'length));
-				output_ends_input <= '1';
+				output_last <= last_buff;
 				joint_ready <= output_ready;
 				if joint_valid = '1' then
 					--read next already
 					quotient_buff_next <= quotient;
 					remainder_buff_next <= remainder;
 					param_buff_next <= joint_param_data;
+					last_buff_next <= joint_last;
 				elsif output_ready = '1' then
 					--go back to IDLE cause our value was read and we have no more values
 					state_next <= IDLE;
