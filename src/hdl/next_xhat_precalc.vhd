@@ -46,6 +46,7 @@ entity NEXT_XHAT_PRECALC is
 		xhatout_data	: out	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xhatout_ready	: in	std_logic;
 		xhatout_valid	: out	std_logic;
+		xhatout_last	: out 	std_logic;
 		xhatoutmean_data: out   std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xhatoutmean_ready:in  	std_logic;
 		xhatoutmean_valid:out   std_logic
@@ -273,15 +274,18 @@ begin
 			input_0_data	=> xtilde_fifo_data,
 			input_0_ready	=> xtilde_fifo_ready,
 			input_0_valid	=> xtilde_fifo_valid,
+			input_0_last    => xtilde_fifo_last,
 			input_1_data	=> xhat_fifo_data,
 			input_1_ready	=> xhat_fifo_ready,
 			input_1_valid	=> xhat_fifo_valid,
+			input_1_last    => xhat_fifo_last,
 			flag_data		=> d_flag_0_rep_data,
 			flag_ready		=> d_flag_0_rep_ready,
 			flag_valid		=> d_flag_0_rep_valid,
 			output_data		=> xhatout_data,
 			output_valid	=> xhatout_valid,
-			output_ready	=> xhatout_ready
+			output_ready	=> xhatout_ready,
+			output_last     => xhatout_last
 		);
 		
 end Behavioral;

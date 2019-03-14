@@ -60,7 +60,7 @@ architecture Behavioral of FIRSTBAND_PREDICTOR is
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
 
 	--last buffer
-	signal x_last_buf, x_last_buf_next;
+	signal x_last_buf, x_last_buf_next: std_logic;
 begin
 
 	seq: process(clk)

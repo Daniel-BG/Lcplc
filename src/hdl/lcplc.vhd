@@ -38,6 +38,7 @@ entity LCPLC is
 		BLOCK_SIZE_LOG: integer := 8;
 		ALPHA_WIDTH: integer := 10;
 		NUMBER_OF_BANDS: integer := 224;
+		ACCUMULATOR_WINDOW: integer := 32;
 		UPSHIFT: integer := 1;
 		DOWNSHIFT: integer := 1;
 		THRESHOLD: std_logic_vector := "100000000000000" 
@@ -66,6 +67,7 @@ architecture Behavioral of LCPLC is
 	signal x_0_last_b, x_0_last_s, x_1_last_i, x_1_last_b, x_1_last_s, x_1_last_r: std_logic;
 	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready: std_logic;
 	signal x_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal x_1_last_data: std_logic_vector(DATA_WIDTH downto 0);
 	
 	--diverter for first band/rest
 	signal x_0_red_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
@@ -102,8 +104,9 @@ architecture Behavioral of LCPLC is
 	signal x_delay_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--fifo delay for nth band prediction
-	signal x_delay_delay_ready,x_delay_delay_valid: std_logic;
+	signal x_delay_delay_ready,x_delay_delay_valid, x_delay_delay_last: std_logic;
 	signal x_delay_delay_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal x_delay_delay_last_data: std_logic_vector(DATA_WIDTH downto 0);
 	
 	--alpha result
 	signal alpha_ready, alpha_valid: std_logic;
@@ -116,29 +119,33 @@ architecture Behavioral of LCPLC is
 	signal alpha_1_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 	
 	--prediction other bands
-	signal prediction_rest_ready, prediction_rest_valid: std_logic;
+	signal prediction_rest_ready, prediction_rest_valid, prediction_rest_last: std_logic;
 	signal prediction_rest_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
 	--prediction junction
-	signal prediction_valid, prediction_ready: std_logic;
+	signal prediction_valid, prediction_ready, prediction_last: std_logic;
 	signal prediction_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
 	--error calc
-	signal merr_ready	: std_logic;
-	signal merr_valid	: std_logic;
-	signal merr_data	: std_logic_vector(DATA_WIDTH + 2 downto 0);
-	signal kj_ready		: std_logic;
-	signal kj_valid		: std_logic;
-	signal kj_data		: std_logic_vector(WORD_WIDTH_LOG - 1 downto 0);
-	signal xtilde_valid	: std_logic;
-	signal xtilde_ready	: std_logic;
-	signal xtilde_data	: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal xhat_valid	: std_logic;
-	signal xhat_ready	: std_logic;
-	signal xhat_data	: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal d_flag_valid	: std_logic;
-	signal d_flag_ready	: std_logic;
-	signal d_flag_data 	: std_logic;
+	signal merr_ready		: std_logic;
+	signal merr_valid		: std_logic;
+	signal merr_last		: std_logic;
+	signal merr_data		: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal merr_last_data	: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal kj_ready			: std_logic;
+	signal kj_valid			: std_logic;
+	signal kj_data			: std_logic_vector(WORD_WIDTH_LOG - 1 downto 0);
+	signal xtilde_valid		: std_logic;
+	signal xtilde_ready		: std_logic;
+	signal xtilde_last		: std_logic;
+	signal xtilde_data		: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xhat_valid		: std_logic;
+	signal xhat_ready		: std_logic;
+	signal xhat_last		: std_logic;
+	signal xhat_data		: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal d_flag_valid		: std_logic;
+	signal d_flag_ready		: std_logic;
+	signal d_flag_data 		: std_logic;
 	
 	--d flag substituter
 	signal d_flag_data_stdlv: std_logic_vector(0 downto 0);
@@ -151,15 +158,17 @@ architecture Behavioral of LCPLC is
 	
 	--xhat precalc
 	signal xhatout_data, xhatoutmean_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal xhatout_ready, xhatout_valid, xhatoutmean_ready, xhatoutmean_valid: std_logic;
+	signal xhatout_ready, xhatout_valid, xhatout_last, xhatoutmean_ready, xhatoutmean_valid: std_logic;
 	
 	--xhat splitter
-	signal xhatout_0_valid, xhatout_0_ready, xhatout_1_valid, xhatout_1_ready: std_logic;
+	signal xhatout_0_valid, xhatout_0_ready, xhatout_0_last, xhatout_1_valid, xhatout_1_ready, xhatout_1_last: std_logic;
 	signal xhatout_0_data, xhatout_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xhatout_1_last_data: std_logic_vector(DATA_WIDTH downto 0);
 	
 	--xhat delay fifo
-	signal xhatout_delay_ready, xhatout_delay_valid: std_logic;
+	signal xhatout_delay_ready, xhatout_delay_valid, xhatout_delay_last: std_logic;
 	signal xhatout_delay_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xhatout_delay_last_data: std_logic_vector(DATA_WIDTH downto 0);
 	
 	--xhatout mean splitter
 	signal xhatoutmean_0_valid, xhatoutmean_0_ready, xhatoutmean_1_valid,xhatoutmean_1_ready: std_logic;
@@ -173,7 +182,8 @@ architecture Behavioral of LCPLC is
 	
 	--final delays
 	signal merr_delay_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal merr_delay_ready, merr_delay_valid: std_logic;
+	signal merr_delay_ready, merr_delay_valid, merr_delay_last: std_logic;
+	signal merr_delay_last_data: std_logic_vector(PREDICTION_WIDTH downto 0);
 	signal kj_delay_data: std_logic_vector(WORD_WIDTH_LOG - 1 downto 0);
 	signal kj_delay_ready, kj_delay_valid: std_logic;
 
@@ -349,6 +359,7 @@ begin
 			xhat_valid		=> xhatout_0_valid,
 			xhat_ready		=> xhatout_0_ready,
 			xhat_data		=> xhatout_0_data,
+			xhat_last  		=> xhatout_0_last,
 			xmean_valid		=> xmean_0_valid,
 			xmean_ready		=> xmean_0_ready,
 			xmean_data		=> xmean_0_data,
@@ -384,14 +395,14 @@ begin
 	nthband_predictor: entity work.NTHBAND_PREDICTOR
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			ALPHA_WIDTH => ALPHA_WIDTH,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG
+			ALPHA_WIDTH => ALPHA_WIDTH
 		)
 		Port map (
 			clk => clk, rst => rst,
 			xhat_valid		=> xhatout_delay_valid,
 			xhat_ready 		=> xhatout_delay_ready,
 			xhat_data  		=> xhatout_delay_data,
+			xhat_last		=> xhatout_delay_last,
 			xmean_valid		=> xmean_1_valid,
 			xmean_ready		=> xmean_1_ready,
 			xmean_data		=> xmean_1_data,
@@ -404,53 +415,59 @@ begin
 			--output prediction
 			prediction_ready => prediction_rest_ready,
 			prediction_valid => prediction_rest_valid,
-			prediction_data  => prediction_rest_data
+			prediction_data  => prediction_rest_data,
+			prediction_last  => prediction_rest_last
 		);
 		
 	--junction for preductions
-	prediction_junction: entity work.AXIS_COMBINER
+	prediction_junction: entity work.AXIS_MERGER_2
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
-			FROM_PORT_ZERO => 2**BLOCK_SIZE_LOG,
-			FROM_PORT_ONE => 2**BLOCK_SIZE_LOG*(NUMBER_OF_BANDS - 1 )
+			START_ON_PORT => 0
 		)
 		Port map ( 
 			clk => clk, rst => rst,
 			input_0_valid	=> prediction_first_valid,
 			input_0_ready	=> prediction_first_ready,
 			input_0_data	=> prediction_first_data,
+			input_0_last    => prediction_first_last,
 			input_1_valid	=> prediction_rest_valid,
 			input_1_ready	=> prediction_rest_ready,
 			input_1_data	=> prediction_rest_data,
+			input_1_last    => prediction_rest_last,
 			output_valid	=> prediction_valid,
 			output_ready	=> prediction_ready,
-			output_data		=> prediction_data
+			output_data		=> prediction_data,
+			output_last     => prediction_last
 		);
 		
 	--buffer for samples for error calc
+	x_1_last_data <= x_1_last_s & x_1_data;
 	error_calc_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
+			DATA_WIDTH => DATA_WIDTH + 1,
 			FIFO_DEPTH => (2**BLOCK_SIZE_LOG)*2
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
 			--input axi port
-			input_valid => x_2_valid,
-			input_ready => x_2_ready,
-			input_data	 => x_2_data,
+			input_valid => x_1_valid,
+			input_ready => x_1_ready,
+			input_data	 => x_1_last_data,
 			--out axi port
 			output_ready=> x_delay_delay_ready,
-			output_data => x_delay_delay_data,
+			output_data => x_delay_delay_last_data,
 			output_valid=> x_delay_delay_valid
 		);
+	x_delay_delay_last <= x_delay_delay_last_data(DATA_WIDTH);
+	x_delay_delay_data <= x_delay_delay_last_data(DATA_WIDTH - 1 downto 0);
 		
 	--error calculations
 	error_calc: entity work.ERROR_CALC 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
-			ACC_LOG => WORD_WIDTH_LOG,
+			ACCUMULATOR_WINDOW => ACCUMULATOR_WINDOW,
 			UPSHIFT => UPSHIFT,
 			DOWNSHIFT => DOWNSHIFT,
 			THRESHOLD => THRESHOLD
@@ -460,21 +477,26 @@ begin
 			x_valid			=> x_delay_delay_valid,
 			x_ready			=> x_delay_delay_ready,
 			x_data			=> x_delay_delay_data,
+			x_last		    => x_delay_delay_last,
 			prediction_ready=> prediction_ready,
 			prediction_valid=> prediction_valid,
 			prediction_data => prediction_data,
+			prediction_last => prediction_last,
 			merr_ready		=> merr_ready,
 			merr_valid		=> merr_valid,
 			merr_data		=> merr_data,
+			merr_last       => merr_last,
 			kj_ready		=> kj_ready,
 			kj_valid		=> kj_valid,
 			kj_data			=> kj_data,
 			xtilde_valid	=> xtilde_valid,
 			xtilde_ready	=> xtilde_ready,
 			xtilde_data		=> xtilde_data,
+			xtilde_last     => xtilde_last,
 			xhatout_valid   => xhat_valid,
 			xhatout_ready	=> xhat_ready,
 			xhatout_data	=> xhat_data,
+			xhatout_last    => xhat_last,
 			d_flag_valid	=> d_flag_valid,
 			d_flag_ready	=> d_flag_ready,
 			d_flag_data 	=> d_flag_data
@@ -530,15 +552,18 @@ begin
 			xhat_data		=> xhat_data,
 			xhat_ready		=> xhat_ready,
 			xhat_valid		=> xhat_valid,
+			xhat_last 		=> xhat_last,
 			xtilde_data		=> xtilde_data,
 			xtilde_ready	=> xtilde_ready,
 			xtilde_valid	=> xtilde_valid,
+			xtilde_last		=> xtilde_last,
 			d_flag_data		=> d_flag_0_valid,
 			d_flag_ready	=> d_flag_0_ready,
 			d_flag_valid	=> d_flag_0_valid,
 			xhatout_data	=> xhatout_data,
 			xhatout_ready	=> xhatout_ready,
 			xhatout_valid	=> xhatout_valid,
+			xhatout_last    => xhatout_last,
 			xhatoutmean_data	=> xhatoutmean_data,
 			xhatoutmean_ready	=> xhatoutmean_ready,
 			xhatoutmean_valid	=> xhatoutmean_valid
@@ -555,18 +580,22 @@ begin
 			input_valid => xhatout_valid,
 			input_ready	=> xhatout_ready,
 			input_data	=> xhatout_data,
+			input_last	=> xhatout_last,
 			output_0_valid	=> xhatout_0_valid,
 			output_0_ready	=> xhatout_0_ready,
 			output_0_data	=> xhatout_0_data,
+			output_0_last   => xhatout_0_last,
 			output_1_valid	=> xhatout_1_valid,
 			output_1_ready	=> xhatout_1_ready,
-			output_1_data	=> xhatout_1_data
+			output_1_data	=> xhatout_1_data,
+			output_1_last   => xhatout_1_last
 		);
 	
 	--one fifo for nth band input
+	xhatout_1_last_data <= xhatout_1_last & xhatout_1_data;
 	xhatout_buffer: entity work.AXIS_FIFO 
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
+			DATA_WIDTH => DATA_WIDTH + 1,
 			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
 		)
 		Port map ( 
@@ -574,12 +603,14 @@ begin
 			--input axi port
 			input_valid => xhatout_1_valid,
 			input_ready => xhatout_1_ready,
-			input_data	 => xhatout_1_data,
+			input_data	=> xhatout_1_last_data,
 			--out axi port
 			output_ready=> xhatout_delay_ready,
-			output_data => xhatout_delay_data,
+			output_data => xhatout_delay_last_data,
 			output_valid=> xhatout_delay_valid
 		);
+	xhatout_delay_last <= xhatout_delay_last_data(DATA_WIDTH);
+	xhatout_delay_data <= xhatout_delay_last_data(DATA_WIDTH - 1 downto 0);
 		
 	--splitter for xhatoutmean
 	xhatoutmean_splitter: entity work.AXIS_SPLITTER_2
@@ -602,6 +633,7 @@ begin
 		
 		
 	--one fifo for nth band input
+	merr_last_data <= merr_last & merr_data;
 	delay_mapped_err: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
@@ -612,12 +644,14 @@ begin
 			--input axi port
 			input_valid => merr_valid,
 			input_ready => merr_ready,
-			input_data	 => merr_data,
+			input_data	 => merr_last_data,
 			--out axi port
 			output_ready=> merr_delay_ready,
-			output_data => merr_delay_data,
+			output_data => merr_delay_last_data,
 			output_valid=> merr_delay_valid
 		);
+	merr_delay_last <= merr_delay_last_data(PREDICTION_WIDTH);
+	merr_delay_data <= merr_delay_last_data(PREDICTION_WIDTH-1 downto 0);
 			
 	--one fifo for nth band input
 	delay_kj_calc: entity work.AXIS_FIFO 
@@ -676,19 +710,21 @@ begin
 	coder: entity work.CODER 
 		Generic map (
 			MAPPED_ERROR_WIDTH => PREDICTION_WIDTH,
-			ACC_LOG => WORD_WIDTH_LOG,
+			ACCUMULATOR_WINDOW => ACCUMULATOR_WINDOW,
 			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
-			OUTPUT_WIDTH_LOG => WORD_WIDTH_LOG
+			OUTPUT_WIDTH_LOG => WORD_WIDTH_LOG,
+			ALPHA_WIDTH => ALPHA_WIDTH,
+			DATA_WIDTH => DATA_WIDTH
 		)
 		Port map (
 			clk => clk, rst	=> rst,
-			--control
-			flush	=> flush,
-			flushed	=> flushed,
 			--inputs
 			ehat_data	=> merr_delay_data,
 			ehat_ready	=> merr_delay_ready,
 			ehat_valid	=> merr_delay_valid,
+			ehat_last_s => merr_delay_last_s,
+			ehat_last_b => merr_delay_last_b,
+			ehat_last_i => merr_delay_last_i,
 			kj_data		=> kj_delay_data,
 			kj_ready	=> kj_delay_ready,
 			kj_valid	=> kj_delay_valid,
@@ -705,7 +741,8 @@ begin
 			--outputs
 			output_data	=> output_data,
 			output_valid=> output_valid,
-			output_ready=> output_ready
+			output_ready=> output_ready,
+			output_last => output_last
 		);
 
 

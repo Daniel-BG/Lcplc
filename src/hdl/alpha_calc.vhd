@@ -174,7 +174,6 @@ begin
 			input_1_data	=> xhatmean_rep_data,
 			input_1_valid	=> xhatmean_rep_valid,
 			input_1_ready	=> xhatmean_rep_ready,
-			input_1_last    => '0',
 			output_data		=> previous_sub_data,
 			output_valid	=> previous_sub_valid,
 			output_ready	=> previous_sub_ready,
@@ -216,23 +215,19 @@ begin
 			IS_ADD => false,
 			SIGN_EXTEND_0 => false,
 			SIGN_EXTEND_1 => false,
-			SIGNED_OP => true,
-			LAST_POLICY => PASS_ZERO
+			SIGNED_OP => true
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_0_data	=> x_data,
 			input_0_valid	=> x_valid,
 			input_0_ready	=> x_ready,
-			input_0_last    => '0',
 			input_1_data	=> xmean_rep_data,
 			input_1_valid	=> xmean_rep_valid,
 			input_1_ready	=> xmean_rep_ready,
-			input_1_last    => '0',
 			output_data		=> current_sub_data,
 			output_valid	=> current_sub_valid,
-			output_ready	=> current_sub_ready,
-			output_last     => open
+			output_ready	=> current_sub_ready
 		);
 			
 	--alphaN multiplier
@@ -252,7 +247,6 @@ begin
 			input_1_data  => current_sub_data,
 			input_1_valid => current_sub_valid,
 			input_1_ready => current_sub_ready,
-			input_1_last  => '0',
 			output_data   => alphan_mult_data,
 			output_valid  => alphan_mult_valid,
 			output_ready  => alphan_mult_ready,
@@ -275,8 +269,6 @@ begin
 			input_0_last  => previous_sub_splitter_last_1,
 			input_1_data  => previous_sub_splitter_data_1,
 			input_1_valid => previous_sub_splitter_valid_1,
-			input_1_ready => open,
-			input_1_last  => '0',
 			output_data  => alphad_mult_data,
 			output_valid => alphad_mult_valid,
 			output_ready => alphad_mult_ready,
