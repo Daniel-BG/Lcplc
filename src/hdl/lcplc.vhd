@@ -44,14 +44,17 @@ entity LCPLC is
 	);
 	Port (
 		clk, rst		: in	std_logic;
-		flush			: in 	std_logic;
-		flushed			: out	std_logic;
 		x_valid			: in 	std_logic;
 		x_ready			: out 	std_logic;
 		x_data			: in  	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		x_last_r		: in	std_logic; --1 when the sample is the last of its row
+		x_last_s		: in 	std_logic; --1 when the sample is the last of its slice (implies r)
+		x_last_b		: in 	std_logic; --1 when the sample is the last of its block (implies s,r)
+		x_last_i		: in 	std_logic; --1 when the sample is the last of its image (implies b,s,r)
 		output_data		: out 	std_logic_vector(2**WORD_WIDTH_LOG - 1 downto 0);
 		output_ready	: in	std_logic;
-		output_valid	: out	std_logic
+		output_valid	: out	std_logic;
+		output_last		: out 	std_logic
 	);
 end LCPLC;
 
@@ -59,24 +62,31 @@ architecture Behavioral of LCPLC is
 	constant PREDICTION_WIDTH: integer := DATA_WIDTH + 3;
 
 	--input separator signals
-	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready, x_2_valid, x_2_ready: std_logic;
-	signal x_0_data, x_1_data, x_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal x_flags_data, x_0_flags_data, x_1_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
+	signal x_0_last_b, x_0_last_s, x_1_last_i, x_1_last_b, x_1_last_s, x_1_last_r: std_logic;
+	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready: std_logic;
+	signal x_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
-	--reducer for first band
+	--diverter for first band/rest
+	signal x_0_red_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
 	signal x_0_red_ready, x_0_red_valid: std_logic;
 	signal x_0_red_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	
+	signal x_0_red_last_row, x_0_red_last_slice: std_logic;
+
+	signal x_1_red_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
+	signal x_1_red_ready, x_1_red_valid: std_logic;
+	signal x_1_red_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal x_1_red_last_slice: std_logic;
+
 	--prediction first band
-	signal prediction_first_ready, prediction_first_valid: std_logic;
+	signal prediction_first_ready, prediction_first_valid, prediction_first_last: std_logic;
 	signal prediction_first_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	signal prediction_first_data_raw: std_logic_vector(DATA_WIDTH downto 0);
 	
-	--reducer for other bands
-	signal x_1_red_ready, x_1_red_valid: std_logic;
-	signal x_1_red_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	
 	
 	--splitter for reduced stuff
-	signal x_others_0_valid, x_others_0_ready, x_others_1_valid,x_others_1_ready: std_logic;
+	signal x_others_0_valid, x_others_0_ready, x_others_0_last, x_others_1_valid, x_others_1_ready, x_others_1_last: std_logic;
 	signal x_others_0_data, x_others_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--mean calc
@@ -169,48 +179,58 @@ architecture Behavioral of LCPLC is
 
 begin
 
-	--todo: drive these
-		--prediction_junction_clear
-
 	--input to first band predictor and second band predictor
-	input_separator: entity work.AXIS_SPLITTER_3
+	x_flags_data <= x_last_i & x_last_b & x_last_s & x_last_r & x_data;
+	input_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
-			DATA_WIDTH	 => DATA_WIDTH
+			DATA_WIDTH	 => DATA_WIDTH + 4
 		)
 		Port map ( 
 			clk => clk, rst => rst,
 			--to input axi port
 			input_valid => x_valid,
 			input_ready	=> x_ready,
-			input_data	=> x_data,
+			input_data	=> x_flags_data,
 			output_0_valid	=> x_0_valid,
 			output_0_ready	=> x_0_ready,
-			output_0_data	=> x_0_data,
-			output_1_valid	=> x_1_valid,
-			output_1_ready	=> x_1_ready,
-			output_1_data	=> x_1_data,
-			output_2_valid  => x_2_valid,
-			output_2_ready  => x_2_ready,
-			output_2_data   => x_2_data
+			output_0_data	=> x_0_flags_data,
+			output_1_valid  => x_1_valid,
+			output_1_ready  => x_1_ready,
+			output_1_data   => x_1_flags_data
 		);
+	x_0_last_b <= x_0_flags_data(x_0_flags_data'high-1);
+	x_0_last_s <= x_0_flags_data(x_0_flags_data'high-2);
+	x_1_data   <= x_1_flags_data(DATA_WIDTH - 1 downto 0);
+	x_1_last_i <= x_1_flags_data(x_1_flags_data'high-0);
+	x_1_last_b <= x_1_flags_data(x_1_flags_data'high-1);
+	x_1_last_s <= x_1_flags_data(x_1_flags_data'high-2);
+	x_1_last_r <= x_1_flags_data(x_1_flags_data'high-3);
 		
-	--reducer to first band processing	
-	reducer_firstband: entity work.AXIS_REDUCER
+	diverter_firstband_others: entity work.AXIS_DIVERTER
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG,
-			INVALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG*(NUMBER_OF_BANDS-1),
-			START_VALID => true
+			DATA_WIDTH => DATA_WIDTH + 4
 		)
-		Port map (
+		Port map ( 
 			clk => clk, rst => rst,
-			input_ready		=> x_0_ready,
+			--to input axi port
 			input_valid		=> x_0_valid,
-			input_data		=> x_0_data,
-			output_ready	=> x_0_red_ready,
-			output_valid	=> x_0_red_valid,
-			output_data		=> x_0_red_data
+			input_ready		=> x_0_ready,
+			input_data		=> x_0_flags_data,
+			input_last_zero	=> x_0_last_s,
+			input_last_one	=> x_0_last_b,
+			--to output axi ports
+			output_0_valid	=> x_0_red_valid,
+			output_0_ready	=> x_0_red_ready,
+			output_0_data	=> x_0_red_flags_data,
+			output_1_valid	=> x_1_red_valid,
+			output_1_ready	=> x_1_red_ready,
+			output_1_data	=> x_1_red_flags_data
 		);
+	x_0_red_data <= x_0_red_flags_data(DATA_WIDTH - 1 downto 0);
+	x_0_red_last_row <= x_0_red_flags_data(x_0_red_flags_data'high - 3);
+	x_0_red_last_slice <= x_0_red_flags_data(x_0_red_flags_data'high - 2);
+	x_1_red_data <= x_1_red_flags_data(DATA_WIDTH - 1 downto 0);
+	x_1_red_last_slice <= x_1_red_flags_data(x_1_red_flags_data'high - 2);
 		
 	--first band predictor
 	first_band_predictor: entity work.FIRSTBAND_PREDICTOR
@@ -223,29 +243,16 @@ begin
 			x_valid => x_0_red_valid,
 			x_ready	=> x_0_red_ready,
 			x_data  => x_0_red_data,
+			x_last_row => x_0_red_last_row,
+			x_last_slice => x_0_red_last_slice,
 			prediction_ready => prediction_first_ready,
 			prediction_valid => prediction_first_valid,
-			prediction_data  => prediction_first_data_raw
+			prediction_data  => prediction_first_data_raw,
+			prediction_last  => prediction_first_last
 		);
 	prediction_first_data <= "00" & prediction_first_data_raw;
 	
-	--reducer for mean (only after first band)
-	reducer_others: entity work.AXIS_REDUCER
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG*(NUMBER_OF_BANDS-1),
-			INVALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG,
-			START_VALID => false
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready		=> x_1_ready,
-			input_valid		=> x_1_valid,
-			input_data		=> x_1_data,
-			output_ready	=> x_1_red_ready,
-			output_valid	=> x_1_red_valid,
-			output_data		=> x_1_red_data
-		);
+
 		
 	--splitter for rest of bands
 	splitter_others_1: entity work.AXIS_SPLITTER_2
@@ -258,19 +265,22 @@ begin
 			input_valid => x_1_red_valid,
 			input_ready	=> x_1_red_ready,
 			input_data	=> x_1_red_data,
+			input_last  => x_1_red_last_slice,
 			output_0_valid	=> x_others_0_valid,
 			output_0_ready	=> x_others_0_ready,
 			output_0_data	=> x_others_0_data,
+			output_0_last   => x_others_0_last,
 			output_1_valid	=> x_others_1_valid,
 			output_1_ready	=> x_others_1_ready,
-			output_1_data	=> x_others_1_data
+			output_1_data	=> x_others_1_data,
+			output_1_last   => x_others_1_last
 		);
 	
 	--raw mean 
-	raw_mean_calc: entity work.AXIS_AVERAGER_POW2 
+	raw_mean_calc: entity work.AXIS_AVERAGER 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			ELEMENT_COUNT_LOG => BLOCK_SIZE_LOG,
+			COUNT_LOG => BLOCK_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (
@@ -278,6 +288,7 @@ begin
 			input_data		=> x_others_0_data,
 			input_valid		=> x_others_0_valid,
 			input_ready		=> x_others_0_ready,
+			input_last      => x_others_0_last,
 			output_data		=> xmean_data,
 			output_valid	=> xmean_valid,
 			output_ready	=> xmean_ready
@@ -327,7 +338,7 @@ begin
 	alpha_calc: entity work.ALPHA_CALC 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
+			MAX_SIZE_LOG => BLOCK_SIZE_LOG,
 			ALPHA_WIDTH => ALPHA_WIDTH
 		)
 		Port map (

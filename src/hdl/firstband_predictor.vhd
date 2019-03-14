@@ -40,7 +40,8 @@ entity FIRSTBAND_PREDICTOR is
 		--output prediction
 		prediction_ready: in std_logic;
 		prediction_valid: out std_logic;
-		prediction_data : out std_logic_vector(DATA_WIDTH - 1 downto 0)
+		prediction_data : out std_logic_vector(DATA_WIDTH - 1 downto 0);
+		prediction_last : out std_logic --last slice
 	);
 end FIRSTBAND_PREDICTOR;
 
@@ -57,6 +58,9 @@ architecture Behavioral of FIRSTBAND_PREDICTOR is
 
 	--prediction
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
+
+	--last buffer
+	signal x_last_buf, x_last_buf_next;
 begin
 
 	seq: process(clk)
@@ -64,10 +68,12 @@ begin
 		if rising_edge(clk) then
 			if rst = '1' then
 				state_curr <= IDLE;
-				first_row    <= true;
-				first_col    <= true;
+				first_row  <= true;
+				first_col  <= true;
+				x_last_buf <= '0';
 			else
 				state_curr <= state_next;
+				x_last_buf <= x_last_buf_next;
 				if shift_enable = '1' then
 					current_sample <= x_data;
 					left_sample <= current_sample;
@@ -102,10 +108,12 @@ begin
 		shift_enable <= '0';
 		prediction_valid <= '0';
 		state_next <= state_curr;
+		x_last_buf_next <= x_last_buf;
 		
 		if state_curr = IDLE then
 			x_ready <= '1';
 			if x_valid = '1' then
+				x_last_buf_next <= x_last_slice;
 				shift_enable <= '1';
 				state_next <= PREDICTING;
 			end if;
@@ -114,6 +122,7 @@ begin
 			if prediction_ready = '1' then
 				x_ready <= '1';
 				if x_valid = '1' then
+					x_last_buf_next <= x_last_slice;
 					shift_enable <= '1';
 					state_next <= PREDICTING;
 				else
@@ -123,6 +132,7 @@ begin
 		end if;
 	end process;
 		
+	upleft_addition <= std_logic_vector(unsigned("0" & upper_sample) + unsigned("0" & left_sample));
 	prediction_gen: process(first_col, first_row, upper_Sample, left_sample, upleft_addition)
 	begin
 		if first_col and first_row then
@@ -137,6 +147,8 @@ begin
 		end if;
 	end process;
 
-	upleft_addition <= std_logic_vector(unsigned("0" & upper_sample) + unsigned("0" & left_sample));
+	prediction_last <= x_last_buf;
+
+	
 
 end Behavioral;

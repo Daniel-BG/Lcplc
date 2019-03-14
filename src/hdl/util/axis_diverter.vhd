@@ -32,7 +32,8 @@ entity AXIS_DIVERTER is
 		input_valid		: in	std_logic;
 		input_ready		: out	std_logic;
 		input_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_last		: in 	std_logic;
+		input_last_zero	: in 	std_logic;
+		input_last_one	: in 	std_logic;
 		--to output axi ports
 		output_0_valid	: out 	std_logic;
 		output_0_ready	: in 	std_logic;
@@ -62,7 +63,7 @@ begin
 		end if;
 	end process;
 	
-	comb: process(state_curr, output_0_ready, output_1_ready, input_valid, input_last)
+	comb: process(state_curr, output_0_ready, output_1_ready, input_valid, input_last_zero, input_last_one)
 	begin
 		state_next <= state_curr;
 		
@@ -72,7 +73,9 @@ begin
 			output_1_valid <= '0';
 			--check if a transaction is made
 			if input_valid = '1' and output_0_ready = '1' then
-				state_next <= PORT_ONE;
+				if input_last_zero = '1' then
+					state_next <= PORT_ONE;
+				end if;
 			end if;
 		elsif state_curr = PORT_ONE then
 			input_ready <= output_1_ready;
@@ -80,7 +83,7 @@ begin
 			output_0_valid <= '0';
 			--check if a transaction is made
 			if input_valid = '1' and output_1_ready = '1' then
-				if input_last = '1' then
+				if input_last_one = '1' then
 					state_next <= PORT_ZERO;
 				end if;
 			end if;
