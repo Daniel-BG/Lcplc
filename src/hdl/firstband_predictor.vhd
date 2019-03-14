@@ -55,6 +55,8 @@ architecture Behavioral of FIRSTBAND_PREDICTOR is
 	--queue system for previous samples
 	signal current_sample, left_sample, upper_sample: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal shift_enable: std_logic;
+	signal fifo_rst, fifo_rst_force: std_logic;
+	signal fifo_output_ready: std_logic;
 
 	--prediction
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
@@ -91,15 +93,21 @@ begin
 		end if;
 	end process;
 	
-	shift_reg_prev_line: entity work.SHIFT_REG
+	fifo_rst <= rst or fifo_rst_force;
+	fifo_output_ready <= '1' when shift_enable = '1' and not first_row else '0';
+	shift_reg_prev_line: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			DEPTH => 2**(BLOCK_SIZE_LOG/2)
+			FIFO_DEPTH => 2**(BLOCK_SIZE_LOG/2) + 1 --leave 1 extra just in case
 		)
 		Port map (
-			clk => clk, enable => shift_enable,
-			input => current_sample,
-			output => upper_sample
+			clk => clk, rst => fifo_rst,
+			input_valid => shift_enable,
+			input_ready => open, --assume always ready
+			input_data  => current_sample,
+			output_ready=> fifo_output_ready,
+			output_valid=> open, --assume always valid
+			output_data => upper_sample
 		);
 	
 	comb: process(state_curr, prediction_ready, x_valid, x_last_buf, x_last_slice)
@@ -109,6 +117,7 @@ begin
 		prediction_valid <= '0';
 		state_next <= state_curr;
 		x_last_buf_next <= x_last_buf;
+		fifo_rst_force <= '0';
 		
 		if state_curr = IDLE then
 			x_ready <= '1';
@@ -127,6 +136,7 @@ begin
 					state_next <= PREDICTING;
 				else
 					state_next <= IDLE;
+					fifo_rst_force <= '1';
 				end if;
 			end if;
 		end if;
