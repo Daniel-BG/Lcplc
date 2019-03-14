@@ -174,12 +174,6 @@ architecture Behavioral of LCPLC is
 	signal xhatoutmean_0_valid, xhatoutmean_0_ready, xhatoutmean_1_valid,xhatoutmean_1_ready: std_logic;
 	signal xhatoutmean_0_data, xhatoutmean_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
-	--reducers before coder
-	signal alpha_1_ready_red, alpha_1_valid_red: std_logic;
-	signal alpha_1_data_red: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
-	signal xmean_2_valid_red, xmean_2_ready_red: std_logic;
-	signal xmean_2_data_red: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	
 	--final delays
 	signal merr_delay_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	signal merr_delay_ready, merr_delay_valid, merr_delay_last: std_logic;
@@ -363,7 +357,7 @@ begin
 			xmean_valid		=> xmean_0_valid,
 			xmean_ready		=> xmean_0_ready,
 			xmean_data		=> xmean_0_data,
-			xhatmean_valid	=> xhatoutmean_0_valid,
+			xhatmean_valid	=> xhatoutmean_0_valid, 
 			xhatmean_ready	=> xhatoutmean_0_ready,
 			xhatmean_data	=> xhatoutmean_0_data,
 			alpha_ready     => alpha_ready,
@@ -409,7 +403,7 @@ begin
 			xhatmean_valid	=> xhatoutmean_1_valid,
 			xhatmean_ready	=> xhatoutmean_1_ready,
 			xhatmean_data	=> xhatoutmean_1_data,
-			alpha_valid     => alpha_0_valid,
+			alpha_valid     => alpha_0_valid, 
 			alpha_ready		=> alpha_0_ready,
 			alpha_data		=> alpha_0_data,
 			--output prediction
@@ -477,7 +471,8 @@ begin
 			x_valid			=> x_delay_delay_valid,
 			x_ready			=> x_delay_delay_ready,
 			x_data			=> x_delay_delay_data,
-			x_last		    => x_delay_delay_last,
+			x_last_s	    => x_delay_delay_last_s,
+			x_last_b		=> x_delat_delay_last_b,
 			prediction_ready=> prediction_ready,
 			prediction_valid=> prediction_valid,
 			prediction_data => prediction_data,
@@ -496,7 +491,8 @@ begin
 			xhatout_valid   => xhat_valid,
 			xhatout_ready	=> xhat_ready,
 			xhatout_data	=> xhat_data,
-			xhatout_last    => xhat_last,
+			xhatout_last_s  => xhat_last_s,
+			xhatout_last_b  => xhat_last_b,
 			d_flag_valid	=> d_flag_valid,
 			d_flag_ready	=> d_flag_ready,
 			d_flag_data 	=> d_flag_data
@@ -514,7 +510,7 @@ begin
 			clk => clk, rst => rst, 
 			input_ready => d_flag_ready,
 			input_valid => d_flag_valid,
-			input_data	=> d_flag_data_stdlv,
+			--input_data	=> d_flag_data_stdlv, need to change the logic of this module
 			input_sub	=> "1",
 			output_ready=> d_flag_sub_ready,
 			output_valid=> d_flag_sub_valid,
@@ -552,7 +548,8 @@ begin
 			xhat_data		=> xhat_data,
 			xhat_ready		=> xhat_ready,
 			xhat_valid		=> xhat_valid,
-			xhat_last 		=> xhat_last,
+			xhat_last_s	 	=> xhat_last_s,
+			xhat_last_b     => xhat_last_b,
 			xtilde_data		=> xtilde_data,
 			xtilde_ready	=> xtilde_ready,
 			xtilde_valid	=> xtilde_valid,
@@ -560,12 +557,12 @@ begin
 			d_flag_data		=> d_flag_0_valid,
 			d_flag_ready	=> d_flag_0_ready,
 			d_flag_valid	=> d_flag_0_valid,
-			xhatout_data	=> xhatout_data,
 			xhatout_ready	=> xhatout_ready,
 			xhatout_valid	=> xhatout_valid,
+			xhatout_data	=> xhatout_data,
 			xhatout_last    => xhatout_last,
-			xhatoutmean_data	=> xhatoutmean_data,
 			xhatoutmean_ready	=> xhatoutmean_ready,
+			xhatoutmean_data	=> xhatoutmean_data, 
 			xhatoutmean_valid	=> xhatoutmean_valid
 		);
 		
@@ -671,41 +668,6 @@ begin
 			output_valid=> kj_delay_valid
 		);
 		
-	--reducers for coder inputs
-	alpha_red: entity work.AXIS_REDUCER
-		Generic map (
-			DATA_WIDTH => ALPHA_WIDTH,
-			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG - 1,
-			INVALID_TRANSACTIONS => 1,
-			START_VALID => true
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready     => alpha_1_ready,
-			input_valid		=> alpha_1_valid,
-			input_data		=> alpha_1_data,
-			output_ready	=> alpha_1_ready_red,
-			output_valid	=> alpha_1_valid_red,
-			output_data		=> alpha_1_data_red
-		);
-		
-	xmean_red: entity work.AXIS_REDUCER
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			VALID_TRANSACTIONS => 2**BLOCK_SIZE_LOG - 1,
-			INVALID_TRANSACTIONS => 1,
-			START_VALID => false
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready     => xmean_2_ready,
-			input_valid		=> xmean_2_valid,
-			input_data		=> xmean_2_data,
-			output_ready	=> xmean_2_ready_red,
-			output_valid	=> xmean_2_valid_red,
-			output_data		=> xmean_2_data_red
-		);
-		
 	--coder
 	coder: entity work.CODER 
 		Generic map (
@@ -731,13 +693,12 @@ begin
 			d_flag_data	=> d_flag_1_data_stdlv,
 			d_flag_ready=> d_flag_1_ready,
 			d_flag_valid=> d_flag_1_valid,
-			alpha_data	=> alpha_1_data_red,
-			alpha_ready => alpha_1_ready_red,
-			alpha_valid	=> alpha_1_valid_red,
-			--XMEAN INPUT: one per band except first (first comes trimmed from outside)
-			xmean_data	=> xmean_2_data_red,
-			xmean_ready => xmean_2_ready_red,
-			xmean_valid => xmean_2_valid_red,
+			alpha_data	=> alpha_1_data,
+			alpha_ready => alpha_1_ready,
+			alpha_valid	=> alpha_1_valid,
+			xmean_data	=> xmean_2_data,
+			xmean_ready => xmean_2_ready,
+			xmean_valid => xmean_2_valid,
 			--outputs
 			output_data	=> output_data,
 			output_valid=> output_valid,

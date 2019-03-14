@@ -33,11 +33,11 @@ entity AXIS_SELECTOR is
 		input_0_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_0_ready	: out std_logic;
 		input_0_valid	: in  std_logic;
-		input_0_last	: in  std_logic;
+		input_0_last	: in  std_logic := '0';
 		input_1_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_1_ready	: out std_logic;
 		input_1_valid	: in  std_logic;
-		input_1_last	: in  std_logic;
+		input_1_last	: in  std_logic := '0';
 		flag_data		: in  std_logic_vector(0 downto 0);
 		flag_ready		: out std_logic;
 		flag_valid		: in  std_logic;
@@ -72,13 +72,13 @@ begin
 		Port map (
 			clk => clk, rst => rst,
 			input_0_valid => input_0_valid,
-			input_1_valid => input_1_valid,
 			input_0_ready => input_0_ready,
-			input_0_valid => input_0_valid,
-			input_1_ready => input_1_ready,
 			input_0_data  => input_0_data,
-			input_1_data  => input_1_data,
+			input_0_last  => input_0_last,
 			input_1_valid => input_1_valid,
+			input_1_ready => input_1_ready,
+			input_1_data  => input_1_data,
+			input_1_last  => input_1_last,
 			output_valid  => joint_inputs_valid,
 			output_ready  => joint_inputs_ready,
 			output_data_0 => joint_inputs_false,
