@@ -195,7 +195,8 @@ begin
 			input_valid		=> ehat_splitter_0_valid,
 			input_ready		=> ehat_splitter_0_ready,
 			input_data		=> ehat_splitter_0_data_full,
-			input_last		=> ehat_splitter_0_last_s,
+			input_last_zero	=> ehat_splitter_0_last_s,
+			input_last_one  => ehat_splitter_0_last_b,
 			--to output axi ports
 			output_0_valid	=> diverter_0_valid,
 			output_0_ready	=> diverter_0_ready,

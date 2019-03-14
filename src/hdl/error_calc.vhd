@@ -40,7 +40,9 @@ entity ERROR_CALC is
 		x_valid			: in  std_logic;
 		x_ready			: out std_logic;
 		x_data			: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		x_last			: in  std_logic;
+		x_last_s		: in  std_logic;
+		x_last_b		: in  std_logic;
+		x_last_i		: in  std_logic;
 		--all predictions (from both the first layer predictor and the second layer)
 		--prediction for first sample included (will be inserted by the first layer predictor)
 		prediction_ready: out std_logic;
@@ -54,7 +56,9 @@ entity ERROR_CALC is
 		merr_ready		: in  std_logic;
 		merr_valid		: out std_logic;
 		merr_data		: out std_logic_vector(DATA_WIDTH + 2 downto 0);
-		merr_last		: out std_logic;
+		merr_last_s		: out std_logic;
+		merr_last_b		: out std_logic;
+		merr_last_i		: out std_logic;
 		kj_ready		: in  std_logic;
 		kj_valid		: out std_logic;
 		kj_data			: out std_logic_vector(bits(bits(ACCUMULATOR_WINDOW-1)+DATA_WIDTH) - 1 downto 0);
@@ -65,7 +69,8 @@ entity ERROR_CALC is
 		xhatout_valid   : out std_logic;
 		xhatout_ready	: in  std_logic;
 		xhatout_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xhatout_last	: out std_logic;
+		xhatout_last_s	: out std_logic;
+		xhatout_last_b	: out std_logic;
 		d_flag_valid	: out std_logic;
 		d_flag_ready	: in  std_logic;
 		d_flag_data 	: out std_logic
@@ -76,6 +81,9 @@ architecture Behavioral of ERROR_CALC is
 	constant PREDICTION_WIDTH: integer := DATA_WIDTH + 3;
 	constant ACC_WINDOW_BITS: integer := bits(ACCUMULATOR_WINDOW);
 	constant ACC_WINDOW_M1_BITS: integer := bits(ACCUMULATOR_WINDOW-1);
+	
+	--
+	signal x_last_ibs: std_logic_vector(2 downto 0);
 	
 	--prediction splitter into 3: 
 		--(0) first one goes to output prediction (in case we skip coding)
@@ -97,12 +105,13 @@ architecture Behavioral of ERROR_CALC is
 	
 	--unquant error calculation
 	signal unquant_error_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal unquant_error_valid, unquant_error_ready, unquant_error_last: std_logic;
+	signal unquant_error_valid, unquant_error_ready: std_logic;
+	signal unquant_error_last_ibs: std_logic_vector(2 downto 0);
 	
 	--error splitter signals
 	signal error_splitter_valid_0, error_splitter_valid_1, error_splitter_ready_0, error_splitter_ready_1: std_logic;
-	signal error_splitter_last_0, error_splitter_last_1: std_logic;
 	signal error_splitter_data_0, error_splitter_data_1: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal error_splitter_last_ibs_0, error_splitter_last_ibs_1: std_logic_vector(2 downto 0);
 	
 	--distortion multiplier
 	signal distortion_mult_data: std_logic_vector(PREDICTION_WIDTH*2-1 downto 0);
@@ -116,32 +125,46 @@ architecture Behavioral of ERROR_CALC is
 	signal d_flag_thres: std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0); 
 	
 	--error quantizer
-	signal error_quant_ready, error_quant_valid, error_quant_last: std_logic;
+	signal error_quant_ready, error_quant_valid: std_logic;
 	signal error_quant_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal error_quant_last_ibs: std_logic_vector(2 downto 0);
 	
 	--error quantizer splitter
 	signal error_quant_splitter_valid_0, error_quant_splitter_ready_0, error_quant_splitter_valid_1, error_quant_splitter_ready_1: std_logic;
-	signal error_quant_splitter_last_0, error_quant_splitter_last_1: std_logic;
+	signal error_quant_splitter_last_ibs_0, error_quant_splitter_last_ibs_1: std_logic_vector(2 downto 0);
+	alias  error_quant_splitter_last_s_0 : std_logic is error_quant_splitter_last_ibs_0(0);
+	alias  error_quant_splitter_last_b_0 : std_logic is error_quant_splitter_last_ibs_0(1);
+	alias  error_quant_splitter_last_i_0 : std_logic is error_quant_splitter_last_ibs_0(2);
+	alias  error_quant_splitter_last_s_1 : std_logic is error_quant_splitter_last_ibs_1(0);
+	alias  error_quant_splitter_last_b_1 : std_logic is error_quant_splitter_last_ibs_1(1);
+	alias  error_quant_splitter_last_i_1 : std_logic is error_quant_splitter_last_ibs_1(2);
 	signal error_quant_splitter_data_0, error_quant_splitter_data_1: std_logic_vector(PREDICTION_WIDTH - 1 downto 0); 
 	
 	--error dequantizer
-	signal error_unquant_ready, error_unquant_valid, error_unquant_last: std_logic;
+	signal error_unquant_ready, error_unquant_valid: std_logic;
 	signal error_unquant_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal error_unquant_last_s: std_logic;
+	signal error_unquant_last_b_stdlv: std_logic_vector(0 downto 0);
 	
 	--error dequantizer splitter
 	signal error_unquant_splitter_valid_0, error_unquant_splitter_ready_0, error_unquant_splitter_valid_1, error_unquant_splitter_ready_1: std_logic; 
-	signal error_unquant_splitter_last_0, error_unquant_splitter_last_1: std_logic;
+	signal error_unquant_splitter_last_s_0, error_unquant_splitter_last_s_1: std_logic;
 	signal error_unquant_splitter_data_0, error_unquant_splitter_data_1: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal error_unquant_splitter_last_b_stdlv_0: std_logic_vector(0 downto 0);
 	
 	--xhatout raw calc
 	signal xhatout_raw_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal xhatout_raw_valid, xhatout_raw_ready, xhatout_raw_last: std_logic;
+	signal xhatout_raw_valid, xhatout_raw_ready: std_logic;
+	signal xhatout_raw_last_s: std_logic;
+	signal xhatout_raw_last_b_stdlv: std_logic_vector(0 downto 0);
 	
 	--xhatout clamp
 	signal xhatout_raw_data_out: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal xhatout_last_b_stdlv: std_logic_vector(0 downto 0);
 	
 	--error mapper
 	signal mapped_error_data_raw:	std_logic_vector (PREDICTION_WIDTH downto 0);
+	signal merr_last_ibs: std_logic_vector(2 downto 0);
 	
 	--error sliding accumulator
 	signal error_acc_in_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
@@ -225,6 +248,7 @@ begin
 	
 	
 	--error calculation
+	x_last_ibs <= x_last_i & x_last_b & x_last_s;
 	unquant_error_calc: entity work.AXIS_ARITHMETIC_OP
 		Generic Map (
 			DATA_WIDTH_0 	  => DATA_WIDTH,
@@ -234,43 +258,44 @@ begin
 			SIGN_EXTEND_0     => false,
 			SIGN_EXTEND_1	  => true,
 			SIGNED_OP		  => true,
-			LAST_POLICY		  => PASS_ONE --ignore x last since we are already using pred last so that it can be trimmed away
-		)
+			USER_WIDTH		  => 3,
+			USER_POLICY 	  => PASS_ZERO
+		)	
 		Port Map (
 			clk => clk, rst => rst,
 			input_0_data  => x_data,
 			input_0_valid => x_valid,
 			input_0_ready => x_ready,
-			input_0_last  => x_last,
+			input_0_user  => x_last_ibs,
 			input_1_data  => prediction_splitter_data_2,
 			input_1_valid => prediction_splitter_valid_2,
 			input_1_ready => prediction_splitter_ready_2,
-			input_1_last  => prediction_splitter_last_2,
 			output_data   => unquant_error_data,
 			output_valid  => unquant_error_valid,
 			output_ready  => unquant_error_ready,
-			output_last   => unquant_error_last
+			output_user   => unquant_error_last_ibs
 		);
 		
 	--error splitter (1 for distortion calculation and 1 for continuing with calcs
 	error_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
-			DATA_WIDTH => PREDICTION_WIDTH
+			DATA_WIDTH => PREDICTION_WIDTH,
+			USER_WIDTH => 3
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_valid => unquant_error_valid,
 			input_ready => unquant_error_ready,
 			input_data  => unquant_error_data,
-			input_last  => unquant_error_last,
+			input_user  => unquant_error_last_ibs,
 			output_0_valid => error_splitter_valid_0,
 			output_0_data  => error_splitter_data_0,
 			output_0_ready => error_splitter_ready_0,
-			output_0_last  => error_splitter_last_0,
+			output_0_user  => error_splitter_last_ibs_0,
 			output_1_valid => error_splitter_valid_1,
 			output_1_data  => error_splitter_data_1,
 			output_1_ready => error_splitter_ready_1,
-			output_1_last  => error_splitter_last_1
+			output_1_user  => error_splitter_last_ibs_1
 		);
 		
 	--distortion multiplier
@@ -289,7 +314,7 @@ begin
 			input_0_data	=> error_splitter_data_0,
 			input_0_valid	=> error_splitter_valid_0,
 			input_0_ready	=> error_splitter_ready_0,
-			input_0_last    => error_splitter_last_0,
+			input_0_last    => error_splitter_last_ibs_0(0),
 			input_1_data	=> error_splitter_data_0,
 			input_1_valid	=> error_splitter_valid_0,
 			input_1_ready	=> open, --no need for this ready since i already have it from port 0 (they sync)
@@ -348,18 +373,19 @@ begin
 		Generic map (
 			UPSHIFT => UPSHIFT,
 			DOWNSHIFT_MINUS_1 => DOWNSHIFT - 1,
-			DATA_WIDTH => PREDICTION_WIDTH
+			DATA_WIDTH => PREDICTION_WIDTH,
+			USER_WIDTH => 3
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_ready => error_splitter_ready_1,
 			input_valid => error_splitter_valid_1,
 			input_data  => error_splitter_data_1,
-			input_last  => error_splitter_last_1,
+			input_user  => error_splitter_last_ibs_1,
 			output_ready => error_quant_ready,
 			output_valid => error_quant_valid,
 			output_data  => error_quant_data,
-			output_last  => error_quant_last
+			output_user  => error_quant_last_ibs
 		);
 		
 	--splitter for quantized error 
@@ -367,22 +393,23 @@ begin
 		--one goes to dequantizing and decoding for next layer
 	quantized_error_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
-			DATA_WIDTH => PREDICTION_WIDTH
+			DATA_WIDTH => PREDICTION_WIDTH,
+			USER_WIDTH => 3
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_valid => error_quant_valid,
 			input_ready => error_quant_ready,
 			input_data  => error_quant_data,
-			input_last  => error_quant_last,
+			input_user  => error_quant_last_ibs,
 			output_0_valid => error_quant_splitter_valid_0,
 			output_0_data  => error_quant_splitter_data_0,
 			output_0_ready => error_quant_splitter_ready_0,
-			output_0_last  => error_quant_splitter_last_0,
+			output_0_user  => error_quant_splitter_last_ibs_0,
 			output_1_valid => error_quant_splitter_valid_1,
 			output_1_data  => error_quant_splitter_data_1,
 			output_1_ready => error_quant_splitter_ready_1,
-			output_1_last  => error_quant_splitter_last_1
+			output_1_user  => error_quant_splitter_last_ibs_1
 		);
 	
 	--error dequantizer
@@ -390,18 +417,21 @@ begin
 		Generic map (
 			UPSHIFT => UPSHIFT,
 			DOWNSHIFT_MINUS_1 => DOWNSHIFT - 1,
-			DATA_WIDTH => PREDICTION_WIDTH
+			DATA_WIDTH => PREDICTION_WIDTH,
+			USER_WIDTH => 1
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_ready => error_quant_splitter_ready_0,
 			input_valid => error_quant_splitter_valid_0,
 			input_data  => error_quant_splitter_data_0,
-			input_last  => error_quant_splitter_last_0,
+			input_last  => error_quant_splitter_last_s_0,
+			input_user  => error_quant_splitter_last_ibs_0(1 downto 1),
 			output_ready => error_unquant_ready,
 			output_valid => error_unquant_valid,
 			output_data  => error_unquant_data,
-			output_last  => error_unquant_last
+			output_last  => error_unquant_last_s,
+			output_user  => error_unquant_last_b_stdlv
 		);
 		
 	--splitter for error dequantizer
@@ -416,15 +446,17 @@ begin
 			input_valid => error_unquant_valid,
 			input_ready => error_unquant_ready,
 			input_data  => error_unquant_data,
-			input_last  => error_unquant_last,
+			input_last  => error_unquant_last_s,
+			input_user  => error_unquant_last_b_stdlv,
 			output_0_valid => error_unquant_splitter_valid_0,
 			output_0_data  => error_unquant_splitter_data_0,
 			output_0_ready => error_unquant_splitter_ready_0,
-			output_0_last  => error_unquant_splitter_last_0,
+			output_0_last  => error_unquant_splitter_last_s_0,
+			output_0_user  => error_unquant_splitter_last_b_stdlv_0,
 			output_1_valid => error_unquant_splitter_valid_1,
 			output_1_data  => error_unquant_splitter_data_1,
 			output_1_ready => error_unquant_splitter_ready_1,
-			output_1_last  => error_unquant_splitter_last_1
+			output_1_last  => error_unquant_splitter_last_s_1
 		);
 		
 	--decoded block out for next layer calculation
@@ -437,7 +469,9 @@ begin
 			SIGN_EXTEND_0 => true,
 			SIGN_EXTEND_1 => true,
 			SIGNED_OP	  => true,
-			LAST_POLICY   => PASS_ONE
+			LAST_POLICY   => PASS_ONE,
+			USER_WIDTH    => 1,
+			USER_POLICY   => PASS_ONE
 		)
 		Port map(
 			clk => clk, rst => rst,
@@ -448,11 +482,13 @@ begin
 			input_1_data  => error_unquant_splitter_data_0,
 			input_1_valid => error_unquant_splitter_valid_0,
 			input_1_ready => error_unquant_splitter_ready_0,
-			input_1_last  => error_unquant_splitter_last_0,
+			input_1_last  => error_unquant_splitter_last_s_0,
+			input_1_user  => error_unquant_splitter_last_b_stdlv_0,
 			output_data   => xhatout_raw_data,
 			output_valid  => xhatout_raw_valid,
 			output_ready  => xhatout_raw_ready,
-			output_last   => xhatout_raw_last
+			output_last   => xhatout_raw_last_s,
+			output_user   => xhatout_raw_last_b_stdlv
 		);
 		
 	--clamp decoded block to real interval
@@ -468,32 +504,39 @@ begin
 			input_data  => xhatout_raw_data,
 			input_valid => xhatout_raw_valid,
 			input_ready => xhatout_raw_ready,
-			input_last  => xhatout_raw_last,
+			input_last  => xhatout_raw_last_s,
+			input_user  => xhatout_raw_last_b_stdlv,
 			output_data => xhatout_raw_data_out,
 			output_valid => xhatout_valid,
 			output_ready => xhatout_ready,
-			output_last  => xhatout_last
+			output_last  => xhatout_last_s,
+			output_user  => xhatout_last_b_stdlv
 		);
 	xhatout_data <= xhatout_raw_data_out(DATA_WIDTH - 1 downto 0);
+	xhatout_last_b <= xhatout_last_b_stdlv(0);
 		
 	--error mapper
 	error_mapper: entity work.ERROR_MAPPER
 		Generic map (
-			DATA_WIDTH => PREDICTION_WIDTH
+			DATA_WIDTH => PREDICTION_WIDTH,
+			USER_WIDTH => 3
 		)
 		Port map (
 			clk => clk, rst => rst,
 			input_ready => error_quant_splitter_ready_1,
 			input_valid => error_quant_splitter_valid_1,
 			input_data  => error_quant_splitter_data_1,
-			input_last  => error_quant_splitter_last_1,
+			input_user  => error_quant_splitter_last_ibs_1,
 			output_ready => merr_ready,
 			output_valid => merr_valid,
 			output_data  => mapped_error_data_raw,
-			output_last  => merr_last
+			output_user  => merr_last_ibs
 		);
 	--no need for last bit since that can only be set when the error value is -2^n and that is not possible here
 	merr_data <= mapped_error_data_raw(PREDICTION_WIDTH - 1 downto 0); 
+	merr_last_i <= merr_last_ibs(2);
+	merr_last_b <= merr_last_ibs(1);
+	merr_last_s <= merr_last_ibs(0);
 	
 	
 	error_acc_in_data <= error_unquant_splitter_data_1 when error_unquant_splitter_data_1(error_unquant_splitter_data_1'high) = '0' else 
@@ -510,7 +553,7 @@ begin
 			input_data  => error_acc_in_data, 
 			input_valid => error_unquant_splitter_valid_1,
 			input_ready => error_unquant_splitter_ready_1,
-			input_last  => error_unquant_splitter_last_1,
+			input_last  => error_unquant_splitter_last_s_1,
 			output_cnt  => error_acc_cnt, 
 			output_data => error_acc_data,
 			output_valid => error_acc_valid,

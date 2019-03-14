@@ -102,7 +102,7 @@ begin
 			output => upper_sample
 		);
 	
-	comb: process(state_curr, prediction_ready, x_valid)
+	comb: process(state_curr, prediction_ready, x_valid, x_last_buf, x_last_slice)
 	begin
 		x_ready <= '0';
 		shift_enable <= '0';

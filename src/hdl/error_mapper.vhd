@@ -24,18 +24,21 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity ERROR_MAPPER is
 	Generic (
-		DATA_WIDTH: integer := 16
+		DATA_WIDTH: integer := 16;
+		USER_WIDTH: integer := 1
 	);
 	Port (
 		clk, rst: std_logic;
 		input_ready	: out std_logic;
 		input_valid	: in  std_logic;
 		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_last	: in  std_logic;
+		input_last	: in  std_logic := '0';
+		input_user  : in  std_logic_vector(USER_WIDTH - 1 downto 0) := (others => '0');
 		output_ready: in  std_logic;
 		output_valid: out std_logic;
 		output_data	: out std_logic_vector(DATA_WIDTH downto 0);
-		output_last : out std_logic
+		output_last : out std_logic;
+		output_user : out std_logic_vector(USER_WIDTH - 1 downto 0)
 	);
 end ERROR_MAPPER;
 
@@ -52,6 +55,7 @@ begin
 	output_last  <= input_last;
 	input_ready  <= output_ready;
 	output_valid <= input_valid;
+	output_user  <= input_user;
 	
 	input_is_positive <= signed(input_data) > to_signed(0, input_data'length);
 	

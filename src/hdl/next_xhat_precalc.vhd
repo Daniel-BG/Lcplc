@@ -19,10 +19,10 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.data_types.all;
 
 entity NEXT_XHAT_PRECALC is
 	Generic (
@@ -101,10 +101,6 @@ architecture Behavioral of NEXT_XHAT_PRECALC is
 	--flag splitter
 	signal d_flag_0_valid, d_flag_0_ready, d_flag_1_valid, d_flag_1_ready: std_logic;
 	signal d_flag_0_data, d_flag_1_data: std_logic_vector(0 downto 0);
-	
-	--flag repeater
-	signal d_flag_0_rep_ready, d_flag_0_rep_valid: std_logic;
-	signal d_flag_0_rep_data: std_logic_vector(0 downto 0); 
 	
 	--xhatout filter
 	signal xhatoutmean_unfiltered_valid, xhatoutmean_unfiltered_ready: std_logic;
@@ -343,26 +339,11 @@ begin
 			output_data => xhatoutmean_data
 		);
 		
-	--replicate flag for sample selector
-	flag_repeater: entity work.AXIS_DATA_REPEATER
-		Generic map (
-			DATA_WIDTH => 1,
-			NUMBER_OF_REPETITIONS => 2**BLOCK_SIZE_LOG
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_ready => d_flag_0_ready,
-			input_valid	=> d_flag_0_valid,
-			input_data	=> d_flag_0_data,
-			output_ready=> d_flag_0_rep_ready,
-			output_valid=> d_flag_0_rep_valid,
-			output_data	=> d_flag_0_rep_data
-		);
-		
 	--select sample
-	sample_selector: entity work.AXIS_SELECTOR 
+	sample_selector: entity work.AXIS_BATCH_SELECTOR 
 		generic map (
-			DATA_WIDTH => DATA_WIDTH
+			DATA_WIDTH => DATA_WIDTH,
+			LAST_POLICY => AND_ALL
 		)
 		port map (
 			clk => clk, rst => rst,
@@ -374,9 +355,9 @@ begin
 			input_1_ready	=> xhat_fifo_ready,
 			input_1_valid	=> xhat_fifo_valid,
 			input_1_last    => xhat_fifo_last,
-			flag_data		=> d_flag_0_rep_data,
-			flag_ready		=> d_flag_0_rep_ready,
-			flag_valid		=> d_flag_0_rep_valid,
+			flag_data		=> d_flag_0_data,
+			flag_ready		=> d_flag_0_ready,
+			flag_valid		=> d_flag_0_valid,
 			output_data		=> xhatout_unfiltered_data,
 			output_valid	=> xhatout_unfiltered_valid,
 			output_ready	=> xhatout_unfiltered_ready,

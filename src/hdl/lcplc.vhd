@@ -18,18 +18,9 @@
 -- 
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+use IEEE.NUMERIC_STD.ALL;
 
 entity LCPLC is
 	Generic (
@@ -63,11 +54,11 @@ architecture Behavioral of LCPLC is
 	constant PREDICTION_WIDTH: integer := DATA_WIDTH + 3;
 
 	--input separator signals
-	signal x_flags_data, x_0_flags_data, x_1_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
-	signal x_0_last_b, x_0_last_s, x_1_last_i, x_1_last_b, x_1_last_s, x_1_last_r: std_logic;
-	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready: std_logic;
+	signal x_flags_data, x_0_flags_data, x_1_flags_data, x_2_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
+	signal x_0_last_b, x_0_last_s, x_1_last_i, x_1_last_b, x_1_last_s, x_1_last_r, x_2_last_b, x_2_last_s: std_logic;
+	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready, x_2_valid, x_2_ready: std_logic;
 	signal x_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal x_1_last_data: std_logic_vector(DATA_WIDTH downto 0);
+	signal x_1_flags_bs_data: std_logic_vector(DATA_WIDTH + 2 downto 0);
 	
 	--diverter for first band/rest
 	signal x_0_red_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
@@ -83,9 +74,7 @@ architecture Behavioral of LCPLC is
 	--prediction first band
 	signal prediction_first_ready, prediction_first_valid, prediction_first_last: std_logic;
 	signal prediction_first_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal prediction_first_data_raw: std_logic_vector(DATA_WIDTH downto 0);
-	
-	
+	signal prediction_first_data_raw: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--splitter for reduced stuff
 	signal x_others_0_valid, x_others_0_ready, x_others_0_last, x_others_1_valid, x_others_1_ready, x_others_1_last: std_logic;
@@ -104,10 +93,13 @@ architecture Behavioral of LCPLC is
 	signal x_delay_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--fifo delay for nth band prediction
-	signal x_delay_delay_ready,x_delay_delay_valid, x_delay_delay_last: std_logic;
-	signal x_delay_delay_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal x_delay_delay_last_data: std_logic_vector(DATA_WIDTH downto 0);
-	
+	signal x_delay_delay_ready, x_delay_delay_valid: std_logic;
+	signal x_delay_delay_flags_data: std_logic_vector(DATA_WIDTH + 2 downto 0);
+	alias  x_delay_delay_data: std_logic_vector(DATA_WIDTH - 1 downto 0) is x_delay_delay_flags_data(DATA_WIDTH - 1 downto 0);
+	alias  x_delay_delay_last_s: std_logic is x_delay_delay_flags_data(DATA_WIDTH);
+	alias  x_delay_delay_last_b: std_logic is x_delay_delay_flags_data(DATA_WIDTH + 1);
+	alias  x_delay_delay_last_i: std_logic is x_delay_delay_flags_data(DATA_WIDTH + 2);
+
 	--alpha result
 	signal alpha_ready, alpha_valid: std_logic;
 	signal alpha_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
@@ -129,9 +121,11 @@ architecture Behavioral of LCPLC is
 	--error calc
 	signal merr_ready		: std_logic;
 	signal merr_valid		: std_logic;
-	signal merr_last		: std_logic;
+	signal merr_last_s		: std_logic;
+	signal merr_last_b		: std_logic;     
+	signal merr_last_i      : std_logic;
 	signal merr_data		: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal merr_last_data	: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal merr_last_data	: std_logic_vector(PREDICTION_WIDTH + 3 - 1 downto 0);
 	signal kj_ready			: std_logic;
 	signal kj_valid			: std_logic;
 	signal kj_data			: std_logic_vector(WORD_WIDTH_LOG - 1 downto 0);
@@ -141,7 +135,8 @@ architecture Behavioral of LCPLC is
 	signal xtilde_data		: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal xhat_valid		: std_logic;
 	signal xhat_ready		: std_logic;
-	signal xhat_last		: std_logic;
+	signal xhat_last_s		: std_logic;
+	signal xhat_last_b		: std_logic;
 	signal xhat_data		: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal d_flag_valid		: std_logic;
 	signal d_flag_ready		: std_logic;
@@ -151,6 +146,12 @@ architecture Behavioral of LCPLC is
 	signal d_flag_data_stdlv: std_logic_vector(0 downto 0);
 	signal d_flag_sub_ready, d_flag_sub_valid: std_logic;
 	signal d_flag_sub_data_stdlv: std_logic_vector(0 downto 0);
+	
+	--d flag last adder
+	signal x_2_last_s_and_valid: std_logic;
+	signal x_2_last_b_stdlv: std_logic_vector(0 downto 0);
+	signal d_flag_presub_valid, d_flag_presub_ready: std_logic;
+	signal d_flag_presub_flag, d_flag_presub_last_stdlv: std_logic_vector(0 downto 0); 
 	
 	--d flag splitter
 	signal d_flag_0_data_stdlv, d_flag_1_data_stdlv: std_logic_vector(0 downto 0);
@@ -175,9 +176,12 @@ architecture Behavioral of LCPLC is
 	signal xhatoutmean_0_data, xhatoutmean_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--final delays
-	signal merr_delay_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal merr_delay_ready, merr_delay_valid, merr_delay_last: std_logic;
-	signal merr_delay_last_data: std_logic_vector(PREDICTION_WIDTH downto 0);
+	signal merr_delay_ready, merr_delay_valid: std_logic;
+	signal merr_delay_last_ibs_data: std_logic_vector(PREDICTION_WIDTH + 2 downto 0);
+	alias  merr_delay_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0) is merr_delay_last_ibs_data(PREDICTION_WIDTH - 1 downto 0);
+	alias  merr_delay_last_i: std_logic is merr_delay_last_ibs_data(PREDICTION_WIDTH + 2);
+	alias  merr_delay_last_b: std_logic is merr_delay_last_ibs_data(PREDICTION_WIDTH + 1);
+	alias  merr_delay_last_s: std_logic is merr_delay_last_ibs_data(PREDICTION_WIDTH + 0);
 	signal kj_delay_data: std_logic_vector(WORD_WIDTH_LOG - 1 downto 0);
 	signal kj_delay_ready, kj_delay_valid: std_logic;
 
@@ -185,7 +189,7 @@ begin
 
 	--input to first band predictor and second band predictor
 	x_flags_data <= x_last_i & x_last_b & x_last_s & x_last_r & x_data;
-	input_splitter: entity work.AXIS_SPLITTER_2
+	input_splitter: entity work.AXIS_SPLITTER_3
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH + 4
 		)
@@ -200,7 +204,10 @@ begin
 			output_0_data	=> x_0_flags_data,
 			output_1_valid  => x_1_valid,
 			output_1_ready  => x_1_ready,
-			output_1_data   => x_1_flags_data
+			output_1_data   => x_1_flags_data,
+			output_2_valid  => x_2_valid,
+			output_2_ready  => x_2_ready,
+			output_2_data   => x_2_flags_data
 		);
 	x_0_last_b <= x_0_flags_data(x_0_flags_data'high-1);
 	x_0_last_s <= x_0_flags_data(x_0_flags_data'high-2);
@@ -209,6 +216,8 @@ begin
 	x_1_last_b <= x_1_flags_data(x_1_flags_data'high-1);
 	x_1_last_s <= x_1_flags_data(x_1_flags_data'high-2);
 	x_1_last_r <= x_1_flags_data(x_1_flags_data'high-3);
+	x_2_last_b <= x_2_flags_data(x_2_flags_data'high-1);
+	x_2_last_s <= x_2_flags_data(x_2_flags_data'high-2);
 		
 	diverter_firstband_others: entity work.AXIS_DIVERTER
 		Generic map (
@@ -254,7 +263,7 @@ begin
 			prediction_data  => prediction_first_data_raw,
 			prediction_last  => prediction_first_last
 		);
-	prediction_first_data <= "00" & prediction_first_data_raw;
+	prediction_first_data <= std_logic_vector(resize(unsigned(prediction_first_data_raw), prediction_first_data'length));
 	
 
 		
@@ -436,10 +445,10 @@ begin
 		);
 		
 	--buffer for samples for error calc
-	x_1_last_data <= x_1_last_s & x_1_data;
+	x_1_flags_bs_data <= x_1_last_i & x_1_last_b & x_1_last_s & x_1_data;
 	error_calc_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
-			DATA_WIDTH => DATA_WIDTH + 1,
+			DATA_WIDTH => DATA_WIDTH + 3,
 			FIFO_DEPTH => (2**BLOCK_SIZE_LOG)*2
 		)
 		Port map ( 
@@ -447,14 +456,12 @@ begin
 			--input axi port
 			input_valid => x_1_valid,
 			input_ready => x_1_ready,
-			input_data	 => x_1_last_data,
+			input_data	 => x_1_flags_bs_data,
 			--out axi port
 			output_ready=> x_delay_delay_ready,
-			output_data => x_delay_delay_last_data,
+			output_data => x_delay_delay_flags_data,
 			output_valid=> x_delay_delay_valid
 		);
-	x_delay_delay_last <= x_delay_delay_last_data(DATA_WIDTH);
-	x_delay_delay_data <= x_delay_delay_last_data(DATA_WIDTH - 1 downto 0);
 		
 	--error calculations
 	error_calc: entity work.ERROR_CALC 
@@ -472,7 +479,8 @@ begin
 			x_ready			=> x_delay_delay_ready,
 			x_data			=> x_delay_delay_data,
 			x_last_s	    => x_delay_delay_last_s,
-			x_last_b		=> x_delat_delay_last_b,
+			x_last_b		=> x_delay_delay_last_b,
+			x_last_i		=> x_delay_delay_last_i,
 			prediction_ready=> prediction_ready,
 			prediction_valid=> prediction_valid,
 			prediction_data => prediction_data,
@@ -480,7 +488,9 @@ begin
 			merr_ready		=> merr_ready,
 			merr_valid		=> merr_valid,
 			merr_data		=> merr_data,
-			merr_last       => merr_last,
+			merr_last_s     => merr_last_s,
+			merr_last_b     => merr_last_b,
+			merr_last_i     => merr_last_i,
 			kj_ready		=> kj_ready,
 			kj_valid		=> kj_valid,
 			kj_data			=> kj_data,
@@ -498,20 +508,47 @@ begin
 			d_flag_data 	=> d_flag_data
 		);
 		
-	--substitute the first flag by '1' to indicate 
+	--get substituter helper flags
+	x_2_last_b <= x_2_flags_data(x_2_flags_data'high-1);
+	x_2_last_s <= x_2_flags_data(x_2_flags_data'high-2);
+	--syncrhonize d flag with input b and s flags
 	d_flag_data_stdlv <= "1" when d_flag_data = '1' else "0";
+	x_2_last_s_and_valid <= x_2_last_s and x_2_valid;
+	x_2_last_b_stdlv <= "1" when x_2_last_b = '1' else "0";
+	d_flag_x_flags_syncer: entity work.AXIS_SYNCHRONIZER_2
+		Generic map (
+			DATA_WIDTH_0 => 1,
+			DATA_WIDTH_1 => 1,
+			LATCH => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_0_valid => d_flag_valid,
+			input_0_ready => d_flag_ready,
+			input_0_data  => d_flag_data_stdlv,
+			input_1_valid => x_2_last_s_and_valid,
+			input_1_ready => x_2_ready,
+			input_1_data => x_2_last_b_stdlv,
+			output_valid => d_flag_presub_valid,
+			output_ready => d_flag_presub_ready,
+			output_data_0=> d_flag_presub_flag,
+			output_data_1=> d_flag_presub_last_stdlv 
+		); 
+		
+	--substitute the first flag by '1' to indicate 
+	
 	substitute_first_d_flag: entity work.AXIS_SUBSTITUTER 
 		Generic map (
 			DATA_WIDTH => 1,
-			INVALID_TRANSACTIONS => 1,
-			VALID_TRANSACTIONS => NUMBER_OF_BANDS - 1
+			INVALID_TRANSACTIONS => 1
 		)
 		Port map (
 			clk => clk, rst => rst, 
-			input_ready => d_flag_ready,
-			input_valid => d_flag_valid,
-			--input_data	=> d_flag_data_stdlv, need to change the logic of this module
+			input_ready => d_flag_presub_ready,
+			input_valid => d_flag_presub_valid,
+			input_data	=> d_flag_presub_flag, --need to change the logic of this module
 			input_sub	=> "1",
+			input_last  => d_flag_presub_last_stdlv(0),
 			output_ready=> d_flag_sub_ready,
 			output_valid=> d_flag_sub_valid,
 			output_data => d_flag_sub_data_stdlv
@@ -630,10 +667,10 @@ begin
 		
 		
 	--one fifo for nth band input
-	merr_last_data <= merr_last & merr_data;
+	merr_last_data <= merr_last_i & merr_last_b & merr_last_s & merr_data;
 	delay_mapped_err: entity work.AXIS_FIFO
 		Generic map (
-			DATA_WIDTH => PREDICTION_WIDTH,
+			DATA_WIDTH => PREDICTION_WIDTH + 3,
 			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
 		)
 		Port map ( 
@@ -644,11 +681,9 @@ begin
 			input_data	 => merr_last_data,
 			--out axi port
 			output_ready=> merr_delay_ready,
-			output_data => merr_delay_last_data,
+			output_data => merr_delay_last_ibs_data,
 			output_valid=> merr_delay_valid
 		);
-	merr_delay_last <= merr_delay_last_data(PREDICTION_WIDTH);
-	merr_delay_data <= merr_delay_last_data(PREDICTION_WIDTH-1 downto 0);
 			
 	--one fifo for nth band input
 	delay_kj_calc: entity work.AXIS_FIFO 

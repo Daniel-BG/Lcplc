@@ -29,18 +29,21 @@ entity AXIS_INTERVAL_CLAMPER is
 		DATA_WIDTH: integer := 18;
 		IS_SIGNED: boolean := true;
 		LOWER_LIMIT: integer := 0;
-		UPPER_LIMIT: integer := 2**16
+		UPPER_LIMIT: integer := 2**16;
+		USER_WIDTH: integer := 1
 	);
 	Port(
 		clk, rst	: in  std_logic;
 		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
 		input_valid	: in  std_logic;
 		input_ready	: out std_logic;
-		input_last  : in  std_logic;
+		input_last  : in  std_logic := '0';
+		input_user	: in  std_logic_vector(USER_WIDTH - 1 downto 0) := (others => '0');
 		output_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
 		output_valid: out std_logic;
 		output_ready: in  std_logic;
-		output_last : out std_logic
+		output_last : out std_logic;
+		output_user : out std_logic_vector(USER_WIDTH - 1 downto 0)
 	);
 end AXIS_INTERVAL_CLAMPER;
 
@@ -50,6 +53,11 @@ architecture Behavioral of AXIS_INTERVAL_CLAMPER is
 
 	signal output_valid_reg: std_logic;
 	signal output_last_reg: std_logic;
+	signal output_user_reg: std_logic_vector(USER_WIDTH - 1 downto 0);
+
+	attribute KEEP of output_last_reg, output_user_reg: signal is KEEP_DEFAULT;
+
+
 	
 	signal op_enable: std_logic;
 	
@@ -83,15 +91,18 @@ begin
 				output_valid_reg <= '0';
 				output_reg <= (others => '0');
 				output_last_reg <= '0';
+				output_user_reg <= (others => '0');
 			elsif op_enable = '1' then
 				output_reg <= result;
 				output_valid_reg <= input_valid;
 				output_last_reg <= input_last;
+				output_user_reg <= input_user;
 			end if;
 		end if;
 	end process;
 				 
 	output_last  <= output_last_reg;
+	output_user  <= output_user_reg;
 	output_valid <= output_valid_reg;
 	input_ready  <= op_enable;
 	output_data  <= output_reg;
