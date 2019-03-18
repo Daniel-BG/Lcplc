@@ -83,7 +83,12 @@ begin
 			--if we need to empty buffer
 			if clear_valid = '1' and output_ready = '1' then
 				if clear_data = '1' then
-					state_next <= EMPTY;
+					input_ready <= '1';
+					if input_valid = '1' then
+						buf_next <= input_data;
+					else
+						state_next <= EMPTY;
+					end if;
 				end if;
 			end if;
 		end if;

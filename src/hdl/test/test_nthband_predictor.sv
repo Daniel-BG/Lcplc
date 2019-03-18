@@ -38,6 +38,7 @@ module test_nthband_predictor;
 
 	reg gen_xhat_enable;
 	wire xhat_valid, xhat_ready;
+	wire xhat_last_s;
 	wire [DATA_WIDTH - 1:0] xhat_data;
 
 	reg gen_xmean_enable;
@@ -49,8 +50,8 @@ module test_nthband_predictor;
 	wire [DATA_WIDTH - 1:0] xhatmean_data;
 
 	reg checker_enable;
-	wire prediction_valid, prediction_ready;
-	wire [DATA_WIDTH:0] prediction_data;
+	wire xtilde_valid, xtilde_ready;
+	wire [DATA_WIDTH:0] xtilde_data;
 
 	
 	always #(PERIOD/2) clk = ~clk;
@@ -87,6 +88,14 @@ module test_nthband_predictor;
 			.output_data(xhat_data),
 			.output_ready(xhat_ready)
 		);
+		
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_XTILDE_O_LAST_S)) GEN_xhat_last_s
+		(
+			.clk(clk), .rst(rst), .enable(gen_xhat_enable),
+			.output_valid(),
+			.output_data(xhat_last_s),
+			.output_ready(xhat_ready)
+		);
 
 	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XMEAN)) GEN_xmean
 		(
@@ -104,22 +113,23 @@ module test_nthband_predictor;
 			.output_ready(xhatmean_ready)
 		);
 
-	helper_axis_checker #(.SKIP(256), .DATA_WIDTH(DATA_WIDTH+1), .FILE_NAME(`GOLDEN_PREDICTION)) GEN_checker
+	helper_axis_checker #(.DATA_WIDTH(DATA_WIDTH+1), .FILE_NAME(`GOLDEN_XTILDE_OTHERBANDS)) GEN_checker
 		(
 			.clk        (clk),
 			.rst        (rst),
 			.enable     (checker_enable),
-			.input_valid(prediction_valid),
-			.input_ready(prediction_ready),
-			.input_data (prediction_data)
+			.input_valid(xtilde_valid),
+			.input_ready(xtilde_ready),
+			.input_data (xtilde_data)
 		);
 
-	nthband_predictor #(.DATA_WIDTH(DATA_WIDTH), .ALPHA_WIDTH(ALPHA_WIDTH), .BLOCK_SIZE_LOG(BLOCK_SIZE_LOG)) predictor
+	nthband_predictor #(.DATA_WIDTH(DATA_WIDTH), .ALPHA_WIDTH(ALPHA_WIDTH)) predictor
 		(
 			.clk(clk), .rst(rst),
 			.xhat_valid(xhat_valid),
 			.xhat_ready(xhat_ready),
 			.xhat_data(xhat_data),
+			.xhat_last_s(xhat_last_s),
 			.xmean_valid(xmean_valid),
 			.xmean_ready(xmean_ready),
 			.xmean_data(xmean_data),
@@ -129,9 +139,9 @@ module test_nthband_predictor;
 			.alpha_valid(alpha_valid),
 			.alpha_ready(alpha_ready),
 			.alpha_data(alpha_data),
-			.prediction_ready(prediction_ready),
-			.prediction_valid(prediction_valid),
-			.prediction_data(prediction_data)
+			.xtilde_ready(xtilde_ready),
+			.xtilde_valid(xtilde_valid),
+			.xtilde_data(xtilde_data)
 		);
 
 endmodule

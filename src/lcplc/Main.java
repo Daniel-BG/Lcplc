@@ -183,6 +183,8 @@ public class Main {
 			Sampler<Long>    xhatmeanSampler	= new Sampler<Long>("xhatmean");
 			Sampler<Integer> alphaSampler		= new Sampler<Integer>("alpha");
 			
+			Sampler<Integer> xTildeOtherBands   = new Sampler<Integer>("xtilde_otherbands");
+			Sampler<Integer> xTilde_o_last_s    = new Sampler<Integer>("xtilde_others_last_s");
 			
 			Sampler<Long> 	 alphanSampler		= new Sampler<Long>("alphan");
 			Sampler<Long> 	 alphadSampler		= new Sampler<Long>("alphad");
@@ -365,6 +367,8 @@ public class Main {
 						}
 						acc.add(Math.abs(error));		//update Rj after coding
 						
+						xTildeOtherBands.sample((int) prediction);
+						xTilde_o_last_s.sample(l == lines-1 && s == samples-1 ? 1 : 0);
 						
 						samplerHelper3.sample(acc.getRunningSum());
 						samplerHelper3.sample((long) acc.getRunningCount());
@@ -425,6 +429,9 @@ public class Main {
 			alphaSampler.export();
 			xmeanSampler.export();
 			xhatmeanSampler.export();
+			
+			xTildeOtherBands.export();
+			xTilde_o_last_s.export();
 			
 			
 			alphanSampler.export();

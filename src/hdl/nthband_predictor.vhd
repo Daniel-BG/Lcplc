@@ -37,7 +37,7 @@ entity NTHBAND_PREDICTOR is
 		xhat_valid		: in  std_logic;
 		xhat_ready		: out std_logic;
 		xhat_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xhat_last		: in  std_logic;
+		xhat_last_s		: in  std_logic;
 		xmean_valid		: in  std_logic;
 		xmean_ready		: out std_logic;
 		xmean_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -48,10 +48,10 @@ entity NTHBAND_PREDICTOR is
 		alpha_ready		: out std_logic;
 		alpha_data		: in  std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 		--output prediction
-		prediction_ready: in  std_logic;
-		prediction_valid: out std_logic;
-		prediction_data : out std_logic_vector(DATA_WIDTH + 2 downto 0);
-		prediction_last : out std_logic
+		xtilde_ready	: in  std_logic;
+		xtilde_valid	: out std_logic;
+		xtilde_data 	: out std_logic_vector(DATA_WIDTH + 2 downto 0);
+		xtilde_last 	: out std_logic
 	);
 end NTHBAND_PREDICTOR;
 
@@ -70,6 +70,14 @@ architecture Behavioral of NTHBAND_PREDICTOR is
 	signal xmean_rep_ready, xmean_rep_valid, xhatmean_rep_ready, xhatmean_rep_valid, alpha_rep_ready, alpha_rep_valid: std_logic;
 	signal xmean_rep_data, xhatmean_rep_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal alpha_rep_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+	
+	--xmean delayer
+	signal xmean_rep_ready_delay, xmean_rep_valid_delay: std_logic;
+	signal xmean_rep_data_delay: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	
+	--alpha delayer
+	signal alpha_rep_ready_delay, alpha_rep_valid_delay: std_logic;
+	signal alpha_rep_data_delay: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 	
 	--prediction stage 0	
 	signal prediction_stage_0_data: std_logic_vector(DATA_WIDTH downto 0);
@@ -94,7 +102,7 @@ begin
 	-------------------
 	--INPUT  SPLITTER--
 	-------------------
-	xhat_last_data <= xhat_last & xhat_data;
+	xhat_last_data <= xhat_last_s & xhat_data;
 	xhat_splitter: entity work.AXIS_SPLITTER_4
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1 --one extra for flag
@@ -146,6 +154,22 @@ begin
 			output_valid	=> xmean_rep_valid,
 			output_data		=> xmean_rep_data
 		);
+		
+	--alpha delayer
+	xmean_delay: entity work.AXIS_FIFO 
+		generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			FIFO_DEPTH => 7
+		)
+		port map (
+			clk => clk, rst => rst,
+			input_data  => xmean_rep_data,
+			input_ready => xmean_rep_ready,
+			input_valid => xmean_rep_valid,
+			output_data => xmean_rep_data_delay,
+			output_ready=> xmean_rep_ready_delay,
+			output_valid=> xmean_rep_valid_delay
+		);
 
 	xhatmean_holder: entity work.AXIS_HOLDER
 		Generic map (
@@ -179,6 +203,22 @@ begin
 			output_ready	=> alpha_rep_ready,
 			output_valid	=> alpha_rep_valid,
 			output_data		=> alpha_rep_data
+		);
+		
+	--alpha delayer
+	alpha_delay: entity work.AXIS_FIFO 
+		generic map (
+			DATA_WIDTH => ALPHA_WIDTH,
+			FIFO_DEPTH => 3	
+		)
+		port map (
+			clk => clk, rst => rst,
+			input_data  => alpha_rep_data,
+			input_ready => alpha_rep_ready,
+			input_valid => alpha_rep_valid,
+			output_data => alpha_rep_data_delay,
+			output_ready=> alpha_rep_ready_delay,
+			output_valid=> alpha_rep_valid_delay
 		);
 		
 	--------------
@@ -231,9 +271,9 @@ begin
 			input_0_valid => prediction_stage_0_out_valid,
 			input_0_ready => prediction_stage_0_out_ready,
 			input_0_last  => prediction_stage_0_out_last,
-			input_1_data  => alpha_rep_data,
-			input_1_valid => alpha_rep_valid,
-			input_1_ready => alpha_rep_ready,
+			input_1_data  => alpha_rep_data_delay,
+			input_1_valid => alpha_rep_valid_delay,
+			input_1_ready => alpha_rep_ready_delay,
 			input_1_last  => '0',
 			output_data   => prediction_stage_1_data,
 			output_valid  => prediction_stage_1_valid,
@@ -274,14 +314,14 @@ begin
 			input_0_valid => prediction_stage_1_valid,
 			input_0_ready => prediction_stage_1_ready,
 			input_0_last  => prediction_stage_1_last,
-			input_1_data  => xmean_rep_data,
-			input_1_valid => xmean_rep_valid,
-			input_1_ready => xmean_rep_ready,
+			input_1_data  => xmean_rep_data_delay,
+			input_1_valid => xmean_rep_valid_delay,
+			input_1_ready => xmean_rep_ready_delay,
 			input_1_last  => '0',
-			output_data   => prediction_data,
-			output_valid  => prediction_valid,
-			output_ready  => prediction_ready,
-			output_last   => prediction_last
+			output_data   => xtilde_data,
+			output_valid  => xtilde_valid,
+			output_ready  => xtilde_ready,
+			output_last   => xtilde_last
 		);
 
 end Behavioral;

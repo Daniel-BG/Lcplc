@@ -13,7 +13,8 @@
 `define GOLDEN_XHATMEAN 		{`GOLDEN_ROOT_DIR, "xhatmean", 				`GOLDEN_EXT}
 `define GOLDEN_ALPHA			{`GOLDEN_ROOT_DIR, "alpha", 				`GOLDEN_EXT}
 
-
+`define GOLDEN_XTILDE_OTHERBANDS{`GOLDEN_ROOT_DIR, "xtilde_otherbands",		`GOLDEN_EXT}
+`define GOLDEN_XTILDE_O_LAST_S	{`GOLDEN_ROOT_DIR, "xtilde_others_last_s",	`GOLDEN_EXT}
 
 `define GOLDEN_ALPHAN		{`GOLDEN_ROOT_DIR, "alphan", 		`GOLDEN_EXT}
 `define GOLDEN_ALPHAD		{`GOLDEN_ROOT_DIR, "alphad", 		`GOLDEN_EXT}
