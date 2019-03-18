@@ -10,8 +10,10 @@ import java.util.List;
 public class Sampler <T> {
 	
 	private List<T> samples;
+	private String filename;
 	
-	public Sampler() {
+	public Sampler(String filename) {
+		this.filename = filename;
 		samples = new ArrayList<T>();
 	}
 	
@@ -19,8 +21,8 @@ public class Sampler <T> {
 		samples.add(t);
 	}
 
-	public void export(String filename) throws IOException {
-		FileOutputStream fos = new FileOutputStream(filename);
+	public void export() throws IOException {
+		FileOutputStream fos = new FileOutputStream(Sampler.samplePath + this.filename + Sampler.extension, true);
 		OutputStreamWriter osw = new OutputStreamWriter(fos);
 		BufferedWriter bw = new BufferedWriter(osw);
 		for (T s: samples) {
@@ -29,6 +31,18 @@ public class Sampler <T> {
 		}	
 		bw.close();
 	}
+	
+	private static String samplePath;
+	private static String extension;
+	
+	public static void setSamplePath(String samplePath) {
+		Sampler.samplePath = samplePath;
+	}
+	
+	public static void setSampleExt(String ext) {
+		Sampler.extension = ext;
+	}
+	
 }
 
 

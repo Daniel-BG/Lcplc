@@ -30,18 +30,18 @@ public class ExpGolombCoDec {
 	private Sampler<Long> codeSampler;
 	private Sampler<Integer> quantSampler;
 	
-	public void startSampling() {
+	public void startSampling(String inputSampleFile, String coderSamplerFile, String quantSamplerFile) {
 		sampling = true;
-		inputSampler = new Sampler<Integer>();
-		codeSampler  = new Sampler<Long>();
-		quantSampler = new Sampler<Integer>();
+		inputSampler = new Sampler<Integer>(inputSampleFile);
+		codeSampler  = new Sampler<Long>(coderSamplerFile);
+		quantSampler = new Sampler<Integer>(quantSamplerFile);
 	}
 	
-	public void endSampling(String inputSamplerFile, String codeSamplerFile, String quantSamplerFile) throws IOException {
+	public void endSampling() throws IOException {
 		sampling = false;
-		inputSampler.export(inputSamplerFile);
-		codeSampler.export(codeSamplerFile);
-		quantSampler.export(quantSamplerFile);
+		inputSampler.export();
+		codeSampler.export();
+		quantSampler.export();
 	}
 	//END SAMPLE STUFF
 	

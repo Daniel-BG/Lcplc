@@ -37,6 +37,7 @@ module test_alpha_calc;
 
 	reg gen_xhat_enable;
 	wire xhat_valid, xhat_ready;
+	wire xhat_last_s;
 	wire [DATA_WIDTH - 1:0] xhat_data;
 
 	reg gen_xmean_enable;
@@ -71,7 +72,7 @@ module test_alpha_calc;
 		drain_alpha_enable = 1;
 	end
 	
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X), .SKIP(2**BLOCK_SIZE_LOG)) GEN_x
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X_OTHERBANDS)) GEN_x
 		(
 			.clk(clk), .rst(rst), .enable(gen_x_enable),
 			.output_valid(x_valid),
@@ -86,6 +87,14 @@ module test_alpha_calc;
 			.output_data(xhat_data),
 			.output_ready(xhat_ready)
 		);
+		
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XHAT_LAST_S)) GEN_xhat_last_s
+			(
+				.clk(clk), .rst(rst), .enable(gen_xhat_enable),
+				.output_valid(),
+				.output_data(xhat_last_s),
+				.output_ready(xhat_ready)
+			);
 
 	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XMEAN)) GEN_xmean
 		(
@@ -112,7 +121,7 @@ module test_alpha_calc;
 			.input_data(alpha_data)
 		);
 
-	alpha_calc #(.DATA_WIDTH(DATA_WIDTH), .BLOCK_SIZE_LOG(BLOCK_SIZE_LOG), .ALPHA_WIDTH(ALPHA_WIDTH)) calc_alpha
+	alpha_calc #(.DATA_WIDTH(DATA_WIDTH), .MAX_SIZE_LOG(BLOCK_SIZE_LOG), .ALPHA_WIDTH(ALPHA_WIDTH)) calc_alpha
 		(
 			.clk(clk), .rst(rst),
 			.x_valid(x_valid),
@@ -121,6 +130,7 @@ module test_alpha_calc;
 			.xhat_valid(xhat_valid),
 			.xhat_ready(xhat_ready),
 			.xhat_data(xhat_data),
+			.xhat_last_s(xhat_last_s),
 			.xmean_valid(xmean_valid),
 			.xmean_ready(xmean_ready),
 			.xmean_data(xmean_data),

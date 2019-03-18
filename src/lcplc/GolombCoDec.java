@@ -51,12 +51,6 @@ public class GolombCoDec {
 		int quotient = value / this.parameter;
 		int remainder = value % this.parameter;
 		
-		//System.out.print(">" + quotient + ":" + this.powerOfTwo);
-		if (quotient > MAX_QUOT) {
-			MAX_QUOT = quotient;
-			System.out.println(MAX_QUOT);
-		}
-		
 		//mimic the hardware behavior
 		while (quotient >= 32) {
 			bos.writeBits(-1, 32, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
@@ -123,20 +117,20 @@ public class GolombCoDec {
 	private Sampler<Long> codeSampler;
 	private Sampler<Integer> quantSampler;
 	
-	public void startSampling() {
+	public void startSampling(String inputDataSamplerFile, String inputParameterSamplerFile, String codeSamplerFile, String quantSamplerFile) {
 		sampling = true;
-		inputDataSampler = new Sampler<Integer>();
-		inputParameterSampler = new Sampler<Integer>();
-		codeSampler  = new Sampler<Long>();
-		quantSampler = new Sampler<Integer>();
+		inputDataSampler = new Sampler<Integer>(inputDataSamplerFile);
+		inputParameterSampler = new Sampler<Integer>(inputParameterSamplerFile);
+		codeSampler  = new Sampler<Long>(codeSamplerFile);
+		quantSampler = new Sampler<Integer>(quantSamplerFile);
 	}
 	
-	public void endSampling(String inputDataSamplerFile, String inputParameterSamplerFile, String codeSamplerFile, String quantSamplerFile) throws IOException {
+	public void endSampling() throws IOException {
 		sampling = false;
-		inputDataSampler.export(inputDataSamplerFile);
-		inputParameterSampler.export(inputParameterSamplerFile);
-		codeSampler.export(codeSamplerFile);
-		quantSampler.export(quantSamplerFile);
+		inputDataSampler.export();
+		inputParameterSampler.export();
+		codeSampler.export();
+		quantSampler.export();
 	}
 	//END SAMPLE STUFF
 }

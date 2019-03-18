@@ -40,7 +40,7 @@ entity ALPHA_CALC is
 		xhat_valid		: in  std_logic;
 		xhat_ready		: out std_logic;
 		xhat_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xhat_last		: in  std_logic;
+		xhat_last_s		: in  std_logic;
 		xmean_valid		: in  std_logic;
 		xmean_ready		: out std_logic;
 		xmean_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -80,6 +80,10 @@ architecture Behavioral of ALPHA_CALC is
 	signal current_sub_data: std_logic_vector(DATA_WIDTH downto 0);
 	signal current_sub_valid, current_sub_ready: std_logic;
 	
+	--delay for current subs
+	signal current_sub_data_buf: std_logic_vector(DATA_WIDTH downto 0);
+	signal current_sub_valid_buf, current_sub_ready_buf: std_logic;
+	
 	--multiplication outputs
 	signal alphad_mult_data, alphan_mult_data: std_logic_vector(DATA_WIDTH*2 + 1 downto 0);
 	signal alphad_mult_valid, alphan_mult_valid, alphad_mult_ready, alphan_mult_ready, alphan_mult_last, alphad_mult_last: std_logic;
@@ -91,7 +95,7 @@ architecture Behavioral of ALPHA_CALC is
 begin
 
 	--splitter for xhat control and such
-	xhat_last_data <= xhat_last & xhat_data;
+	xhat_last_data <= xhat_last_s & xhat_data;
 	xhat_splitter: entity work.AXIS_SPLITTER_3
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1
@@ -229,6 +233,21 @@ begin
 			output_valid	=> current_sub_valid,
 			output_ready	=> current_sub_ready
 		);
+		
+	--current sub delay
+	current_sub_delay: entity work.AXIS_DATA_LATCH
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH + 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => current_sub_ready,
+			input_valid => current_sub_valid,
+			input_data  => current_sub_data,
+			output_ready=> current_sub_ready_buf,
+			output_valid=> current_sub_valid_buf,
+			output_data => current_sub_data_buf
+		);
 			
 	--alphaN multiplier
 	alphan_multiplier: entity work.AXIS_MULTIPLIER
@@ -244,9 +263,9 @@ begin
 			input_0_valid => previous_sub_splitter_valid_0,
 			input_0_ready => previous_sub_splitter_ready_0,
 			input_0_last  => previous_sub_splitter_last_0,
-			input_1_data  => current_sub_data,
-			input_1_valid => current_sub_valid,
-			input_1_ready => current_sub_ready,
+			input_1_data  => current_sub_data_buf,
+			input_1_valid => current_sub_valid_buf,
+			input_1_ready => current_sub_ready_buf,
 			output_data   => alphan_mult_data,
 			output_valid  => alphan_mult_valid,
 			output_ready  => alphan_mult_ready,

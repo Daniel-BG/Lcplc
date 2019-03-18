@@ -56,9 +56,7 @@ architecture Behavioral of AXIS_FIFO is
 	signal tail, tail_next, tail_incr: natural range 0 to FIFO_DEPTH - 1;
 	signal occupancy, occupancy_next: natural range 0 to FIFO_DEPTH;
 	
-	
 	signal input_buff, input_buff_next: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal output_from_buff: std_logic;
 	
 	signal almost_full, almost_empty: boolean;
 begin

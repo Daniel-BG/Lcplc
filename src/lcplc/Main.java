@@ -2,6 +2,7 @@ package lcplc;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.Map.Entry;
 
@@ -20,34 +21,21 @@ public class Main {
 	static String input = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.dat";
 	static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.hdr";
 	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data/";
+	static String sampleExt = ".smpl";
 
-	static int[] min = new int[5];
-	static int[] max = new int[5];
-	
+
 	public static void main(String[] args) {
-		for (int i = 0; i < max.length; i++) {
-			max[i] = Integer.MIN_VALUE;
-			min[i] = Integer.MAX_VALUE;
-		}
+		//clear directory
+		File dir = new File(samplerBaseDir);
 		
+		for(File file: dir.listFiles()) {
+		    if (!file.isDirectory()) 
+		        if (!file.delete())
+		        	System.out.println("Problem deleting file: " + file.getPath());
+		}
 		
 		Compressor c = new Compressor();
 		c.test();
-		
-		for (int i = 0; i < max.length; i++) {
-			System.out.println("(" + min[i] + "," + max[i] + ")");
-		}
-		
-		/*IntegerUniformThresholdQuantizer iutq = new IntegerUniformThresholdQuantizer(1, 1);
-		
-		for (int i = 0; i < 0xff; i++) {
-			int q = iutq.quantize(i);
-			int dq = iutq.dequantize(q);
-			if (dq != i) {
-				System.out.println(i + "->" + dq);
-			}
-		}
-		*/
 	}
 	
 
@@ -61,111 +49,158 @@ public class Main {
 		private static final int CONST_GAMMA = 0;
 		
 		
+		private static final int BLOCKS_TO_CODE = 3;
+		private static final int MAX_LINES_PER_BLOCK = 16;
+		private static final int MAX_SAMPLES_PER_BLOCK = 16;
+		
+		
 		public void test() {
 			HyperspectralImage hi;
 			try {
 				hi = HyperspectralImageReader.read(input, inputHeader, true);
+				for (Entry<HeaderConstants, Object> e: hi.getHeader().entrySet()) {
+					System.out.print(e.getKey().toString() + ": " + e.getValue().toString() + "\n");
+				};
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 				return;
 			}
 			
-			for (Entry<HeaderConstants, Object> e: hi.getHeader().entrySet()) {
-				System.out.print(e.getKey().toString() + ": " + e.getValue().toString() + "\n");
-			};
-			
 			HyperspectralImageData hid = hi.getData();
 			
-			int bands = hid.getNumberOfBands();
-			int lines = 16;//hid.getNumberOfLines();
-			int samples = 16;//hid.getNumberOfSamples();
+			int imgBands	= hid.getNumberOfBands();
+			int imgLines	= hid.getNumberOfLines();
+			int imgSamples	= hid.getNumberOfSamples();
 			
-			int[][][] block = new int[bands][lines][samples];
+			ByteArrayOutputStream adbaos = new ByteArrayOutputStream();
+			BitOutputStream bos = new BitOutputStream(adbaos);
 			
-			for (int b = 0; b < bands; b++) {
-				for (int l = 0; l < lines; l++) {
-					for (int s = 0; s < samples; s++) {
-						block[b][l][s] = hid.getValueAt(b, l, s);
-					}
-				}
-			}
-			
-			try {
-				
-				System.out.println("COMPRESSING: " + 16*bands*lines*samples);
-
-				ByteArrayOutputStream adbaos = new ByteArrayOutputStream();
-				BitOutputStream bos = new BitOutputStream(adbaos);
-				this.compress(block, bands, lines, samples, bos);
-				
-				Sampler<Integer> outputSampler = new Sampler<Integer>();
-				
-				byte[] bytesoutput = adbaos.toByteArray();
-				for (int i = 0; i < bytesoutput.length; i+=4) {
-					if (i + 3 >= bytesoutput.length)
-						break;
-					int word = ((bytesoutput[i]   << 24) & 0xff000000) 
-							 | ((bytesoutput[i+1] << 16) & 0x00ff0000) 
-							 | ((bytesoutput[i+2] << 8 ) & 0x0000ff00) 
-							 | ((bytesoutput[i+3]      ) & 0x000000ff);
-					outputSampler.sample(word);
-				}
-				outputSampler.export(samplerBaseDir + "output.smpl");
-				
-				
-				System.out.println("COMPR:  " + bos.getBitsOutput());
-				
-				bos.paddingFlush();
-				
-				ByteArrayInputStream adbais = new ByteArrayInputStream(adbaos.toByteArray());
-				BitInputStream bis = new BitInputStream(adbais);
-				int[][][] uncompressedBlock = this.uncompress(bands, lines, samples, bis);
-				
-				System.out.println("UNCOMP: " + bis.getBitsInput());
-				
-				int maxDiff = 0;
-				for (int b = 0; b < bands; b++) {
-					for (int l = 0; l < lines; l++) {
-						for (int s = 0; s < samples; s++) {
-							int diff = Math.abs(block[b][l][s] - uncompressedBlock[b][l][s]); 
-							if (diff > maxDiff) {
-								System.out.println("Diff@" + b + "," + l + "," + s + ": " + block[b][l][s] + "->" + uncompressedBlock[b][l][s]);
-								maxDiff = diff;
+			int compressedBlocks = 0;
+			for (int l = 0; l < imgLines; l += MAX_LINES_PER_BLOCK) {
+				for (int s = 0; s < imgSamples; s += MAX_SAMPLES_PER_BLOCK) {
+					int blockBands = imgBands;
+					int blockLines = Math.min(MAX_LINES_PER_BLOCK, imgLines - l);
+					int blockSamples = Math.min(MAX_SAMPLES_PER_BLOCK, imgSamples - s);
+					
+					//fill block up
+					int[][][] block = new int[blockBands][blockLines][blockSamples];
+					for (int bb = 0; bb < blockBands; bb++) {
+						for (int ll = 0; ll < blockLines; ll++) {
+							for (int ss = 0; ss < blockSamples; ss++) {
+								block[bb][ll][ss] = hid.getValueAt(bb, ll+l, ss+s);
 							}
 						}
 					}
+					//compress block
+					try {
+						this.compress(block, blockBands, blockLines, blockSamples, bos);
+					} catch (IOException e) {
+						e.printStackTrace();
+						System.exit(0);
+					}
+					System.out.println("COMPR:  " + bos.getBitsOutput());
+					compressedBlocks++;
+					if (compressedBlocks >= BLOCKS_TO_CODE)
+						break;
 				}
-				
-				
-				System.out.println("FINISHED");
-			} catch (IOException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
+				if (compressedBlocks >= BLOCKS_TO_CODE)
+					break;
 			}
+			
+			try {
+				bos.paddingFlush();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				System.exit(0);
+			}
+			
+			ByteArrayInputStream adbais = new ByteArrayInputStream(adbaos.toByteArray());
+			BitInputStream bis = new BitInputStream(adbais);
+			
+			int unCompressedBlocks = 0;
+			for (int l = 0; l < imgLines; l += MAX_LINES_PER_BLOCK) {
+				for (int s = 0; s < imgSamples; s += MAX_SAMPLES_PER_BLOCK) {
+					int blockBands = imgBands;
+					int blockLines = Math.min(MAX_LINES_PER_BLOCK, imgLines - l);
+					int blockSamples = Math.min(MAX_SAMPLES_PER_BLOCK, imgSamples - s);
+					
+					//uncompress block
+					try {
+						this.uncompress(blockBands, blockLines, blockSamples, bis);
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+						System.exit(0);
+					}
+
+					System.out.println("UNCOMPR:  " + bis.getBitsInput());
+					unCompressedBlocks++;
+					if (unCompressedBlocks >= BLOCKS_TO_CODE)
+						break;
+				}
+				if (unCompressedBlocks >= BLOCKS_TO_CODE)
+					break;
+			}
+			
+			
+			//output bytes
+			Sampler<Integer> outputSampler = new Sampler<Integer>("output");
+			
+			byte[] bytesoutput = adbaos.toByteArray();
+			for (int i = 0; i < bytesoutput.length; i+=4) {
+				if (i + 3 >= bytesoutput.length)
+					break;
+				int word = ((bytesoutput[i]   << 24) & 0xff000000) 
+						 | ((bytesoutput[i+1] << 16) & 0x00ff0000) 
+						 | ((bytesoutput[i+2] << 8 ) & 0x0000ff00) 
+						 | ((bytesoutput[i+3]      ) & 0x000000ff);
+				outputSampler.sample(word);
+			}
+			try {
+				outputSampler.export();
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.exit(0);
+			}
+			
 		}
 		
 		
 		public void compress(int[][][] block, int bands, int lines, int samples, BitOutputStream bos) throws IOException {
+			Sampler.setSamplePath(samplerBaseDir);
+			Sampler.setSampleExt(sampleExt);
 			//samplers for testing in verilog/vhdl
-			Sampler<Integer> alphaSampler		= new Sampler<Integer>();
-			Sampler<Long> 	 alphanSampler		= new Sampler<Long>();
-			Sampler<Long> 	 alphadSampler		= new Sampler<Long>();
-			Sampler<Integer> xSampler			= new Sampler<Integer>();
-			Sampler<Integer> xhatSampler 		= new Sampler<Integer>();
-			Sampler<Integer> xhatrawSampler 	= new Sampler<Integer>();
-			Sampler<Long>    xmeanSampler		= new Sampler<Long>();
-			Sampler<Long>    xhatmeanSampler	= new Sampler<Long>();
-			Sampler<Integer> predictionSampler	= new Sampler<Integer>();
-			Sampler<Integer> mappedErrorSampler = new Sampler<Integer>();
-			Sampler<Integer> kjSampler			= new Sampler<Integer>();
-			Sampler<Integer> xtildeSampler		= new Sampler<Integer>();
-			Sampler<Integer> dFlagSampler		= new Sampler<Integer>();
-			Sampler<Integer> errorSampler		= new Sampler<Integer>();
+			Sampler<Integer> xFirstBand		    = new Sampler<Integer>("x_firstband");
+			Sampler<Integer> xTildeFirstBand	= new Sampler<Integer>("xtilde_firstband"); 
+			Sampler<Integer> xFirstBand_last_r  = new Sampler<Integer>("x_firstband_last_r");
+			Sampler<Integer> xFirstBand_last_s  = new Sampler<Integer>("x_firstband_last_s");
 			
-			Sampler<Long>	 samplerHelper1		= new Sampler<Long>();
-			Sampler<Long>	 samplerHelper2		= new Sampler<Long>();
-			Sampler<Long>	 samplerHelper3		= new Sampler<Long>();			
+			Sampler<Integer> xOtherBands  		= new Sampler<Integer>("x_otherbands");
+			Sampler<Integer> xhatSampler 		= new Sampler<Integer>("xhat");
+			Sampler<Integer> xhat_last_s		= new Sampler<Integer>("xhat_last_s");
+			Sampler<Long>    xmeanSampler		= new Sampler<Long>("xmean");
+			Sampler<Long>    xhatmeanSampler	= new Sampler<Long>("xhatmean");
+			Sampler<Integer> alphaSampler		= new Sampler<Integer>("alpha");
+			
+			
+			Sampler<Long> 	 alphanSampler		= new Sampler<Long>("alphan");
+			Sampler<Long> 	 alphadSampler		= new Sampler<Long>("alphad");
+			Sampler<Integer> xSampler			= new Sampler<Integer>("x");
+			
+			Sampler<Integer> xhatrawSampler 	= new Sampler<Integer>("xhatraw");
+			
+			Sampler<Integer> predictionSampler	= new Sampler<Integer>("prediction");
+			Sampler<Integer> mappedErrorSampler = new Sampler<Integer>("merr");
+			Sampler<Integer> kjSampler			= new Sampler<Integer>("kj");
+			Sampler<Integer> xtildeSampler		= new Sampler<Integer>("xtilde");
+			Sampler<Integer> dFlagSampler		= new Sampler<Integer>("dflag");
+			Sampler<Integer> errorSampler		= new Sampler<Integer>("error");
+			
+			Sampler<Long>	 samplerHelper1		= new Sampler<Long>("helper1");
+			Sampler<Long>	 samplerHelper2		= new Sampler<Long>("helper2");
+			Sampler<Long>	 samplerHelper3		= new Sampler<Long>("helper3");			
+			
 			
 			int[][][] decodedBlock = new int[bands][lines][samples];
 			
@@ -174,13 +209,14 @@ public class Main {
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
 			IntegerUniformThresholdQuantizer iutq = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE);
 			
-			expGolombZero.startSampling();
-			golombCoDec.startSampling();
+			
+			expGolombZero.startSampling("egz_input", "egz_code", "egz_quant");
+			golombCoDec.startSampling("gc_input", "gc_param", "gc_code", "gc_quant");
 			
 			//compress first band
 			int[][] band = block[0];
 			for (int l = 0; l < lines; l++) {
-				for (int s = 0; s < samples; s++) {
+				for (int s = 0; s < samples; s++) {	
 					xSampler.sample(block[0][l][s]);
 					//First sample is just coded raw since we have not initialized
 					//the counters/accumulators/predictors yet
@@ -227,6 +263,11 @@ public class Main {
 						acc.add(Math.abs(error));		//update Rj after coding
 					}
 					
+					xFirstBand.sample(block[0][l][s]);
+					xTildeFirstBand.sample(prediction);
+					xFirstBand_last_r.sample(s == samples-1 ? 1 : 0);
+					xFirstBand_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+					
 					errorSampler.sample(error);
 					samplerHelper3.sample(acc.getRunningSum());   
 					samplerHelper3.sample((long) acc.getRunningCount());
@@ -237,7 +278,7 @@ public class Main {
 					xtildeSampler.sample(prediction);
 					predictionSampler.sample(prediction);
 					mappedErrorSampler.sample(mappedError);
-					xhatSampler.sample(decodedBlock[0][l][s]);
+					
 					xhatrawSampler.sample(decodedBlock[0][l][s]);
 				}
 			}
@@ -246,7 +287,6 @@ public class Main {
 			long sampleCnt = lines*samples;
 			double delta = (double) CONST_UTQ_DOWNSCALE / (double) CONST_UTQ_UPSCALE;
 			double thres = (double) CONST_GAMMA * delta * delta * sampleCnt * sampleCnt / 3.0;
-			System.out.println("Threshold is: " + thres);
 			
 			dFlagSampler.sample(1); //first sample should be 1 to save xhatraw samples instead of empty values
 			
@@ -256,6 +296,14 @@ public class Main {
 				//generate means. we'll see where these means have to be from
 				long currAcc = Utils.sumArray(band, lines, samples);
 				long prevAcc = Utils.sumArray(decodedBlock[b-1], lines, samples);
+				//sample the decoded block
+				for (int l = 0; l < lines; l++) {
+					for (int s = 0; s < samples; s++) {
+						xOtherBands.sample(block[b][l][s]);
+						xhatSampler.sample(decodedBlock[b-1][l][s]);
+						xhat_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+					}
+				}
 				xmeanSampler.sample(currAcc/sampleCnt);
 				xhatmeanSampler.sample(prevAcc/sampleCnt);
 				
@@ -317,6 +365,7 @@ public class Main {
 						}
 						acc.add(Math.abs(error));		//update Rj after coding
 						
+						
 						samplerHelper3.sample(acc.getRunningSum());
 						samplerHelper3.sample((long) acc.getRunningCount());
 						samplerHelper3.sample((long) findkj(acc));    
@@ -341,7 +390,6 @@ public class Main {
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
 							decodedBlock[b][l][s] = savedxhat[l][s];
-							xhatSampler.sample(decodedBlock[b][l][s]);
 							if (l == 0 && s == 0) {
 								expGolombZero.encode(savedMappedError[l][s], bos);
 							} else {
@@ -356,34 +404,46 @@ public class Main {
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
 							decodedBlock[b][l][s] = savedPrediction[l][s];
-							xhatSampler.sample(decodedBlock[b][l][s]);
 						}
 					}
 				}
+
 				
 				//System.out.println("Distortion is: " + distortionAcc + " (block was skipped: " + (distortionAcc <= thres) + ")");
 			}
 			
 			//samplers for testing in verilog/vhdl
-			alphaSampler.export(samplerBaseDir + "alpha.smpl");
-			alphanSampler.export(samplerBaseDir + "alphan.smpl");
-			alphadSampler.export(samplerBaseDir + "alphad.smpl");
-			xhatSampler.export(samplerBaseDir + "xhat.smpl");
-			xhatrawSampler.export(samplerBaseDir + "xhatraw.smpl");
-			xmeanSampler.export(samplerBaseDir + "xmean.smpl");
-			xhatmeanSampler.export(samplerBaseDir + "xhatmean.smpl");
-			predictionSampler.export(samplerBaseDir + "prediction.smpl");
-			xSampler.export(samplerBaseDir + "x.smpl");
-			mappedErrorSampler.export(samplerBaseDir + "merr.smpl");
-			kjSampler.export(samplerBaseDir + "kj.smpl");
-			xtildeSampler.export(samplerBaseDir + "xtilde.smpl");
-			dFlagSampler.export(samplerBaseDir + "dflag.smpl");
-			errorSampler.export(samplerBaseDir + "error.smpl");
-			samplerHelper1.export(samplerBaseDir + "helper1.smpl");
-			samplerHelper2.export(samplerBaseDir + "helper2.smpl");
-			samplerHelper3.export(samplerBaseDir + "helper3.smpl");
-			expGolombZero.endSampling(samplerBaseDir + "egz_input.smpl", samplerBaseDir + "egz_code.smpl", samplerBaseDir + "egz_quant.smpl");
-			golombCoDec.endSampling(samplerBaseDir + "gc_input.smpl", samplerBaseDir + "gc_param.smpl", samplerBaseDir + "gc_code.smpl", samplerBaseDir + "gc_quant.smpl");
+			xFirstBand.export();
+			xTildeFirstBand.export(); 
+			xFirstBand_last_r.export();
+			xFirstBand_last_s.export();
+			
+			xOtherBands.export();
+			xhatSampler.export();
+			xhat_last_s.export();
+			
+			alphaSampler.export();
+			xmeanSampler.export();
+			xhatmeanSampler.export();
+			
+			
+			alphanSampler.export();
+			alphadSampler.export();
+			xSampler.export();
+			xhatrawSampler.export();
+			predictionSampler.export();
+			mappedErrorSampler.export();
+			kjSampler.export();
+			xtildeSampler.export();
+			dFlagSampler.export();
+			errorSampler.export();
+			samplerHelper1.export();
+			samplerHelper2.export();
+			samplerHelper3.export();	
+			
+			
+			expGolombZero.endSampling();
+			golombCoDec.endSampling();
 		}
 		
 		public int findAlpha(long alphaN, long alphaD, long depth) {
