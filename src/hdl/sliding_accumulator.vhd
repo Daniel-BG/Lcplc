@@ -53,6 +53,7 @@ architecture Behavioral of SLIDING_ACCUMULATOR  is
 	signal state_curr, state_next: sliding_acc_state_t;
 
 	signal accumulator, accumulator_next: std_logic_vector(DATA_WIDTH + ACC_WINDOW_M1_BITS - 1 downto 0);
+	signal accumulator_next_substract, accumulator_next_pass: std_logic_vector(DATA_WIDTH + ACC_WINDOW_M1_BITS - 1 downto 0);
 
 	signal counter, counter_next: natural range 0 to ACCUMULATOR_WINDOW;
 
@@ -82,8 +83,11 @@ begin
 			end if;
 		end if;
 	end process;
+	
+	accumulator_next_substract <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data) - unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_queued));
+	accumulator_next_pass      <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data));
 
-	comb: process(state_curr, counter, input_valid, accumulator, input_data, input_queued, output_ready, input_last)
+	comb: process(state_curr, counter, input_valid, accumulator, input_data, input_queued, output_ready, input_last, accumulator_next_substract, accumulator_next_pass)
 	begin
 		force_rst_sample_queue <= '0';
 		state_next <= state_curr;
@@ -104,10 +108,10 @@ begin
 				state_next <= PRIMED;
 				if counter = ACCUMULATOR_WINDOW then
 					read_en <= '1';
-					accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data) - unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_queued));
+					accumulator_next <= accumulator_next_substract;
 				else
 					counter_next <= counter + 1;
-					accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data));
+					accumulator_next <= accumulator_next_pass;
 				end if;
 			end if;
 		elsif state_curr = PRIMED then
@@ -121,10 +125,10 @@ begin
 					write_en <= '1';
 					if counter = ACCUMULATOR_WINDOW then
 						read_en <= '1';
-						accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data) - unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_queued));
+						accumulator_next <= accumulator_next_substract;
 					else
 						counter_next <= counter + 1;
-						accumulator_next <= std_logic_vector(unsigned(accumulator) + unsigned((ACC_WINDOW_M1_BITS - 1 downto 0 => '0') & input_data));
+						accumulator_next <= accumulator_next_pass;
 					end if;
 				else
 					state_next <= IDLE;

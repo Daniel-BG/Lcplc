@@ -45,10 +45,10 @@ entity ERROR_CALC is
 		x_last_i		: in  std_logic;
 		--all predictions (from both the first layer predictor and the second layer)
 		--prediction for first sample included (will be inserted by the first layer predictor)
-		prediction_ready: out std_logic;
-		prediction_valid: in  std_logic;
-		prediction_data : in  std_logic_vector(DATA_WIDTH + 2 downto 0);
-		prediction_last : in  std_logic;
+		xtilde_in_ready	: out std_logic;
+		xtilde_in_valid	: in  std_logic;
+		xtilde_in_data 	: in  std_logic_vector(DATA_WIDTH + 2 downto 0);
+		xtilde_in_last_s: in  std_logic;
 		--output distortion, mapped error, parameter kj and prediction
 		--mapped error is going to be coded with parameter kj later
 		--the distortion might be used to skip coding of the current block
@@ -62,10 +62,10 @@ entity ERROR_CALC is
 		kj_ready		: in  std_logic;
 		kj_valid		: out std_logic;
 		kj_data			: out std_logic_vector(bits(bits(ACCUMULATOR_WINDOW-1)+DATA_WIDTH) - 1 downto 0);
-		xtilde_valid	: out std_logic;
-		xtilde_ready	: in  std_logic;
-		xtilde_data		: out std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xtilde_last		: out std_logic;
+		xtilde_out_valid: out std_logic;
+		xtilde_out_ready: in  std_logic;
+		xtilde_out_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
+		xtilde_out_last_s: out std_logic;
 		xhatout_valid   : out std_logic;
 		xhatout_ready	: in  std_logic;
 		xhatout_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -99,7 +99,7 @@ architecture Behavioral of ERROR_CALC is
 	signal xtilde_clamped_raw_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
 	--fifo for xhatout calculation later (after quantizing/dequantizing the error)
-	constant XHATOUT_CALC_FIFO_DEPTH: positive := 16; --as much as the quantizing and dequantizing take
+	constant XHATOUT_CALC_FIFO_DEPTH: positive := 8; --as much as the quantizing and dequantizing take
 	signal xhatout_calc_fifo_ready, xhatout_calc_fifo_valid: std_logic;
 	signal xhatout_calc_fifo_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
@@ -166,12 +166,14 @@ architecture Behavioral of ERROR_CALC is
 	signal mapped_error_data_raw:	std_logic_vector (PREDICTION_WIDTH downto 0);
 	signal merr_last_ibs: std_logic_vector(2 downto 0);
 	
-	--error sliding accumulator
-	signal error_acc_in_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	--error sliding accumulator latch
+	signal error_acc_in_data, error_acc_in_latch_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal error_acc_in_valid, error_acc_in_ready, error_acc_in_last_s: std_logic;
+	
+	--error sliding acc 
 	signal error_acc_cnt: std_logic_vector(ACC_WINDOW_BITS - 1 downto 0);
 	signal error_acc_data: std_logic_vector(PREDICTION_WIDTH + ACC_WINDOW_M1_BITS - 1 downto 0);
 	signal error_acc_valid, error_acc_ready: std_logic;
-	
 					
 begin
 
@@ -190,10 +192,10 @@ begin
 		Port map (
 			clk => clk, rst => rst,
 			--to input axi port
-			input_valid => prediction_valid,
-			input_data  => prediction_data,
-			input_ready => prediction_ready,
-			input_last	=> prediction_last,
+			input_valid => xtilde_in_valid,
+			input_data  => xtilde_in_data,
+			input_ready => xtilde_in_ready,
+			input_last	=> xtilde_in_last_s,
 			--to output axi ports
 			output_0_valid => prediction_splitter_valid_0,
 			output_0_data  => prediction_splitter_data_0,
@@ -223,11 +225,11 @@ begin
 			input_ready  => prediction_splitter_ready_0,
 			input_last   => prediction_splitter_last_0,
 			output_data  => xtilde_clamped_raw_data,
-			output_valid => xtilde_valid,
-			output_ready => xtilde_ready,
-			output_last  => xtilde_last
+			output_valid => xtilde_out_valid,
+			output_ready => xtilde_out_ready,
+			output_last  => xtilde_out_last_s
 		);
-	xtilde_data <= xtilde_clamped_raw_data(DATA_WIDTH - 1 downto 0);
+	xtilde_out_data <= xtilde_clamped_raw_data(DATA_WIDTH - 1 downto 0);
 	
 	--fifo to xhatout calculation
 	xhatout_calc_fifo: entity work.AXIS_FIFO
@@ -539,8 +541,26 @@ begin
 	merr_last_s <= merr_last_ibs(0);
 	
 	
-	error_acc_in_data <= error_unquant_splitter_data_1 when error_unquant_splitter_data_1(error_unquant_splitter_data_1'high) = '0' else 
+	error_acc_in_latch_data <= error_unquant_splitter_data_1 when error_unquant_splitter_data_1(error_unquant_splitter_data_1'high) = '0' else 
 		std_logic_vector(-signed(error_unquant_splitter_data_1));
+		
+	--need one latch here
+	error_acc_input_data_latch: entity work.AXIS_DATA_LATCH
+		generic map (
+			DATA_WIDTH => PREDICTION_WIDTH
+		)
+		port map (
+			clk => clk, rst => rst,
+			input_valid => error_unquant_splitter_valid_1,
+			input_ready => error_unquant_splitter_ready_1,
+			input_data  => error_acc_in_latch_data,
+			input_last  => error_unquant_splitter_last_s_1,
+			output_valid=> error_acc_in_valid,
+			output_ready=> error_acc_in_ready,
+			output_data => error_acc_in_data,
+			output_last => error_acc_in_last_s
+		);
+		
 	--sliding accumulator for kj finding
 	error_acc: entity work.SLIDING_ACCUMULATOR
 		Generic map (
@@ -551,9 +571,9 @@ begin
 		Port map (
 			clk => clk, rst => rst,
 			input_data  => error_acc_in_data, 
-			input_valid => error_unquant_splitter_valid_1,
-			input_ready => error_unquant_splitter_ready_1,
-			input_last  => error_unquant_splitter_last_s_1,
+			input_valid => error_acc_in_valid,
+			input_ready => error_acc_in_ready,
+			input_last  => error_acc_in_last_s,
 			output_cnt  => error_acc_cnt, 
 			output_data => error_acc_data,
 			output_valid => error_acc_valid,

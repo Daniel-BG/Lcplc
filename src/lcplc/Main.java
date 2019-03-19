@@ -186,22 +186,34 @@ public class Main {
 			Sampler<Integer> xTildeOtherBands   = new Sampler<Integer>("xtilde_otherbands");
 			Sampler<Integer> xTilde_o_last_s    = new Sampler<Integer>("xtilde_others_last_s");
 			
-			Sampler<Long> 	 alphanSampler		= new Sampler<Long>("alphan");
-			Sampler<Long> 	 alphadSampler		= new Sampler<Long>("alphad");
 			Sampler<Integer> xSampler			= new Sampler<Integer>("x");
+			Sampler<Integer> xSampler_last_s	= new Sampler<Integer>("x_last_s");
+			Sampler<Integer> xSampler_last_b	= new Sampler<Integer>("x_last_b");
+			Sampler<Integer> xSampler_last_i	= new Sampler<Integer>("x_last_i");
 			
-			Sampler<Integer> xhatrawSampler 	= new Sampler<Integer>("xhatraw");
+			Sampler<Integer> xtildeSampler		= new Sampler<Integer>("xtilde");
+			Sampler<Integer> xtilde_last_s      = new Sampler<Integer>("xtilde_last_s");
 			
-			Sampler<Integer> predictionSampler	= new Sampler<Integer>("prediction");
 			Sampler<Integer> mappedErrorSampler = new Sampler<Integer>("merr");
 			Sampler<Integer> kjSampler			= new Sampler<Integer>("kj");
-			Sampler<Integer> xtildeSampler		= new Sampler<Integer>("xtilde");
+			
+			Sampler<Integer> xhatrawSampler 	= new Sampler<Integer>("xhatraw");
+			Sampler<Integer> xhatraw_last_s		= new Sampler<Integer>("xhatraw_last_s");
+			Sampler<Integer> xhatraw_last_b		= new Sampler<Integer>("xhatraw_last_b");
+			
 			Sampler<Integer> dFlagSampler		= new Sampler<Integer>("dflag");
+			
+			
+			//Sampler<Long>	 samplerHelper1		= new Sampler<Long>("helper1");
+			//Sampler<Long>	 samplerHelper2		= new Sampler<Long>("helper2");
+			//Sampler<Long>	 samplerHelper3		= new Sampler<Long>("helper3");		
+			
+			
+			
+			
 			Sampler<Integer> errorSampler		= new Sampler<Integer>("error");
 			
-			Sampler<Long>	 samplerHelper1		= new Sampler<Long>("helper1");
-			Sampler<Long>	 samplerHelper2		= new Sampler<Long>("helper2");
-			Sampler<Long>	 samplerHelper3		= new Sampler<Long>("helper3");			
+	
 			
 			
 			int[][][] decodedBlock = new int[bands][lines][samples];
@@ -219,7 +231,6 @@ public class Main {
 			int[][] band = block[0];
 			for (int l = 0; l < lines; l++) {
 				for (int s = 0; s < samples; s++) {	
-					xSampler.sample(block[0][l][s]);
 					//First sample is just coded raw since we have not initialized
 					//the counters/accumulators/predictors yet
 					int error = 0;
@@ -238,9 +249,12 @@ public class Main {
 						int quant = iutq.quantize(block[0][l][s]);
 						int dequant = iutq.dequantize(quant);
 						
-						expGolombZero.encode(quant, bos);
+						mappedError = Mapper.mapError(quant); //Mapper.mapError(block[0][l][s]);
+						
+						
+						expGolombZero.encode(mappedError, bos);
 						//mimic hw by injecting here the first sample
-						mappedError = quant; //Mapper.mapError(block[0][l][s]); 
+						 
 						prediction = 0;
 						
 						decodedBlock[0][l][s] = dequant;
@@ -270,18 +284,23 @@ public class Main {
 					xFirstBand_last_r.sample(s == samples-1 ? 1 : 0);
 					xFirstBand_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
 					
-					errorSampler.sample(error);
-					samplerHelper3.sample(acc.getRunningSum());   
-					samplerHelper3.sample((long) acc.getRunningCount());
-					samplerHelper3.sample((long) findkj(acc));
-					
-					kjSampler.sample(findkj(acc));
+					xSampler.sample(block[0][l][s]);
+					xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+					xSampler_last_b.sample(s == samples-1 && l == lines-1 && 0 == bands-1 ? 1 : 0);
+					xSampler_last_i.sample(0);
 					
 					xtildeSampler.sample(prediction);
-					predictionSampler.sample(prediction);
+					xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+					
 					mappedErrorSampler.sample(mappedError);
+					if (s != samples-1 || l != lines-1) kjSampler.sample(findkj(acc));
 					
 					xhatrawSampler.sample(decodedBlock[0][l][s]);
+					xhatraw_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+					xhatraw_last_b.sample(s == samples-1 && l == lines-1 && 0 == bands-1 ? 1 : 0);
+					
+					
+					errorSampler.sample(error);
 				}
 			}
 			
@@ -314,8 +333,6 @@ public class Main {
 				long simpleAlphaDacc = 0;
 				for (int l = 0; l < lines; l++) {
 					for (int s = 0; s < samples; s++) {
-						samplerHelper1.sample(decodedBlock[b-1][l][s] - prevAcc/sampleCnt);
-						samplerHelper2.sample(band[l][s] 			  - currAcc/sampleCnt);
 						simpleAlphaNacc += (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*(band[l][s] 			  - currAcc/sampleCnt);
 						simpleAlphaDacc += (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*(decodedBlock[b-1][l][s] - prevAcc/sampleCnt);
 					}
@@ -324,8 +341,6 @@ public class Main {
 				//allocate 10 bits for alpha (when using it we need to divide by 512
 				//to stay in the [0, 2) range
 				int simpleAlphaScaled = findAlpha(simpleAlphaNacc, simpleAlphaDacc, 10);
-				alphanSampler.sample(simpleAlphaNacc);
-				alphadSampler.sample(simpleAlphaDacc);
 				alphaSampler.sample(simpleAlphaScaled);
 				long alphaScaleVal = 9; //512;
 				//mu is 16 bits wide, and should stay that way since we are averaging 16-bit values
@@ -370,18 +385,23 @@ public class Main {
 						xTildeOtherBands.sample((int) prediction);
 						xTilde_o_last_s.sample(l == lines-1 && s == samples-1 ? 1 : 0);
 						
-						samplerHelper3.sample(acc.getRunningSum());
-						samplerHelper3.sample((long) acc.getRunningCount());
-						samplerHelper3.sample((long) findkj(acc));    
-						
-						kjSampler.sample(findkj(acc));    
-						
 						xSampler.sample(block[b][l][s]);
+						xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+						xSampler_last_b.sample(s == samples-1 && l == lines-1 && b == bands-1 ? 1 : 0);
+						xSampler_last_i.sample(0);
+						
 						xtildeSampler.sample((int) prediction);
-						predictionSampler.sample((int) prediction);
+						xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
 						
 						mappedErrorSampler.sample((int)mappedError);
+						if (s != samples-1 || l != lines-1) kjSampler.sample(findkj(acc));
+						
 						xhatrawSampler.sample(savedxhat[l][s]);
+						xhatraw_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+						xhatraw_last_b.sample(s == samples-1 && l == lines-1 && b == bands-1 ? 1 : 0);
+
+						
+						
 						
 						errorSampler.sample(error);
 					}
@@ -433,21 +453,26 @@ public class Main {
 			xTildeOtherBands.export();
 			xTilde_o_last_s.export();
 			
-			
-			alphanSampler.export();
-			alphadSampler.export();
 			xSampler.export();
-			xhatrawSampler.export();
-			predictionSampler.export();
+			xSampler_last_s.export();
+			xSampler_last_b.export();
+			xSampler_last_i.export();
+			
+			xtildeSampler.export();
+			xtilde_last_s.export();
+			
 			mappedErrorSampler.export();
 			kjSampler.export();
-			xtildeSampler.export();
-			dFlagSampler.export();
-			errorSampler.export();
-			samplerHelper1.export();
-			samplerHelper2.export();
-			samplerHelper3.export();	
+
+			xhatrawSampler.export();
+			xhatraw_last_s.export();
+			xhatraw_last_b.export();
 			
+			dFlagSampler.export();
+			
+			
+			
+			errorSampler.export();
 			
 			expGolombZero.endSampling();
 			golombCoDec.endSampling();
@@ -521,8 +546,8 @@ public class Main {
 					if (l == 0 && s == 0) {
 						/*decodedBand[l][s] = expGolombZero.decode(bis);
 						acc.add(0);*/
-						
-						int quant = expGolombZero.decode(bis);
+						int mappedErr = expGolombZero.decode(bis);
+						int quant = Mapper.unmapError(mappedErr);
 						int dequant = iutq.dequantize(quant);
 						decodedBlock[0][l][s] = dequant;
 						acc.add(dequant);

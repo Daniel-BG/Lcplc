@@ -51,27 +51,71 @@ architecture Behavioral of BINARY_QUANTIZER is
 	
 	signal shifted_up, added_downshift: std_logic_vector(DATA_WIDTH + UPSHIFT downto 0);
 	signal downshifted, downshifted_inverse: std_logic_vector(DATA_WIDTH downto 0);
-begin
-	
-	output_valid <= input_valid;
-	input_ready  <= output_ready;
-	output_last  <= input_last;
-	output_user  <= input_user;
 
+	signal quantized_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+
+	--latching/registers
+	constant STAGES: integer := 2;
+	signal valid_stages: std_logic_vector(STAGES - 1 downto 0);
+	signal device_enable: std_logic;
+	
+	signal input_sign: std_logic;
+
+	signal stage_1_reg: std_logic_vector(DATA_WIDTH + UPSHIFT downto 0);
+	signal stage_2_reg: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal stage_1_last, stage_2_last: std_logic;
+	signal stage_1_user, stage_2_user: std_logic_vector(USER_WIDTH - 1 downto 0);
+
+begin
+
+	device_enable <= '1' when valid_stages(STAGES - 1) = '0' or output_ready = '1' else '0';
+	input_ready <= device_enable;
+	output_valid <= valid_stages(STAGES - 1);
+
+	output_data <= stage_2_reg;
+	output_last <= stage_2_last;
+	output_user <= stage_2_user;
+
+	seq: process(clk, rst)
+	begin
+		if rising_edge(clk) then
+			if rst = '1' then
+				valid_stages <= (others => '0');
+			else
+				if device_enable = '1' then
+					input_sign <= input_data(DATA_WIDTH - 1);
+					valid_stages(0) <= input_valid;
+					for i in 0 to STAGES - 2 loop
+						valid_stages(i+1) <= valid_stages(i);
+					end loop;
+					stage_1_reg <= added_downshift;
+					stage_2_reg <= quantized_data;
+					stage_1_last<= input_last;
+					stage_2_last<= stage_1_last;
+					stage_1_user<= input_user;
+					stage_2_user<= stage_1_user;
+				end if;	
+			end if;
+		end if;
+	end process;
+	
+
+	--stage 1
 	input_sign_extended <= input_data(DATA_WIDTH - 1) & input_data;
 	abs_val <= input_sign_extended when input_data(DATA_WIDTH - 1) = '0' else std_logic_vector(-signed(input_sign_extended));
 
 	shifted_up <= abs_val & (UPSHIFT - 1 downto 0 => '0');
 	added_downshift <= std_logic_vector(unsigned(shifted_up) + to_unsigned(2**DOWNSHIFT_MINUS_1, DATA_WIDTH + UPSHIFT + 1));
 	
+	--stage 2
 	gen_downshift_a: if DOWNSHIFT_MINUS_1 <= UPSHIFT - 1 generate
-		downshifted <= added_downshift(DOWNSHIFT_MINUS_1 + 1 + DATA_WIDTH downto DOWNSHIFT_MINUS_1 + 1);
+		downshifted <= stage_1_reg(DOWNSHIFT_MINUS_1 + 1 + DATA_WIDTH downto DOWNSHIFT_MINUS_1 + 1);
 	end generate;
 	gen_downshift_b: if DOWNSHIFT_MINUS_1 > UPSHIFT - 1 generate
-		downshifted <= (DOWNSHIFT_MINUS_1 + 1 + DATA_WIDTH downto DATA_WIDTH + UPSHIFT + 1 => '0') & added_downshift(DATA_WIDTH + UPSHIFT downto DOWNSHIFT_MINUS_1 + 1);
+		downshifted <= (DOWNSHIFT_MINUS_1 + 1 + DATA_WIDTH downto DATA_WIDTH + UPSHIFT + 1 => '0') & stage_1_reg(DATA_WIDTH + UPSHIFT downto DOWNSHIFT_MINUS_1 + 1);
 	end generate;
 	
 	downshifted_inverse <= std_logic_vector(-signed(downshifted));
-	output_data <= downshifted(DATA_WIDTH - 1 downto 0) when input_data(DATA_WIDTH - 1) = '0' else downshifted_inverse(DATA_WIDTH - 1 downto 0);
+	quantized_data <= downshifted(DATA_WIDTH - 1 downto 0) when input_sign = '0' else downshifted_inverse(DATA_WIDTH - 1 downto 0);
 	
 end Behavioral;

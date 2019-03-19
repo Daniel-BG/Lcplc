@@ -82,6 +82,7 @@ architecture Behavioral of AXIS_ARITHMETIC_OP is
 	signal op_enable: std_logic;
 	
 	signal result: std_logic_vector(OUTPUT_DATA_WIDTH - 1 downto 0);
+	attribute USE_DSP48 of result : signal is USE_DSP48_ARITH_OP;
 begin
 
 	data_joiner: entity work.AXIS_SYNCHRONIZER_2

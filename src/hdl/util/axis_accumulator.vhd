@@ -97,6 +97,19 @@ begin
 				accumulator_next <= (others => '0');
 				acc_state_next <= READING;
 			end if;
+--			output_valid <= '1';
+--			if output_ready = '1' then
+--				input_ready <= '1';
+--				if input_valid = '1' then
+--					accumulator_next <= std_logic_vector(resize(unsigned(input_data), ACCUMULATOR_WIDTH));
+--					if input_last = '0' then
+--						acc_state_next <= READING;
+--					end if;
+--				else
+--					accumulator_next <= (others => '0');
+--					acc_state_next <= READING;
+--				end if;
+--			end if;
 		end if;
 	end process;
 	

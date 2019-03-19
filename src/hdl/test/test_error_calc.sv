@@ -23,17 +23,15 @@
 
 
 module test_error_calc;
-
-	parameter BANDS=224;
 	parameter DATA_WIDTH=16;
 	parameter BLOCK_SIZE_LOG=8;
-	parameter ACC_LOG=5;
+	parameter ACCUMULATOR_WINDOW=32;
 	parameter UPSHIFT=1;
 	parameter DOWNSHIFT=1;
 	parameter THRESHOLD=0;
-
+	//inner constants
 	parameter PERIOD=10;
-
+	parameter ACC_LOG = 5;
 
 	
 	reg clk, rst;
@@ -43,14 +41,17 @@ module test_error_calc;
 	reg gen_x_enable;
 	wire x_valid, x_ready;
 	wire [DATA_WIDTH - 1:0] x_data;
+	wire x_last_s, x_last_b, x_last_i;
 
-	reg gen_prediction_enable;
-	wire prediction_valid, prediction_ready;
-	wire [DATA_WIDTH + 2:0] prediction_data;
+	reg gen_xtilde_enable;
+	wire xtilde_valid, xtilde_ready;
+	wire [DATA_WIDTH + 2:0] xtilde_data;
+	wire xtilde_last_s;
 
 	//checkers
 	reg merr_checker_enable;
 	wire merr_valid, merr_ready;
+	wire merr_last_s, merr_last_b, merr_last_i;
 	wire [DATA_WIDTH + 2:0] merr_data;
 
 	reg kj_checker_enable;
@@ -58,59 +59,82 @@ module test_error_calc;
 	wire [ACC_LOG - 1:0] kj_data;
 
 	reg xtilde_checker_enable;
-	wire xtilde_valid, xtilde_ready;
-	wire [DATA_WIDTH - 1:0] xtilde_data;
+	wire xtilde_out_valid, xtilde_out_ready;
+	wire [DATA_WIDTH - 1:0] xtilde_out_data;
+	wire xtilde_out_last_s;
 
-	reg xhatout_checker_enable;
-	wire xhatout_valid, xhatout_ready;
-	wire [DATA_WIDTH - 1:0] xhatout_data;
+	reg xhatraw_checker_enable;
+	wire xhatraw_valid, xhatraw_ready;
+	wire [DATA_WIDTH - 1:0] xhatraw_data;
+	wire xhatraw_last_s, xhatraw_last_b;
 	
 	reg dflag_checker_enable;
 	wire dflag_valid, dflag_ready;
 	wire [0:0] dflag_data;
-
 
 	
 	always #(PERIOD/2) clk = ~clk;
 	
 	initial begin
 		gen_x_enable = 0;
-		gen_prediction_enable = 0;
+		gen_xtilde_enable = 0;
 
 		merr_checker_enable = 0;
 		kj_checker_enable = 0;
 		xtilde_checker_enable = 0;
-		xhatout_checker_enable = 0;
+		xhatraw_checker_enable = 0;
 		dflag_checker_enable = 0;
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
 		rst = 0;
 		gen_x_enable = 1;
-		gen_prediction_enable = 1;
+		gen_xtilde_enable = 1;
 
 		merr_checker_enable = 1;
 		kj_checker_enable = 1;
 		xtilde_checker_enable = 1;
-		xhatout_checker_enable = 1;
+		xhatraw_checker_enable = 1;
 		dflag_checker_enable = 1;
 	end
 	
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X)) GEN_alpha
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X)) GEN_x
 		(
 			.clk(clk), .rst(rst), .enable(gen_x_enable),
 			.output_valid(x_valid),
 			.output_data(x_data),
 			.output_ready(x_ready)
 		);
-
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH+3), .FILE_NAME(`GOLDEN_PREDICTION)) GEN_pred
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_S)) GEN_x_last_s
 		(
-			.clk(clk), .rst(rst), .enable(gen_prediction_enable),
-			.output_valid(prediction_valid),
-			.output_data(prediction_data),
-			.output_ready(prediction_ready)
+			.clk(clk), .rst(rst), .enable(gen_x_enable),
+			.output_valid(), .output_data(x_last_s), .output_ready(x_ready)
 		);
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_B)) GEN_x_last_b
+		(
+			.clk(clk), .rst(rst), .enable(gen_x_enable),
+			.output_valid(), .output_data(x_last_b), .output_ready(x_ready)
+		);
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_I)) GEN_x_last_i
+		(
+			.clk(clk), .rst(rst), .enable(gen_x_enable),
+			.output_valid(), .output_data(x_last_i), .output_ready(x_ready)
+		);
+
+
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH+3), .FILE_NAME(`GOLDEN_XTILDE)) GEN_xtilde
+		(
+			.clk(clk), .rst(rst), .enable(gen_xtilde_enable),
+			.output_valid(xtilde_valid),
+			.output_data(xtilde_data),
+			.output_ready(xtilde_ready)
+		);
+	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH+3), .FILE_NAME(`GOLDEN_XTILDE_LAST_S)) GEN_xtilde_last_s
+		(
+			.clk(clk), .rst(rst), .enable(gen_xtilde_enable),
+			.output_valid(), .output_data(xtilde_last_s), .output_ready(xtilde_ready)
+		);
+		
 
 	helper_axis_checker #(.DATA_WIDTH(DATA_WIDTH+3), .FILE_NAME(`GOLDEN_MERR)) GEN_checker_merr
 		(
@@ -131,17 +155,17 @@ module test_error_calc;
 	helper_axis_checker #(.DATA_WIDTH(ACC_LOG), .FILE_NAME(`GOLDEN_XTILDE)) GEN_checker_xtilde
 		(
 			.clk        (clk), .rst        (rst), .enable     (xtilde_checker_enable),
-			.input_valid(xtilde_valid),
-			.input_ready(xtilde_ready),
-			.input_data (xtilde_data)
+			.input_valid(xtilde_out_valid),
+			.input_ready(xtilde_out_ready),
+			.input_data (xtilde_out_data)
 		);
 
-	helper_axis_checker #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XHAT)) GEN_checker_xhatout
+	helper_axis_checker #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XHATRAW)) GEN_checker_xhatout
 		(
-			.clk        (clk), .rst        (rst), .enable     (xhatout_checker_enable),
-			.input_valid(xhatout_valid),
-			.input_ready(xhatout_ready),
-			.input_data (xhatout_data)
+			.clk        (clk), .rst        (rst), .enable     (xhatraw_checker_enable),
+			.input_valid(xhatraw_valid),
+			.input_ready(xhatraw_ready),
+			.input_data (xhatraw_data)
 		);
 
 	helper_axis_checker #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_DFLAG)) GEN_checker_dflag
@@ -154,10 +178,9 @@ module test_error_calc;
 
 
 	error_calc #(
-		.BANDS(BANDS),
 		.DATA_WIDTH(DATA_WIDTH),
 		.BLOCK_SIZE_LOG(BLOCK_SIZE_LOG),
-		.ACC_LOG(ACC_LOG),
+		.ACCUMULATOR_WINDOW(ACCUMULATOR_WINDOW),
 		.UPSHIFT(UPSHIFT),
 		.DOWNSHIFT(DOWNSHIFT),
 		.THRESHOLD(THRESHOLD)
@@ -167,25 +190,35 @@ module test_error_calc;
 			.rst(rst),
 			.x_valid(x_valid),
 			.x_ready(x_ready),			
-			.x_data(x_data),			
-			.prediction_ready(prediction_ready),
-			.prediction_valid(prediction_valid),
-			.prediction_data(prediction_data),
+			.x_data(x_data),	
+			.x_last_s(x_last_s),
+			.x_last_b(x_last_b),
+			.x_last_i(x_last_i),		
+			.xtilde_in_ready(xtilde_ready),
+			.xtilde_in_valid(xtilde_valid),
+			.xtilde_in_data(xtilde_data),
+			.xtilde_in_last_s(xtilde_last_s),
 			.merr_ready(merr_ready),		
 			.merr_valid(merr_valid),		
 			.merr_data(merr_data),		
+			.merr_last_s(merr_last_s),
+			.merr_last_b(merr_last_b),
+			.merr_last_i(merr_last_i),
 			.kj_ready(kj_ready),		
 			.kj_valid(kj_valid),		
 			.kj_data(kj_data),			
-			.xtilde_valid(xtilde_valid),	
-			.xtilde_ready(xtilde_ready),	
-			.xtilde_data(xtilde_data),		
-			.xhatout_valid(xhatout_valid),   
-			.xhatout_ready(xhatout_ready),	
-			.xhatout_data(xhatout_data),	
+			.xtilde_out_valid(xtilde_out_valid),	
+			.xtilde_out_ready(xtilde_out_ready),	
+			.xtilde_out_data(xtilde_out_data),
+			.xtilde_out_last_s(xtilde_out_last_s),		
+			.xhatout_valid(xhatraw_valid),   
+			.xhatout_ready(xhatraw_ready),	
+			.xhatout_data(xhatraw_data),	
+			.xhatout_last_s(xhatraw_last_s),
+			.xhatout_last_b(xhatraw_last_b),
 			.d_flag_valid(dflag_valid),	
 			.d_flag_ready(dflag_ready),	
 			.d_flag_data(dflag_data) 	
 		);
-
+	
 endmodule
