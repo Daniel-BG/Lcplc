@@ -168,6 +168,7 @@ begin
 						end if;
 						inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
 					else
+						--if input_position = input_position_buff
 						--do nothing special
 					end if;
 				else

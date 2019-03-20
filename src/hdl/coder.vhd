@@ -96,9 +96,9 @@ architecture Behavioral of CODER is
 	signal diverter_1_last_s, diverter_1_last_b, diverter_1_last_i : std_logic;
 
 	--splitter signals
-	signal d_flag_0_valid, d_flag_1_valid, d_flag_2_valid, d_flag_3_valid: std_logic;
-	signal d_flag_0_data, d_flag_1_data, d_flag_2_data, d_flag_3_data: std_logic_vector(0 downto 0); 
-	signal d_flag_0_ready, d_flag_1_ready, d_flag_2_ready, d_flag_3_ready: std_logic;
+	signal d_flag_0_valid, d_flag_1_valid, d_flag_2_valid: std_logic;
+	signal d_flag_0_data, d_flag_1_data, d_flag_2_data: std_logic_vector(0 downto 0); 
+	signal d_flag_0_ready, d_flag_1_ready, d_flag_2_ready: std_logic;
 
 	--filter for golomb coder
 	signal diverter_0_valid_filtered, diverter_0_ready_filtered: std_logic;
@@ -134,15 +134,10 @@ architecture Behavioral of CODER is
 	signal sync_xmean_alpha_alpha: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
 	signal sync_xmean_alpha_data: std_logic_vector(DATA_WIDTH + ALPHA_WIDTH - 1 downto 0);
 	
-	--alpha xmean filtered
-	signal xmean_alpha_valid, xmean_alpha_ready: std_logic;
-	signal xmean_alpha_data: std_logic_vector(DATA_WIDTH + ALPHA_WIDTH - 1 downto 0);
-	
-	
 	--------------
 	--CONTROLLER--
 	--------------
-	type coder_ctrl_state_t is (TRAP, DISCARD_FLAG, OUTPUT_FLAG, OUTPUT_XMEAN_ALPHA, OUTPUT_EXP_GOL, OUTPUT_GOL, OUTPUT_GOL_PRIMED, OUTPUT_GOL_LAST);
+	type coder_ctrl_state_t is (DISCARD_FLAG, OUTPUT_FLAG, OUTPUT_XMEAN_ALPHA, OUTPUT_XMEAN_ALPHA_LAST, OUTPUT_EXP_GOL, OUTPUT_GOL, OUTPUT_GOL_PRIMED, OUTPUT_GOL_LAST, END_SLICE_XALPHA);
 	signal state_curr, state_next: coder_ctrl_state_t;
 	
 	--control signals
@@ -218,7 +213,7 @@ begin
 	diverter_1_last_s <= diverter_1_data_full(diverter_1_data_full'high-2);
 
 	--D flag splitter (one for ehat control, one for kj control, one for output)
-	d_flag_splitter: entity work.AXIS_SPLITTER_4
+	d_flag_splitter: entity work.AXIS_SPLITTER_3
 		Generic map (
 			DATA_WIDTH => 1
 		)
@@ -241,11 +236,7 @@ begin
 			output_2_valid => d_flag_2_valid,
 			output_2_data  => d_flag_2_data,
 			output_2_ready => d_flag_2_ready,
-			output_2_last  => open,
-			output_3_valid => d_flag_3_valid,
-			output_3_data  => d_flag_3_data,
-			output_3_ready => d_flag_3_ready,
-			output_3_last  => open
+			output_2_last  => open
 		);
 
 	--exp golomb coder filter
@@ -388,26 +379,6 @@ begin
 		);
 	sync_xmean_alpha_data <= sync_xmean_alpha_alpha & sync_xmean_alpha_xmean;
 
-	--xmean_alpha_filter
-	xmean_alpha_filter: entity work.AXIS_FILTER 
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH + ALPHA_WIDTH,
-			ELIMINATE_ON_UP => false --0 is below threshold and does not code then
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_valid	=> sync_xmean_alpha_valid,
-			input_ready => sync_xmean_alpha_ready,
-			input_data	=> sync_xmean_alpha_data,
-			flag_valid	=> d_flag_2_valid,
-			flag_ready	=> d_flag_2_ready,
-			flag_data	=> d_flag_2_data,
-			--to output axi ports
-			output_valid=> xmean_alpha_valid,
-			output_ready=> xmean_alpha_ready,
-			output_data	=> xmean_alpha_data
-		);
-
 	---------------
 	--  CONTROL  --
 	---------------
@@ -459,7 +430,7 @@ begin
 	comb: process (state_curr, control_valid, control_end_block, control_end_image, 
 		packer_ready, control_end_image_buff, control_end_block_buff,
 		eg_valid, eg_code, eg_length, golomb_valid, golomb_code, golomb_length, golomb_last,
-		d_flag_3_valid, d_flag_3_data, xmean_alpha_valid, xmean_alpha_data,
+		d_flag_2_valid, d_flag_2_data, sync_xmean_alpha_valid, sync_xmean_alpha_data,
 		golomb_last_buf, golomb_code_buf, golomb_length_buf)
 	begin
 		state_next    <= state_curr;
@@ -471,8 +442,8 @@ begin
 		golomb_length_buf_next <= golomb_length_buf;
 		--internal components
 		eg_ready      <= '0';
-		d_flag_3_ready<= '0';
-		xmean_alpha_ready <= '0';
+		d_flag_2_ready<= '0';
+		sync_xmean_alpha_ready <= '0';
 		golomb_ready  <= '0';
 		--packer
 		packer_valid  <= '0';
@@ -480,28 +451,44 @@ begin
 		packer_length <= (others => '0');
 		packer_last   <= '0';
 
-
+		--FIRST BLOCK DOES NOT OUTPUT FLAG NOR ALPHA/XMEAN
 		if state_curr = DISCARD_FLAG then
-			d_flag_3_ready <= '1';
-			if d_flag_3_valid = '1' then
+			d_flag_2_ready <= '1';
+			if d_flag_2_valid = '1' then
 				state_next <= OUTPUT_EXP_GOL;
 			end if;
+		--OUTPUT FLAG AND SAVE IT FOR LATER
 		elsif state_curr = OUTPUT_FLAG then
-			d_flag_3_ready <= packer_ready;
-			packer_valid <= d_flag_3_valid;
-			packer_code  <= (CODING_LENGTH_MAX - 1 downto 1 => '0') & d_flag_3_data;
+			d_flag_2_ready <= packer_ready;
+			packer_valid <= d_flag_2_valid;
+			packer_code  <= (CODING_LENGTH_MAX - 1 downto 1 => '0') & d_flag_2_data;
 			packer_length<= std_logic_vector(to_unsigned(1, packer_length'length));
-			if d_flag_3_valid = '1' and packer_ready = '1' then
-				state_next <= OUTPUT_XMEAN_ALPHA;
+			if d_flag_2_valid = '1' and packer_ready = '1' then
+				if d_flag_2_data(0) = '1' then
+					state_next <= OUTPUT_XMEAN_ALPHA;
+				else
+					state_next <= OUTPUT_XMEAN_ALPHA_LAST;
+				end if;
 			end if;
+		--OUTPUT ALPHA AND XMEAN THEN GO TO GOLOMB CODING
 		elsif state_curr = OUTPUT_XMEAN_ALPHA then
-			xmean_alpha_ready <= packer_ready;
-			packer_valid <= xmean_alpha_valid;
-			packer_code  <= (CODING_LENGTH_MAX - 1 downto xmean_alpha_data'high + 1 => '0') & xmean_alpha_data;
+			sync_xmean_alpha_ready <= packer_ready;
+			packer_valid <= sync_xmean_alpha_valid;
+			packer_code  <= (CODING_LENGTH_MAX - 1 downto sync_xmean_alpha_data'high + 1 => '0') & sync_xmean_alpha_data;
 			packer_length<= std_logic_vector(to_unsigned(DATA_WIDTH + ALPHA_WIDTH, packer_length'length));
-			if xmean_alpha_valid = '1' and packer_ready = '1' then
+			if sync_xmean_alpha_valid = '1' and packer_ready = '1' then
 				state_next <= OUTPUT_EXP_GOL;
 			end if;
+		--ALPHA AND XMEAN END THE SLICE. 
+		--FIRST READ CONTROL TO KNOW IF IT ENDS THE BLOCK OR NOT
+		elsif state_curr = OUTPUT_XMEAN_ALPHA_LAST then
+			control_ready <= '1';
+			if control_valid = '1' then
+				control_end_image_buff_next <= control_end_image;
+				control_end_block_buff_next <= control_end_block;
+				state_next <= END_SLICE_XALPHA;
+			end if;
+		--OUTPUT EXP GOLOMB CODER RESULT
 		elsif state_curr = OUTPUT_EXP_GOL then
 			eg_ready     <= packer_ready;
 			packer_valid <= eg_valid;
@@ -510,6 +497,7 @@ begin
 			if eg_valid = '1' and packer_ready = '1' then
 				state_next <= OUTPUT_GOL;
 			end if;
+		--LOAD GOLOMB CODER RESULT (WE CAN'T OUTPUT YET)
 		elsif state_curr = OUTPUT_GOL then
 			golomb_ready <= '1';
 			if golomb_valid = '1' then
@@ -518,6 +506,9 @@ begin
 				golomb_length_buf_next <= golomb_length;
 				state_next <= OUTPUT_GOL_PRIMED;
 			end if;
+		--OUTPUT GOLOMB CODER RESULT IF POSSIBLE
+		--IF THIS IS THE LAST SAMPLE, MERGE WITH CONTROL
+		--IN EXTRA STATE TO DECIDE ON CONTORL SIGNALS
 		elsif state_curr = OUTPUT_GOL_PRIMED then
 			if golomb_last_buf = '1' then
 				--get the control state (should be already processed and available)
@@ -545,6 +536,8 @@ begin
 					end if;
 				end if;
 			end if;
+		--OUTPUT THE LAST GOLOMB SAMPLE, AND FLUSH 
+		--BUFFERS IF NECESSARY
 		elsif state_curr = OUTPUT_GOL_LAST then
 			packer_valid <= '1';
 			packer_code  <= golomb_code_buf;
@@ -555,11 +548,23 @@ begin
 					state_next <= DISCARD_FLAG;
 				else
 					state_next <= OUTPUT_FLAG;
-					--state_next <= TRAP;
 				end if;
 			end if;
-		elsif state_curr = TRAP then
-		
+		--READ CONTROL DATA AND EITHER GO INTO 
+		--DISCARD OR OUTPUT FLAG MODE NEXT
+		elsif state_curr = END_SLICE_XALPHA then
+			sync_xmean_alpha_ready <= packer_ready;
+			packer_valid <= sync_xmean_alpha_valid;
+			packer_code  <= (CODING_LENGTH_MAX - 1 downto sync_xmean_alpha_data'high + 1 => '0') & sync_xmean_alpha_data;
+			packer_length<= std_logic_vector(to_unsigned(DATA_WIDTH + ALPHA_WIDTH, packer_length'length));
+			packer_last  <= control_end_image_buff;
+			if sync_xmean_alpha_valid = '1' and packer_ready = '1' then
+				if control_end_block_buff = '1' then
+					state_next <= DISCARD_FLAG;
+				else
+					state_next <= OUTPUT_FLAG;
+				end if;
+			end if;
 		end if;
 	end process;
 

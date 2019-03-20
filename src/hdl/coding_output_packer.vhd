@@ -101,7 +101,7 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	
 	--shifted results /presults
 	signal shifted_data: std_logic_vector(SHIFTED_WIDTH - 1 downto 0);
-	signal shifted_ready, shifted_valid, shitled_last: std_logic;
+	signal shifted_ready, shifted_valid, shifted_last: std_logic;
 	
 	--delay before segmenter
 	signal len_cnt_ready_buf, len_cnt_valid_buf: std_logic;
@@ -354,7 +354,7 @@ begin
 			output_data		=> shifted_data,
 			output_ready	=> shifted_ready,
 			output_valid	=> shifted_valid,
-			output_last     => shitled_last
+			output_last     => shifted_last
 		);
 		
 	--delay fifo for len_cnt
@@ -388,7 +388,7 @@ begin
 			bits_data		=> shifted_data,
 			bits_ready		=> shifted_ready,
 			bits_valid		=> shifted_valid,
-			bits_last   	=> shitled_last,
+			bits_last   	=> shifted_last,
 			position_data	=> len_cnt_data_buf,
 			position_ready	=> len_cnt_ready_buf,
 			position_valid	=> len_cnt_valid_buf,
