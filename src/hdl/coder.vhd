@@ -265,6 +265,7 @@ begin
 			DATA_WIDTH => MAPPED_ERROR_WIDTH
 		)
 		Port map (
+			clk => clk, rst => rst,
 			input_data	=> diverter_0_data_filtered,
 			input_valid => diverter_0_valid_filtered,
 			input_ready	=> diverter_0_ready_filtered,
