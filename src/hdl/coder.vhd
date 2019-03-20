@@ -30,7 +30,6 @@ entity CODER is
 		MAPPED_ERROR_WIDTH: integer := 19;
 		ACCUMULATOR_WINDOW: integer := 32;
 		--ACC_LOG: integer := 5; change for the real stuff
-		BLOCK_SIZE_LOG: integer := 8;
 		OUTPUT_WIDTH_LOG: integer := 5;
 		ALPHA_WIDTH: integer := 10;
 		DATA_WIDTH: integer := 16
@@ -124,6 +123,10 @@ architecture Behavioral of CODER is
 	signal golomb_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
 	signal golomb_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 	signal golomb_valid, golomb_ready, golomb_last: std_logic;
+	--buffered golomb
+	signal golomb_last_buf_next, golomb_last_buf: std_logic;
+	signal golomb_code_buf_next, golomb_code_buf: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
+	signal golomb_length_buf_next, golomb_length_buf: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 	
 	--alpha xmean syncer
 	signal sync_xmean_alpha_valid, sync_xmean_alpha_ready: std_logic;
@@ -139,7 +142,7 @@ architecture Behavioral of CODER is
 	--------------
 	--CONTROLLER--
 	--------------
-	type coder_ctrl_state_t is (IDLE, IDLE_FIRST, DISCARD_FLAG, OUTPUT_FLAG, OUTPUT_XMEAN_ALPHA, OUTPUT_EXP_GOL, OUTPUT_GOL);
+	type coder_ctrl_state_t is (TRAP, DISCARD_FLAG, OUTPUT_FLAG, OUTPUT_XMEAN_ALPHA, OUTPUT_EXP_GOL, OUTPUT_GOL, OUTPUT_GOL_PRIMED, OUTPUT_GOL_LAST);
 	signal state_curr, state_next: coder_ctrl_state_t;
 	
 	--control signals
@@ -147,8 +150,8 @@ architecture Behavioral of CODER is
 	signal control_ready, control_valid: std_logic;
 	signal control_end_block, control_end_image: std_logic;
 	
-	--control signals buffer
-	signal control_end_image_buff, control_end_image_buff_next, control_end_block_buff, control_end_block_buff_next: std_logic;
+	--control buffs
+	signal control_end_block_buff_next, control_end_image_buff_next, control_end_block_buff, control_end_image_buff: std_logic;
 	
 	--packer
 	signal packer_valid, packer_ready, packer_last: std_logic;
@@ -195,8 +198,8 @@ begin
 			input_valid		=> ehat_splitter_0_valid,
 			input_ready		=> ehat_splitter_0_ready,
 			input_data		=> ehat_splitter_0_data_full,
-			input_last_zero	=> ehat_splitter_0_last_s,
-			input_last_one  => ehat_splitter_0_last_b,
+			input_last_zero	=> '1',
+			input_last_one  => ehat_splitter_0_last_s,
 			--to output axi ports
 			output_0_valid	=> diverter_0_valid,
 			output_0_ready	=> diverter_0_ready,
@@ -306,7 +309,7 @@ begin
 			output_data_1 => sync_merr_kj_kj,
 			output_last	  => sync_merr_kj_last
 		);
-	sync_merr_kj_data <= sync_merr_kj_merr & sync_merr_kj_kj;
+	sync_merr_kj_data <= sync_merr_kj_kj & sync_merr_kj_merr;
 
 	--filter to normal coder
 	coder_batch_filter: entity work.AXIS_BATCH_FILTER
@@ -383,7 +386,7 @@ begin
 			output_data_1 => sync_xmean_alpha_alpha,
 			output_last	  => open
 		);
-	sync_xmean_alpha_data <= sync_xmean_alpha_xmean & sync_xmean_alpha_alpha;
+	sync_xmean_alpha_data <= sync_xmean_alpha_alpha & sync_xmean_alpha_xmean;
 
 	--xmean_alpha_filter
 	xmean_alpha_filter: entity work.AXIS_FILTER 
@@ -435,13 +438,19 @@ begin
 	begin
 		if (rising_edge(clk)) then
 			if rst = '1' then
-				state_curr <= IDLE;
+				state_curr <= DISCARD_FLAG;
 				control_end_image_buff <= '0';
 				control_end_block_buff <= '0';
+				golomb_last_buf <= '0';
+				golomb_code_buf <= (others => '0');
+				golomb_length_buf <= (others => '0');
 			else
 				state_curr <= state_next;
 				control_end_image_buff <= control_end_image_buff_next;
 				control_end_block_buff <= control_end_block_buff_next;
+				golomb_last_buf <= golomb_last_buf_next;
+				golomb_code_buf <= golomb_code_buf_next;
+				golomb_length_buf <= golomb_length_buf_next;
 			end if;
 		end if;
 	end process;
@@ -450,13 +459,16 @@ begin
 	comb: process (state_curr, control_valid, control_end_block, control_end_image, 
 		packer_ready, control_end_image_buff, control_end_block_buff,
 		eg_valid, eg_code, eg_length, golomb_valid, golomb_code, golomb_length, golomb_last,
-		d_flag_3_valid, d_flag_3_data, xmean_alpha_valid, xmean_alpha_data)
+		d_flag_3_valid, d_flag_3_data, xmean_alpha_valid, xmean_alpha_data,
+		golomb_last_buf, golomb_code_buf, golomb_length_buf)
 	begin
 		state_next    <= state_curr;
 		control_ready <= '0';
-		--bufs
-		control_end_block_buff_next <= control_end_block;
-		control_end_image_buff_next <= control_end_image;
+		control_end_image_buff_next <= control_end_image_buff;
+		control_end_block_buff_next <= control_end_block_buff;
+		golomb_last_buf_next <= golomb_last_buf;
+		golomb_code_buf_next <= golomb_code_buf;
+		golomb_length_buf_next <= golomb_length_buf;
 		--internal components
 		eg_ready      <= '0';
 		d_flag_3_ready<= '0';
@@ -469,24 +481,10 @@ begin
 		packer_last   <= '0';
 
 
-		if state_curr = IDLE_FIRST then
-			control_ready <= '1';
-			if control_valid = '1' then
-				control_end_block_buff_next <= control_end_block;
-				control_end_image_buff_next <= control_end_image;
-				state_next <= DISCARD_FLAG;
-			end if;
-		elsif state_curr = DISCARD_FLAG then
+		if state_curr = DISCARD_FLAG then
 			d_flag_3_ready <= '1';
 			if d_flag_3_valid = '1' then
 				state_next <= OUTPUT_EXP_GOL;
-			end if;
-		elsif state_curr =  IDLE then
-			control_ready <= '1';
-			if control_valid = '1' then
-				control_end_block_buff_next <= control_end_block;
-				control_end_image_buff_next <= control_end_image;
-				state_next <= OUTPUT_FLAG;
 			end if;
 		elsif state_curr = OUTPUT_FLAG then
 			d_flag_3_ready <= packer_ready;
@@ -513,22 +511,55 @@ begin
 				state_next <= OUTPUT_GOL;
 			end if;
 		elsif state_curr = OUTPUT_GOL then
-			golomb_ready <= packer_ready;
-			packer_valid <= golomb_valid;
-			packer_code  <= golomb_code;
-			packer_length<= golomb_length;
-			if golomb_last = '1' and control_end_image_buff = '1' then
-				packer_last  <= '1';
+			golomb_ready <= '1';
+			if golomb_valid = '1' then
+				golomb_last_buf_next <= golomb_last;
+				golomb_code_buf_next <= golomb_code;
+				golomb_length_buf_next <= golomb_length;
+				state_next <= OUTPUT_GOL_PRIMED;
 			end if;
-			if golomb_valid = '1' and packer_ready = '1' then
-				if golomb_last = '1' then
-					if control_end_block_buff = '1' then
-						state_next <= IDLE_FIRST;
+		elsif state_curr = OUTPUT_GOL_PRIMED then
+			if golomb_last_buf = '1' then
+				--get the control state (should be already processed and available)
+				--and go to final output state
+				control_ready <= '1';
+				if control_valid = '1' then
+					control_end_image_buff_next <= control_end_image;
+					control_end_block_buff_next <= control_end_block;
+					state_next <= OUTPUT_GOL_LAST;
+				end if;
+			else
+				packer_valid <= '1';
+				packer_code  <= golomb_code_buf;
+				packer_length<= golomb_length_buf;
+				packer_last  <= '0';
+				if packer_ready = '1' then
+					golomb_ready <= '1';
+					if golomb_valid = '1' then
+						golomb_last_buf_next <= golomb_last;
+						golomb_code_buf_next <= golomb_code;
+						golomb_length_buf_next <= golomb_length;
 					else
-						state_next <= IDLE;
+						--no new signals, go back to 'golomb_idle' state
+						state_next <= OUTPUT_GOL;
 					end if;
 				end if;
 			end if;
+		elsif state_curr = OUTPUT_GOL_LAST then
+			packer_valid <= '1';
+			packer_code  <= golomb_code_buf;
+			packer_length<= golomb_length_buf;
+			packer_last  <= control_end_image_buff;
+			if packer_ready = '1' then
+				if control_end_block_buff = '1' then
+					state_next <= DISCARD_FLAG;
+				else
+					state_next <= OUTPUT_FLAG;
+					--state_next <= TRAP;
+				end if;
+			end if;
+		elsif state_curr = TRAP then
+		
 		end if;
 	end process;
 

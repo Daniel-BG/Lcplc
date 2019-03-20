@@ -92,7 +92,7 @@ begin
 				state_curr <= WAIT_FLAG;
 				flag_buf <= '0';
 			else
-				state_curr <= SENDING;
+				state_curr <= state_next;
 				flag_buf <= flag_buf_next;
 			end if;
 		end if;
@@ -104,6 +104,7 @@ begin
 		flag_buf_next <= flag_buf;
 		output_data <= (others => '0');
 		joint_inputs_ready <= '0';
+		state_next <= state_curr;
 	
 		if state_curr = WAIT_FLAG then
 			flag_ready <= '1';

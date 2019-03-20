@@ -40,14 +40,14 @@ entity NEXT_XHAT_PRECALC is
 		xtilde_data		: in	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xtilde_ready	: out	std_logic;
 		xtilde_valid	: in	std_logic;
-		xtilde_last		: in 	std_logic;
+		xtilde_last_s	: in 	std_logic;
 		d_flag_data		: in	std_logic;
 		d_flag_ready	: out	std_logic;
 		d_flag_valid	: in 	std_logic;
 		xhatout_data	: out	std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xhatout_ready	: in	std_logic;
 		xhatout_valid	: out	std_logic;
-		xhatout_last	: out 	std_logic;
+		xhatout_last_s	: out 	std_logic;
 		xhatoutmean_data: out   std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xhatoutmean_ready:in  	std_logic;
 		xhatoutmean_valid:out   std_logic
@@ -160,7 +160,7 @@ begin
 				input_valid => xtilde_valid,
 				input_data  => xtilde_data,
 				input_ready => xtilde_ready,
-				input_last  => xtilde_last,
+				input_last  => xtilde_last_s,
 				--to output axi ports
 				output_0_valid => xtilde_split_0_valid,
 				output_0_data  => xtilde_split_0_data,
@@ -381,7 +381,7 @@ begin
 			output_valid=> xhatout_valid,
 			output_ready=> xhatout_ready,
 			output_data => xhatout_data,
-			output_last => xhatout_last
+			output_last => xhatout_last_s
 		);
 		
 end Behavioral;

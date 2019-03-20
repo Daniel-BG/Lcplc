@@ -4,7 +4,6 @@ package constants is
 
 	attribute USE_DSP48 : string;
 	constant USE_DSP48_ARITH_OP: string := "YES";
-	constant USE_DSP48_SLIDING_ACC: string := "YES";
 end constants;
 
 package body constants is

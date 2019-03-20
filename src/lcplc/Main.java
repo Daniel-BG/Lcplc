@@ -345,10 +345,6 @@ public class Main {
 				long alphaScaleVal = 9; //512;
 				//mu is 16 bits wide, and should stay that way since we are averaging 16-bit values
 				long muScaled = currAcc / sampleCnt;
-				
-				bos.writeBits((int) simpleAlphaScaled, 10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
-				bos.writeBits((int) muScaled, 16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
-
 
 				//save encoding data in these variables and only add
 				//it if we don't skip the block
@@ -407,9 +403,13 @@ public class Main {
 					}
 				}
 				
+				//write flag and alpha and mu
+				bos.writeBit(Bit.fromBoolean(distortionAcc > thres));
+				bos.writeBits((int) simpleAlphaScaled, 10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+				bos.writeBits((int) muScaled, 16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+				
 				if (distortionAcc > thres) {
 					dFlagSampler.sample(1);
-					bos.writeBit(Bit.BIT_ONE);
 					//code block as normal
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
@@ -423,7 +423,6 @@ public class Main {
 					}
 				} else {
 					dFlagSampler.sample(0);
-					bos.writeBit(Bit.BIT_ZERO);
 					//skip block
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
@@ -577,15 +576,15 @@ public class Main {
 					}
 				}
 
+				//is this block skipped or not?
+				boolean coded = bis.readBoolean();
+				
 				//generate alpha value. Could try to generate it using the original band as well to see performance
 				long sampleCnt = lines*samples;
 				
 				long simpleAlphaScaled = bis.readBits(10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 				long alphaScaleVal = 9; //512;
 				long muScaled = bis.readBits(16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
-				
-				//is this block skipped or not?
-				boolean coded = bis.readBoolean();
 
 				acc.reset(); 
 				for (int l = 0; l < lines; l++) {

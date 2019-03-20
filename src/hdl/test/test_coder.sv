@@ -24,15 +24,13 @@
 
 module test_coder;
 	parameter MAPPED_ERROR_WIDTH = 19;
-	parameter ACC_LOG = 5;
-	parameter BLOCK_SIZE_LOG = 8;
+	parameter ACCUMULATOR_WINDOW = 32;
 	parameter OUTPUT_WIDTH_LOG = 5;
 	parameter ALPHA_WIDTH = 10;
 	parameter DATA_WIDTH = 16;
 
+	parameter KJ_WIDTH = 5;
 	parameter PERIOD=10;
-
-
 	
 	reg clk, rst;
 
@@ -41,10 +39,11 @@ module test_coder;
 	reg gen_ehat_enable;
 	wire ehat_valid, ehat_ready;
 	wire [MAPPED_ERROR_WIDTH - 1:0] ehat_data;
+	wire ehat_last_s, ehat_last_b, ehat_last_i;
 
 	reg gen_kj_enable;
 	wire kj_valid, kj_ready;
-	wire [ACC_LOG - 1:0] kj_data;
+	wire [KJ_WIDTH - 1:0] kj_data;
 
 	reg gen_dflag_enable;
 	wire dflag_valid, dflag_ready;
@@ -93,32 +92,37 @@ module test_coder;
 			.output_data(ehat_data),
 			.output_ready(ehat_ready)
 		);
+	helper_axis_reader #(.DATA_WIDTH(MAPPED_ERROR_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_S)) GEN_ehat_last_s
+		(
+			.clk(clk), .rst(rst), .enable(gen_ehat_enable),
+			.output_valid(),
+			.output_data(ehat_last_s),
+			.output_ready(ehat_ready)
+		);
+	helper_axis_reader #(.DATA_WIDTH(MAPPED_ERROR_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_B)) GEN_ehat_last_b
+		(
+			.clk(clk), .rst(rst), .enable(gen_ehat_enable),
+			.output_valid(),
+			.output_data(ehat_last_b),
+			.output_ready(ehat_ready)
+		);
+	helper_axis_reader #(.DATA_WIDTH(MAPPED_ERROR_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_I)) GEN_ehat_last_i
+		(
+			.clk(clk), .rst(rst), .enable(gen_ehat_enable),
+			.output_valid(),
+			.output_data(ehat_last_i),
+			.output_ready(ehat_ready)
+		);
+				
+								
 
-	helper_axis_reader #(.DATA_WIDTH(ACC_LOG), .FILE_NAME(`GOLDEN_KJ)) GEN_kj
+	helper_axis_reader #(.DATA_WIDTH(KJ_WIDTH), .FILE_NAME(`GOLDEN_KJ)) GEN_kj
 		(
 			.clk(clk), .rst(rst), .enable(gen_kj_enable),
 			.output_valid(kj_valid),
 			.output_data(kj_data),
 			.output_ready(kj_ready)
 		);
-
-	wire kj_red_ready, kj_red_valid;
-	wire [ACC_LOG-1:0] kj_red_data;
-	AXIS_REDUCER #(
-		.DATA_WIDTH(ACC_LOG),
-		.VALID_TRANSACTIONS(255),
-		.INVALID_TRANSACTIONS(1),
-		.START_VALID(1)
-	) kj_reducer (
-		.clk(clk),
-		.rst(rst),
-		.input_ready(kj_ready),
-		.input_valid(kj_valid),
-		.input_data(kj_data),
-		.output_ready(kj_red_ready),
-		.output_valid(kj_red_valid),
-		.output_data(kj_red_data)
-	);
 
 	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_DFLAG)) GEN_dflag
 		(
@@ -154,20 +158,22 @@ module test_coder;
 
 	CODER #(
 		.MAPPED_ERROR_WIDTH(MAPPED_ERROR_WIDTH),
-		.ACC_LOG(ACC_LOG),
-		.BLOCK_SIZE_LOG(BLOCK_SIZE_LOG),
-		.OUTPUT_WIDTH_LOG(OUTPUT_WIDTH_LOG)
+		.ACCUMULATOR_WINDOW(ACCUMULATOR_WINDOW),
+		.OUTPUT_WIDTH_LOG(OUTPUT_WIDTH_LOG),
+		.ALPHA_WIDTH(ALPHA_WIDTH),
+		.DATA_WIDTH(DATA_WIDTH)
 	) coder_instance (
 		.clk(clk),
 		.rst(rst),
-		.flush(0),
-		.flushed(),
 		.ehat_data(ehat_data),
 		.ehat_ready(ehat_ready),
 		.ehat_valid(ehat_valid),
-		.kj_data(kj_red_data),
-		.kj_ready(kj_red_ready),
-		.kj_valid(kj_red_valid),
+		.ehat_last_s(ehat_last_s),
+		.ehat_last_b(ehat_last_b),
+		.ehat_last_i(ehat_last_i),
+		.kj_data(kj_data),
+		.kj_ready(kj_ready),
+		.kj_valid(kj_valid),
 		.d_flag_data(dflag_data),
 		.d_flag_ready(dflag_ready),
 		.d_flag_valid(dflag_valid),

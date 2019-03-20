@@ -124,12 +124,14 @@ module test_golomb_coding;
 			.input_param_data(param_data),
 			.input_param_valid(param_valid),
 			.input_param_ready(param_ready),
+			.input_param_last(0),
 			.input_value_data(input_data),
 			.input_value_valid(input_valid),
 			.input_value_ready(input_ready),
+			.input_value_last(0),
 			.output_code(code_data),
 			.output_length(length_data),
-			.output_ends_input(),
+			.output_last(),
 			.output_valid(output_valid),
 			.output_ready(output_ready)
 		);

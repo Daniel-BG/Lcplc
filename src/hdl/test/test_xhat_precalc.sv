@@ -38,6 +38,7 @@ module test_xhat_precalc;
 	reg gen_xhatraw_enable;
 	wire xhatraw_valid, xhatraw_ready;
 	wire [DATA_WIDTH - 1:0] xhatraw_data;
+	wire xhatraw_last_s, xhatraw_last_b;
 
 	reg gen_xtilde_enable;
 	wire xtilde_valid, xtilde_ready;
@@ -87,12 +88,33 @@ module test_xhat_precalc;
 			.output_data(xhatraw_data),
 			.output_ready(xhatraw_ready)
 		);
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_XHATRAW_LAST_S)) GEN_xhatraw_last_s
+		(
+			.clk(clk), .rst(rst), .enable(gen_xhatraw_enable),
+			.output_valid(),
+			.output_data(xhatraw_last_s),
+			.output_ready(xhatraw_ready)
+		);
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_XHATRAW_LAST_B)) GEN_xhatraw_last_b
+		(
+			.clk(clk), .rst(rst), .enable(gen_xhatraw_enable),
+			.output_valid(),
+			.output_data(xhatraw_last_b),
+			.output_ready(xhatraw_ready)
+		);
 
 	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_XTILDE)) GEN_xtilde
 		(
 			.clk(clk), .rst(rst), .enable(gen_xtilde_enable),
 			.output_valid(xtilde_valid),
 			.output_data(xtilde_data),
+			.output_ready(xtilde_ready)
+		);
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_XTILDE_LAST_S)) GEN_xtilde_last_s
+		(
+			.clk(clk), .rst(rst), .enable(gen_xtilde_enable),
+			.output_valid(),
+			.output_data(xtilde_last_s),
 			.output_ready(xtilde_ready)
 		);
 
@@ -129,9 +151,12 @@ module test_xhat_precalc;
 			.xhat_data(xhatraw_data),
 			.xhat_ready(xhatraw_ready),
 			.xhat_valid(xhatraw_valid),
+			.xhat_last_s(xhatraw_last_s),
+			.xhat_last_b(xhatraw_last_b),
 			.xtilde_data(xtilde_data),
 			.xtilde_ready(xtilde_ready),
 			.xtilde_valid(xtilde_valid),
+			.xtilde_last_s(xtilde_last_s),
 			.d_flag_data(dflag_data),
 			.d_flag_ready(dflag_ready),
 			.d_flag_valid(dflag_valid),

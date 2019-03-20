@@ -150,13 +150,13 @@ begin
 		);
 
 	sss_0_data_shift <= sss_0_data(BIT_AMT_WIDTH - 1 downto 0);
-	sss_0_data_code  <= sss_0_data(sss_0_data'high downto sss_0_data'high - CODE_WIDTH + 1);
+	sss_0_data_code  <= sss_0_data(sss_0_data'high downto BIT_AMT_WIDTH);
 	sss_1_data_shift <= sss_1_data(BIT_AMT_WIDTH - 1 downto 0);
 	--TEMPORARY FIX UNTIL A MORE PIPELINED APPROACH IS MADE
 		--sss_1_data_code <= sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1);
 	sss_1_data_shift_ntrl <= to_integer(unsigned(sss_1_data_shift));
-	sss_1_data_code <= 
-		sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1);
+--	sss_1_data_code <= 
+--		sss_1_data(sss_1_data'high downto sss_1_data'high - CODE_WIDTH + 1)
 --		and
 --		not std_logic_vector(
 --			shift_left(
@@ -164,6 +164,11 @@ begin
 --				sss_1_data_shift_ntrl)
 --			);
 	--
+	
+	sss_1_data_code <=
+		sss_1_data(sss_1_data'high downto BIT_AMT_WIDTH)
+	    and
+	    not std_logic_vector(shift_left(to_signed(-1, CODE_WIDTH), to_integer(unsigned(sss_1_data_shift))));
 
 	
 	
@@ -322,7 +327,7 @@ begin
 			output_data		=> data_buf_output_last_data,
 			output_valid	=> sss_1_valid_buf
 		);
-	sss_1_data_code_buf <= data_buf_output_last_data(sss_1_data_code_buf'high downto 0);
+	sss_1_data_code_buf <= data_buf_output_last_data(data_buf_output_last_data'high - 1 downto 0);
 	sss_1_last_buf      <= data_buf_output_last_data(data_buf_output_last_data'high);
 		
 	--shifter
@@ -411,7 +416,7 @@ begin
 			output_data  => segmenter_data_ends_buf
 		);
 	segmenter_last_buf <= segmenter_data_ends_buf(segmenter_data_ends_buf'high);
-	segmenter_data_buf <= segmenter_data_ends_buf(2**OUTPUT_WIDTH_LOG downto 1);
+	segmenter_data_buf <= segmenter_data_ends_buf(segmenter_data_ends_buf'high-1 downto 1);
 	segmenter_ends_word_buf <= segmenter_data_ends_buf(0);
 		
 	--merger

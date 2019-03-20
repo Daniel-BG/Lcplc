@@ -63,7 +63,8 @@ architecture Behavioral of GOLOMB_CODING is
 	
 	--calculate quotient and remainder
 	signal quotient: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal remainder_base_mask, remainder_mask, remainder: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal remainder_base_mask, remainder_mask: std_logic_vector(MAX_PARAM_VALUE - 1 downto 0);
+	signal remainder: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--fsm for control
 	type golomb_coding_state_t is (IDLE, QUOTREM_READ);
@@ -126,7 +127,7 @@ begin
 
 	remainder_base_mask <= (others => '1');
 	remainder_mask <= std_logic_vector(shift_right(unsigned(remainder_base_mask), MAX_PARAM_VALUE - joint_param_data));
-	remainder <= remainder_mask and joint_value_data;
+	remainder <= remainder_mask(remainder'high downto 0) and joint_value_data;
 	
 	quotient <= std_logic_vector(shift_right(unsigned(joint_value_data), joint_param_data));
 	
@@ -189,17 +190,17 @@ begin
 				output_code <= output_code_last;
 				output_length <= std_logic_vector(to_unsigned(output_length_last, output_length'length));
 				output_last <= last_buff;
-				joint_ready <= output_ready;
-				if joint_valid = '1' then
-					--read next already
-					quotient_buff_next <= quotient;
-					remainder_buff_next <= remainder;
-					param_buff_next <= joint_param_data;
-					last_buff_next <= joint_last;
-				elsif output_ready = '1' then
-					--go back to IDLE cause our value was read and we have no more values
-					state_next <= IDLE;
-				end if;	
+				if output_ready = '1' then
+					joint_ready <= '1';
+					if joint_valid = '1' then
+						quotient_buff_next <= quotient;
+						remainder_buff_next <= remainder;
+						param_buff_next <= joint_param_data;
+						last_buff_next <= joint_last;
+					else
+						state_next <= IDLE;
+					end if;
+				end if;
 			else
 				output_code <= output_code_temp;
 				output_length <= std_logic_vector(to_unsigned(output_length_temp, output_length'length));
