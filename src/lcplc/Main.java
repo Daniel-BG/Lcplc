@@ -187,6 +187,7 @@ public class Main {
 			Sampler<Integer> xTilde_o_last_s    = new Sampler<Integer>("xtilde_others_last_s");
 			
 			Sampler<Integer> xSampler			= new Sampler<Integer>("x");
+			Sampler<Integer> xSampler_last_r	= new Sampler<Integer>("x_last_r");
 			Sampler<Integer> xSampler_last_s	= new Sampler<Integer>("x_last_s");
 			Sampler<Integer> xSampler_last_b	= new Sampler<Integer>("x_last_b");
 			Sampler<Integer> xSampler_last_i	= new Sampler<Integer>("x_last_i");
@@ -285,6 +286,7 @@ public class Main {
 					xFirstBand_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
 					
 					xSampler.sample(block[0][l][s]);
+					xSampler_last_r.sample(s == samples-1 ? 1 : 0);
 					xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
 					xSampler_last_b.sample(s == samples-1 && l == lines-1 && 0 == bands-1 ? 1 : 0);
 					xSampler_last_i.sample(0);
@@ -382,6 +384,7 @@ public class Main {
 						xTilde_o_last_s.sample(l == lines-1 && s == samples-1 ? 1 : 0);
 						
 						xSampler.sample(block[b][l][s]);
+						xSampler_last_r.sample(s == samples-1 ? 1 : 0);
 						xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
 						xSampler_last_b.sample(s == samples-1 && l == lines-1 && b == bands-1 ? 1 : 0);
 						xSampler_last_i.sample(0);
@@ -453,6 +456,7 @@ public class Main {
 			xTilde_o_last_s.export();
 			
 			xSampler.export();
+			xSampler_last_r.export();
 			xSampler_last_s.export();
 			xSampler_last_b.export();
 			xSampler_last_i.export();

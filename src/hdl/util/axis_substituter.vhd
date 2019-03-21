@@ -85,7 +85,9 @@ begin
 			if input_valid = '1' and output_ready = '1' then
 				counter_enable <= '1';
 				if counter_saturating = '1' then
-					state_next <= VALID;
+					if input_last = '0' then
+						state_next <= VALID;
+					end if;
 				end if;
 			end if;
 		elsif state_curr = VALID then

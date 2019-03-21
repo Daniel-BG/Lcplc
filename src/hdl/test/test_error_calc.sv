@@ -24,7 +24,7 @@
 
 module test_error_calc;
 	parameter DATA_WIDTH=16;
-	parameter BLOCK_SIZE_LOG=8;
+	parameter MAX_SLICE_SIZE_LOG=8;
 	parameter ACCUMULATOR_WINDOW=32;
 	parameter UPSHIFT=1;
 	parameter DOWNSHIFT=1;
@@ -179,7 +179,7 @@ module test_error_calc;
 
 	error_calc #(
 		.DATA_WIDTH(DATA_WIDTH),
-		.BLOCK_SIZE_LOG(BLOCK_SIZE_LOG),
+		.MAX_SLICE_SIZE_LOG(MAX_SLICE_SIZE_LOG),
 		.ACCUMULATOR_WINDOW(ACCUMULATOR_WINDOW),
 		.UPSHIFT(UPSHIFT),
 		.DOWNSHIFT(DOWNSHIFT),

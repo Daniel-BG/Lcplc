@@ -17,6 +17,7 @@
 `define GOLDEN_XTILDE_O_LAST_S	{`GOLDEN_ROOT_DIR, "xtilde_others_last_s",	`GOLDEN_EXT}
 
 `define GOLDEN_X 				{`GOLDEN_ROOT_DIR, "x", 					`GOLDEN_EXT}
+`define GOLDEN_X_LAST_R			{`GOLDEN_ROOT_DIR, "x_Last_r",				`GOLDEN_EXT}
 `define GOLDEN_X_LAST_S			{`GOLDEN_ROOT_DIR, "x_Last_s",				`GOLDEN_EXT}
 `define GOLDEN_X_LAST_B			{`GOLDEN_ROOT_DIR, "x_last_b",				`GOLDEN_EXT}
 `define GOLDEN_X_LAST_I			{`GOLDEN_ROOT_DIR, "x_last_i",				`GOLDEN_EXT}

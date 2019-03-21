@@ -76,7 +76,7 @@ begin
 				output_kj_latch <= (others => '0');
 			else
 				--inputting and outputting
-				if input_ready_local = '1' and input_valid = '1' and output_busy = '0' and output_ready = '1' then
+				if input_ready_local = '1' and input_valid = '1' and output_busy = '1' and output_ready = '1' then
 					middle_busy <= '1';
 					rj_shifted_latch <= rj_shifted;
 					output_busy <= middle_busy;
@@ -90,7 +90,7 @@ begin
 						output_kj_latch <= output_kj_pre;
 					end if;
 				--control outputs via AXI out port
-				elsif output_busy = '0' or output_ready = '1' then
+				elsif output_busy = '1' or output_ready = '1' then
 					output_busy <= middle_busy;
 					output_kj_latch <= output_kj_pre;
 					middle_busy <= '0';
