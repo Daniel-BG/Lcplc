@@ -27,7 +27,7 @@ use work.data_types.all;
 entity NEXT_XHAT_PRECALC is
 	Generic (
 		DATA_WIDTH: integer := 16;
-		BLOCK_SIZE_LOG: integer := 8
+		MAX_SLICE_SIZE_LOG: integer := 8
 	);
 	Port (
 		rst, clk		: in 	std_logic;
@@ -122,7 +122,7 @@ begin
 
 	--split xhat and xtilde data
 	--one goes to mean calculation
-	--the other goes to queue of block_size_log depth
+	--the other goes to queue of MAX_SLICE_SIZE_LOG depth
 	--whenever D is found check threshold
 	--and enable whatever queue is ok
 
@@ -176,7 +176,7 @@ begin
 	xhat_fifo: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1,
-			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -193,7 +193,7 @@ begin
 	xtilde_fifo: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => xtilde_split_0_last_data'length,
-			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -211,7 +211,7 @@ begin
 	xhat_acc: entity work.AXIS_AVERAGER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			COUNT_LOG => BLOCK_SIZE_LOG,
+			MAX_COUNT_LOG => MAX_SLICE_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (
@@ -228,7 +228,7 @@ begin
 	xtilde_acc: entity work.AXIS_AVERAGER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			COUNT_LOG => BLOCK_SIZE_LOG,
+			MAX_COUNT_LOG => MAX_SLICE_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (

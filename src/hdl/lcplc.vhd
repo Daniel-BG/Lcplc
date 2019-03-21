@@ -24,14 +24,24 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity LCPLC is
 	Generic (
+		--configure input data width
 		DATA_WIDTH: integer := 16;
+		--configure output data width
 		WORD_WIDTH_LOG: integer := 5;
-		BLOCK_SIZE_LOG: integer := 8;
+		--configure max slice size 
+		--the max slice size accepted is 2**MAX_SLICE_SIZE_LOG
+		MAX_SLICE_SIZE_LOG: integer := 8;
+		--width of the alpha value. This can increase accuracy in prediction
 		ALPHA_WIDTH: integer := 10;
-		NUMBER_OF_BANDS: integer := 224;
+		--window with which predictions are made. Smaller windows adapt better to fast changes, while 
+		--bigger windows are better for smoother images
 		ACCUMULATOR_WINDOW: integer := 32;
+		--quantizer up and downshift. With every downshift, a bit is lost so that compression is better
+		--but accuracy is lower
 		UPSHIFT: integer := 1;
 		DOWNSHIFT: integer := 1;
+		--threshold for compression. If distortion is greater than this threshold for a certain slice,
+		--the slice is compressed. Otherwise the slice is skipped. Set to zero for lossless compression.
 		THRESHOLD: std_logic_vector := "100000000000000" 
 	);
 	Port (
@@ -249,7 +259,7 @@ begin
 	first_band_predictor: entity work.FIRSTBAND_PREDICTOR
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG
+			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG
 		)
 		Port map (
 			clk => clk, rst => rst,
@@ -258,10 +268,10 @@ begin
 			x_data  => x_0_red_data,
 			x_last_row => x_0_red_last_row,
 			x_last_slice => x_0_red_last_slice,
-			prediction_ready => prediction_first_ready,
-			prediction_valid => prediction_first_valid,
-			prediction_data  => prediction_first_data_raw,
-			prediction_last  => prediction_first_last
+			xtilde_ready => prediction_first_ready,
+			xtilde_valid => prediction_first_valid,
+			xtilde_data  => prediction_first_data_raw,
+			xtilde_last  => prediction_first_last
 		);
 	prediction_first_data <= std_logic_vector(resize(unsigned(prediction_first_data_raw), prediction_first_data'length));
 	
@@ -293,7 +303,7 @@ begin
 	raw_mean_calc: entity work.AXIS_AVERAGER 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			COUNT_LOG => BLOCK_SIZE_LOG,
+			MAX_COUNT_LOG => MAX_SLICE_SIZE_LOG,
 			IS_SIGNED => false
 		)
 		Port map (
@@ -333,7 +343,7 @@ begin
 	alpha_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -351,7 +361,7 @@ begin
 	alpha_calc: entity work.ALPHA_CALC 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			MAX_SIZE_LOG => BLOCK_SIZE_LOG,
+			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG,
 			ALPHA_WIDTH => ALPHA_WIDTH
 		)
 		Port map (
@@ -362,7 +372,7 @@ begin
 			xhat_valid		=> xhatout_0_valid,
 			xhat_ready		=> xhatout_0_ready,
 			xhat_data		=> xhatout_0_data,
-			xhat_last  		=> xhatout_0_last,
+			xhat_last_s		=> xhatout_0_last,
 			xmean_valid		=> xmean_0_valid,
 			xmean_ready		=> xmean_0_ready,
 			xmean_data		=> xmean_0_data,
@@ -405,7 +415,7 @@ begin
 			xhat_valid		=> xhatout_delay_valid,
 			xhat_ready 		=> xhatout_delay_ready,
 			xhat_data  		=> xhatout_delay_data,
-			xhat_last		=> xhatout_delay_last,
+			xhat_last_s		=> xhatout_delay_last,
 			xmean_valid		=> xmean_1_valid,
 			xmean_ready		=> xmean_1_ready,
 			xmean_data		=> xmean_1_data,
@@ -416,10 +426,10 @@ begin
 			alpha_ready		=> alpha_0_ready,
 			alpha_data		=> alpha_0_data,
 			--output prediction
-			prediction_ready => prediction_rest_ready,
-			prediction_valid => prediction_rest_valid,
-			prediction_data  => prediction_rest_data,
-			prediction_last  => prediction_rest_last
+			xtilde_ready => prediction_rest_ready,
+			xtilde_valid => prediction_rest_valid,
+			xtilde_data  => prediction_rest_data,
+			xtilde_last  => prediction_rest_last
 		);
 		
 	--junction for preductions
@@ -449,7 +459,7 @@ begin
 	error_calc_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 3,
-			FIFO_DEPTH => (2**BLOCK_SIZE_LOG)*2
+			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -467,7 +477,7 @@ begin
 	error_calc: entity work.ERROR_CALC 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
+			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG,
 			ACCUMULATOR_WINDOW => ACCUMULATOR_WINDOW,
 			UPSHIFT => UPSHIFT,
 			DOWNSHIFT => DOWNSHIFT,
@@ -497,7 +507,7 @@ begin
 			xtilde_out_valid=> xtilde_valid,
 			xtilde_out_ready=> xtilde_ready,
 			xtilde_out_data => xtilde_data,
-			xtilde_out_last => xtilde_last,
+			xtilde_out_last_s=> xtilde_last,
 			xhatout_valid   => xhat_valid,
 			xhatout_ready	=> xhat_ready,
 			xhatout_data	=> xhat_data,
@@ -577,7 +587,7 @@ begin
 	xhat_precalc: entity work.NEXT_XHAT_PRECALC
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG
+			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG
 		)
 		Port map (
 			rst => rst, clk	=> clk,
@@ -590,14 +600,14 @@ begin
 			xtilde_data		=> xtilde_data,
 			xtilde_ready	=> xtilde_ready,
 			xtilde_valid	=> xtilde_valid,
-			xtilde_last		=> xtilde_last,
+			xtilde_last_s	=> xtilde_last,
 			d_flag_data		=> d_flag_0_valid,
 			d_flag_ready	=> d_flag_0_ready,
 			d_flag_valid	=> d_flag_0_valid,
 			xhatout_ready	=> xhatout_ready,
 			xhatout_valid	=> xhatout_valid,
 			xhatout_data	=> xhatout_data,
-			xhatout_last    => xhatout_last,
+			xhatout_last_s  => xhatout_last,
 			xhatoutmean_ready	=> xhatoutmean_ready,
 			xhatoutmean_data	=> xhatoutmean_data, 
 			xhatoutmean_valid	=> xhatoutmean_valid
@@ -630,7 +640,7 @@ begin
 	xhatout_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1,
-			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -671,7 +681,7 @@ begin
 	delay_mapped_err: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH + 3,
-			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -689,7 +699,7 @@ begin
 	delay_kj_calc: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => WORD_WIDTH_LOG,
-			FIFO_DEPTH => 2**BLOCK_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -708,7 +718,6 @@ begin
 		Generic map (
 			MAPPED_ERROR_WIDTH => PREDICTION_WIDTH,
 			ACCUMULATOR_WINDOW => ACCUMULATOR_WINDOW,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
 			OUTPUT_WIDTH_LOG => WORD_WIDTH_LOG,
 			ALPHA_WIDTH => ALPHA_WIDTH,
 			DATA_WIDTH => DATA_WIDTH

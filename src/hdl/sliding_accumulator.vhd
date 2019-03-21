@@ -9,8 +9,7 @@
 -- Target Devices: 
 -- Tool Versions: 
 -- Description: Create an accumulator that registers the last 2**ACC_LOG window
---		of input samples. When the total number of samples read reaches 
---		2**BLOCK_SIZE_LOG, the inner workings are reset
+--		of input samples. 
 -- 
 -- Dependencies: 
 -- 
@@ -29,7 +28,6 @@ use work.functions.all;
 entity SLIDING_ACCUMULATOR is
 	Generic (
 		DATA_WIDTH: integer := 16;
-		BLOCK_SIZE_LOG: integer := 8;
 		ACCUMULATOR_WINDOW: integer := 32
 	);
 	Port (

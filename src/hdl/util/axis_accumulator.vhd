@@ -30,7 +30,7 @@ use work.functions.all;
 entity AXIS_ACCUMULATOR is
 	Generic (
 		DATA_WIDTH			: integer := 36;
-		COUNT_LOG			: integer := 8;
+		MAX_COUNT_LOG		: integer := 8;
 		IS_SIGNED			: boolean := true
 	);
 	Port (
@@ -39,7 +39,7 @@ entity AXIS_ACCUMULATOR is
 		input_valid	: in  std_logic;
 		input_ready	: out std_logic;
 		input_last	: in std_logic;
-		output_data	: out std_logic_vector(COUNT_LOG + DATA_WIDTH - 1 downto 0);
+		output_data	: out std_logic_vector(MAX_COUNT_LOG+ DATA_WIDTH - 1 downto 0);
 		output_valid: out std_logic;
 		output_ready: in  std_logic
 	);
@@ -50,11 +50,11 @@ architecture Behavioral of AXIS_ACCUMULATOR is
 	type acc_state_t is (READING, OUTPUTTING);
 	signal acc_state_curr, acc_state_next: acc_state_t;
 	
-	constant ACCUMULATOR_WIDTH: integer := DATA_WIDTH + COUNT_LOG;
+	constant ACCUMULATOR_WIDTH: integer := DATA_WIDTH + MAX_COUNT_LOG;
 	signal accumulator, accumulator_next, accumulator_plus_input: std_logic_vector(ACCUMULATOR_WIDTH - 1 downto 0);
 begin
 
-	assert COUNT_LOG >= 2 report "Max count should be greater or equal than 2" severity error; 
+	assert MAX_COUNT_LOG>= 2 report "Max count should be greater or equal than 2" severity error; 
 
 	gen_acc_plus_signed: if IS_SIGNED generate
 		accumulator_plus_input <= std_logic_vector(signed(accumulator) + resize(signed(input_data), ACCUMULATOR_WIDTH));

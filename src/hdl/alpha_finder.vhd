@@ -28,16 +28,15 @@ use work.data_types.all;
 
 entity ALPHA_FINDER is
 	generic (
-		DATA_WIDTH: integer := 16;
-		BLOCK_SIZE_LOG: integer := 8;
+		INPUT_WIDTH: integer := 16*2+2+8;
 		ALPHA_WIDTH: integer := 10
 	);
 	port (
 		clk, rst: in std_logic;
-		alphan_data:	in 	std_logic_vector(DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG - 1 downto 0);
+		alphan_data:	in 	std_logic_vector(INPUT_WIDTH - 1 downto 0);
 		alphan_ready:	out	std_logic;
 		alphan_valid:	in 	std_logic;
-		alphad_data:	in 	std_logic_vector(DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG - 1 downto 0);
+		alphad_data:	in 	std_logic_vector(INPUT_WIDTH - 1 downto 0);
 		alphad_ready:	out	std_logic;
 		alphad_valid:	in 	std_logic;
 		output_data: 	out std_logic_vector(ALPHA_WIDTH - 1 downto 0);
@@ -49,8 +48,8 @@ end ALPHA_FINDER;
 
 architecture Behavioral of ALPHA_FINDER is
 	--initial synchronizer
-	signal input_data_alphan: std_logic_vector(DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG - 1 downto 0);
-	signal input_data_alphad: std_logic_vector(DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG - 1 downto 0);
+	signal input_data_alphan: std_logic_vector(INPUT_WIDTH - 1 downto 0);
+	signal input_data_alphad: std_logic_vector(INPUT_WIDTH - 1 downto 0);
 	signal input_ready: std_logic;
 	signal input_valid: std_logic;
 
@@ -59,7 +58,7 @@ architecture Behavioral of ALPHA_FINDER is
 	signal state_curr, state_next: alpha_finder_state_t;
 	
 	signal alphan_reg_curr, alphan_reg_next, alphad_reg_curr, alphad_reg_next: 
-		std_logic_vector (DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG - 1 + ALPHA_WIDTH downto 0);
+		std_logic_vector (INPUT_WIDTH - 1 + ALPHA_WIDTH downto 0);
 		--give alpha_width slack for divisions
 	
 	signal alpha_reg_curr, alpha_reg_next: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
@@ -69,8 +68,8 @@ begin
 
 	input_sync: entity work.AXIS_SYNCHRONIZER_2 
 		generic map (
-			DATA_WIDTH_0 => DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG,
-			DATA_WIDTH_1 => DATA_WIDTH*2 + 2 + BLOCK_SIZE_LOG,
+			DATA_WIDTH_0 => INPUT_WIDTH,
+			DATA_WIDTH_1 => INPUT_WIDTH,
 			LATCH => true,
 			LAST_POLICY => PASS_ZERO
 		)

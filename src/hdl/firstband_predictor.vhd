@@ -26,7 +26,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity FIRSTBAND_PREDICTOR is
 	Generic (
 		DATA_WIDTH: positive := 16;
-		BLOCK_WIDTH_LOG_MAX: positive := 8
+		MAX_SLICE_SIZE_LOG: positive := 8
 	);
 	Port (
 		clk, rst		: in  std_logic;
@@ -150,7 +150,7 @@ begin
 	shift_reg_prev_line: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			FIFO_DEPTH => 2**BLOCK_WIDTH_LOG_MAX + 2 --leave 2 extra to avoid jamming the queue up
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 2 --leave 2 extra to avoid jamming the queue up
 		)
 		Port map (
 			clk => clk, rst => fifo_rst,

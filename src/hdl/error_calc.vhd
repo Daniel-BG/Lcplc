@@ -28,7 +28,7 @@ use work.functions.all;
 entity ERROR_CALC is
 	Generic (
 		DATA_WIDTH: positive := 16;
-		BLOCK_SIZE_LOG: positive := 8;
+		MAX_SLICE_SIZE_LOG: positive := 8;
 		ACCUMULATOR_WINDOW: positive := 32;
 		UPSHIFT: positive := 1;
 		DOWNSHIFT: positive := 1;
@@ -119,10 +119,10 @@ architecture Behavioral of ERROR_CALC is
 	
 	--distortion stuff
 	signal distortion_valid, distortion_ready: std_logic;
-	signal distortion_data: std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0);
+	signal distortion_data: std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0);
 	
 	--distortion flag stuff
-	signal d_flag_thres: std_logic_vector((DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG - 1 downto 0); 
+	signal d_flag_thres: std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0); 
 	
 	--error quantizer
 	signal error_quant_ready, error_quant_valid: std_logic;
@@ -333,7 +333,7 @@ begin
 	distortion_accumulator: entity work.AXIS_ACCUMULATOR
 		Generic map (
 			DATA_WIDTH 		=> PREDICTION_WIDTH*2,
-			COUNT_LOG		=> BLOCK_SIZE_LOG,
+			MAX_COUNT_LOG		=> MAX_SLICE_SIZE_LOG,
 			IS_SIGNED 		=> true
 		)
 		Port map (
@@ -347,10 +347,10 @@ begin
 			output_ready=> distortion_ready
 		);
 		
-	d_flag_thres <= std_logic_vector(resize(unsigned(THRESHOLD),(DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG));
+	d_flag_thres <= std_logic_vector(resize(unsigned(THRESHOLD),(DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG));
 	d_threshold_comparator: entity work.AXIS_COMPARATOR
 		Generic map (
-			DATA_WIDTH => (DATA_WIDTH + 3)*2 + BLOCK_SIZE_LOG,
+			DATA_WIDTH => (DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG,
 			IS_SIGNED => false,
 			IS_EQUAL => false,
 			IS_GREATER => true,
@@ -565,7 +565,6 @@ begin
 	error_acc: entity work.SLIDING_ACCUMULATOR
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH,
-			BLOCK_SIZE_LOG => BLOCK_SIZE_LOG,
 			ACCUMULATOR_WINDOW => ACCUMULATOR_WINDOW
 		)
 		Port map (
