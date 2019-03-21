@@ -21,6 +21,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.data_types.all;
 
 entity LCPLC is
 	Generic (
@@ -74,12 +75,13 @@ architecture Behavioral of LCPLC is
 	signal x_0_red_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
 	signal x_0_red_ready, x_0_red_valid: std_logic;
 	signal x_0_red_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal x_0_red_last_row, x_0_red_last_slice: std_logic;
+	signal x_0_red_last_r, x_0_red_last_s: std_logic;
 
 	signal x_1_red_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
 	signal x_1_red_ready, x_1_red_valid: std_logic;
 	signal x_1_red_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal x_1_red_last_slice: std_logic;
+	signal x_1_red_last_s, x_1_red_last_b: std_logic;
+	signal x_1_red_last_b_stdlv: std_logic_vector(0 downto 0);
 
 	--prediction first band
 	signal prediction_first_ready, prediction_first_valid, prediction_first_last: std_logic;
@@ -87,8 +89,10 @@ architecture Behavioral of LCPLC is
 	signal prediction_first_data_raw: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--splitter for reduced stuff
-	signal x_others_0_valid, x_others_0_ready, x_others_0_last, x_others_1_valid, x_others_1_ready, x_others_1_last: std_logic;
+	signal x_others_0_valid, x_others_0_ready, x_others_0_last_s, x_others_1_valid, x_others_1_ready: std_logic;
 	signal x_others_0_data, x_others_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal x_others_2_valid, x_others_2_ready: std_logic;
+	signal x_others_2_last_b_stdlv: std_logic_vector(0 downto 0);
 	
 	--mean calc
 	signal xmean_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -123,6 +127,16 @@ architecture Behavioral of LCPLC is
 	--prediction other bands
 	signal prediction_rest_ready, prediction_rest_valid, prediction_rest_last: std_logic;
 	signal prediction_rest_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	
+	--b flag that goes to the prediction junnction merger
+	signal delayed_last_b_ready, delayed_last_b_valid: std_logic;
+	signal delayed_last_b_stdlv: std_logic_vector(0 downto 0);
+	
+	--sync with b flag
+	signal prediction_rest_bsync_valid, prediction_rest_bsync_ready: std_logic;
+	signal prediction_rest_bsync_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal prediction_rest_bsync_last_b_stdlv: std_logic_vector(0 downto 0);
+	signal prediction_rest_bsync_last_s: std_logic;
 	
 	--prediction junction
 	signal prediction_valid, prediction_ready, prediction_last: std_logic;
@@ -250,10 +264,11 @@ begin
 			output_1_data	=> x_1_red_flags_data
 		);
 	x_0_red_data <= x_0_red_flags_data(DATA_WIDTH - 1 downto 0);
-	x_0_red_last_row <= x_0_red_flags_data(x_0_red_flags_data'high - 3);
-	x_0_red_last_slice <= x_0_red_flags_data(x_0_red_flags_data'high - 2);
+	x_0_red_last_r <= x_0_red_flags_data(x_0_red_flags_data'high - 3);
+	x_0_red_last_s <= x_0_red_flags_data(x_0_red_flags_data'high - 2);
 	x_1_red_data <= x_1_red_flags_data(DATA_WIDTH - 1 downto 0);
-	x_1_red_last_slice <= x_1_red_flags_data(x_1_red_flags_data'high - 2);
+	x_1_red_last_s <= x_1_red_flags_data(x_1_red_flags_data'high - 2);
+	x_1_red_last_b <= x_1_red_flags_data(x_1_red_flags_data'high - 1);
 		
 	--first band predictor
 	first_band_predictor: entity work.FIRSTBAND_PREDICTOR
@@ -263,11 +278,11 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			x_valid => x_0_red_valid,
-			x_ready	=> x_0_red_ready,
-			x_data  => x_0_red_data,
-			x_last_row => x_0_red_last_row,
-			x_last_slice => x_0_red_last_slice,
+			x_valid      => x_0_red_valid,
+			x_ready	     => x_0_red_ready,
+			x_data       => x_0_red_data,
+			x_last_r     => x_0_red_last_r,
+			x_last_s     => x_0_red_last_s,
 			xtilde_ready => prediction_first_ready,
 			xtilde_valid => prediction_first_valid,
 			xtilde_data  => prediction_first_data_raw,
@@ -278,9 +293,11 @@ begin
 
 		
 	--splitter for rest of bands
-	splitter_others_1: entity work.AXIS_SPLITTER_2
+	x_1_red_last_b_stdlv <= x_1_red_last_b & "";
+	splitter_others_1: entity work.AXIS_SPLITTER_3
 		Generic map (
-			DATA_WIDTH	 => DATA_WIDTH
+			DATA_WIDTH	 => DATA_WIDTH,
+			USER_WIDTH   => 1
 		)
 		Port map ( 
 			clk => clk, rst => rst,
@@ -288,15 +305,19 @@ begin
 			input_valid => x_1_red_valid,
 			input_ready	=> x_1_red_ready,
 			input_data	=> x_1_red_data,
-			input_last  => x_1_red_last_slice,
+			input_last  => x_1_red_last_s,
+			input_user  => x_1_red_last_b_stdlv,
 			output_0_valid	=> x_others_0_valid,
 			output_0_ready	=> x_others_0_ready,
 			output_0_data	=> x_others_0_data,
-			output_0_last   => x_others_0_last,
+			output_0_last   => x_others_0_last_s,
 			output_1_valid	=> x_others_1_valid,
 			output_1_ready	=> x_others_1_ready,
 			output_1_data	=> x_others_1_data,
-			output_1_last   => x_others_1_last
+			output_1_last   => open,
+			output_2_valid  => x_others_2_valid,
+			output_2_ready  => x_others_2_ready,
+			output_2_user   => x_others_2_last_b_stdlv
 		);
 	
 	--raw mean 
@@ -311,7 +332,7 @@ begin
 			input_data		=> x_others_0_data,
 			input_valid		=> x_others_0_valid,
 			input_ready		=> x_others_0_ready,
-			input_last      => x_others_0_last,
+			input_last      => x_others_0_last_s,
 			output_data		=> xmean_data,
 			output_valid	=> xmean_valid,
 			output_ready	=> xmean_ready
@@ -432,6 +453,46 @@ begin
 			xtilde_last_b=> prediction_rest_last
 		);
 		
+	--fifo for B flag that joins the nth band prediction
+	b_flag_fifo: entity work.AXIS_FIFO
+		generic map (
+			DATA_WIDTH => 1,
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+		)
+		port map (
+			clk => clk, rst => rst,
+			input_valid => x_others_2_valid,
+			input_ready => x_others_2_ready,
+			input_data  => x_others_2_last_b_stdlv,
+			output_ready=> delayed_last_b_ready,
+			output_valid=> delayed_last_b_valid,
+			output_data => delayed_last_b_stdlv
+		);
+		
+	--synchronizer for b flag and prediction from other bands
+	prediction_others_b_flag_sync: entity work.AXIS_SYNCHRONIZER_2
+		generic map (
+			DATA_WIDTH_0 => PREDICTION_WIDTH,
+			DATA_WIDTH_1 => 1,
+			LATCH => true,
+			LAST_POLICY => PASS_ZERO
+		)
+		port map (
+			clk => clk, rst => rst,
+			input_0_valid => prediction_rest_valid,
+			input_0_ready => prediction_rest_ready,
+			input_0_data  => prediction_rest_data,
+			input_0_last  => prediction_rest_last,
+			input_1_valid => delayed_last_b_valid,
+			input_1_ready => delayed_last_b_ready, 
+			input_1_data  => delayed_last_b_stdlv,
+			output_valid  => prediction_rest_bsync_valid,
+			output_ready  => prediction_rest_bsync_ready,
+			output_data_0 => prediction_rest_bsync_data,
+			output_data_1 => prediction_rest_bsync_last_b_stdlv,
+			output_last	  => prediction_rest_bsync_last_s
+		);
+		
 	--junction for preductions
 	prediction_junction: entity work.AXIS_MERGER_2
 		Generic map (
@@ -444,10 +505,12 @@ begin
 			input_0_ready	=> prediction_first_ready,
 			input_0_data	=> prediction_first_data,
 			input_0_last    => prediction_first_last,
-			input_1_valid	=> prediction_rest_valid,
-			input_1_ready	=> prediction_rest_ready,
-			input_1_data	=> prediction_rest_data,
-			input_1_last    => prediction_rest_last,
+			input_0_merge   => prediction_first_last,
+			input_1_valid	=> prediction_rest_bsync_valid,
+			input_1_ready	=> prediction_rest_bsync_ready,
+			input_1_data	=> prediction_rest_bsync_data,
+			input_1_last    => prediction_rest_bsync_last_s,
+			input_1_merge   => prediction_rest_bsync_last_b_stdlv(0),
 			output_valid	=> prediction_valid,
 			output_ready	=> prediction_ready,
 			output_data		=> prediction_data,

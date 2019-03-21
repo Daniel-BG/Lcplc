@@ -21,18 +21,24 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use work.constants.all;
 
 entity AXIS_MULT_COMPONENT_25x25 is
+	Generic (
+		USER_WIDTH: integer := 1
+	);
 	Port(
 		clk, rst: in std_logic;
 		input_a, input_b: in std_logic_vector(24 downto 0);
 		input_valid: in std_logic;
 		input_ready: out std_logic;
 		input_last: in std_logic;
-		output: out std_logic_vector(49 downto 0);
+		input_user			: in  std_logic_vector(USER_WIDTH - 1 downto 0);
+		output_data: out std_logic_vector(49 downto 0);
 		output_valid: out std_logic;
 		output_ready: in std_logic;
-		output_last: out std_logic
+		output_last: out std_logic;
+		output_user 		: out std_logic_vector(USER_WIDTH - 1 downto 0)
 	);
 end AXIS_MULT_COMPONENT_25x25;
 
@@ -54,6 +60,9 @@ architecture Behavioral of AXIS_MULT_COMPONENT_25x25 is
 	
 	signal mult_stage_occupancy: std_logic_vector(MULT_STAGES - 1 downto 0);
 	signal mult_stage_last: std_logic_vector(MULT_STAGES - 1 downto 0);
+	signal mult_stage_user: std_logic_vector(MULT_STAGES*USER_WIDTH - 1 downto 0);
+
+	attribute KEEP of mult_stage_user, mult_stage_last: signal is KEEP_DEFAULT;
 	
 begin
 
@@ -65,9 +74,11 @@ begin
 			if rst = '1' then
 				mult_stage_occupancy <= (others => '0');
 				mult_stage_last <= (others => '0');
+				mult_stage_user <= (others => '0');
 			elsif mult_enable = '1' then
 				mult_stage_occupancy <= mult_stage_occupancy(MULT_STAGES - 2 downto 0) & input_valid;
 				mult_stage_last      <= mult_stage_last     (MULT_STAGES - 2 downto 0) & input_last;
+				mult_stage_user      <= mult_stage_user     (MULT_STAGES*USER_WIDTH - 1 - USER_WIDTH downto 0) & input_user;
 			end if;
 		end if;
 	end process;
@@ -78,11 +89,12 @@ begin
 				 B => input_b, 
 				 CE => mult_enable, 
 				 SCLR => rst, 
-				 P => output);
+				 P => output_data);
 
 				 
 	output_valid <= mult_stage_occupancy(MULT_STAGES - 1);
 	output_last  <= mult_stage_last(MULT_STAGES - 1);
+	output_user  <= mult_stage_user(MULT_STAGES*USER_WIDTH - 1 downto (MULT_STAGES-1)*USER_WIDTH);
 	input_ready  <= mult_enable;
 
 end Behavioral;

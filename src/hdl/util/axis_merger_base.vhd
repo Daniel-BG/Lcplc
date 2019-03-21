@@ -23,12 +23,14 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use work.constants.all;
 
 entity AXIS_MERGER_BASE is
 	Generic (
 		DATA_WIDTH: integer := 16;
 		NUMBER_OF_PORTS: integer := 4;
-		START_ON_PORT: integer := 0
+		START_ON_PORT: integer := 0;
+		USER_WIDTH: integer := 1
 	);
 	Port ( 
 		clk, rst: in std_logic;
@@ -37,11 +39,14 @@ entity AXIS_MERGER_BASE is
 		input_ready 	: out std_logic_vector(NUMBER_OF_PORTS - 1 downto 0);
 		input_data 		: in  std_logic_vector(NUMBER_OF_PORTS * DATA_WIDTH - 1 downto 0);
 		input_last 		: in  std_logic_vector(NUMBER_OF_PORTS - 1 downto 0);
+		input_merge		: in  std_logic_vector(NUMBER_OF_PORTS - 1 downto 0);
+		input_user		: in  std_logic_vector(NUMBER_OF_PORTS * USER_WIDTH - 1 downto 0);
 		--to output axi ports
 		output_valid	: out std_logic;
 		output_ready	: in  std_logic;
 		output_data		: out std_logic_vector(DATA_WIDTH - 1 downto 0);
-		output_last 	: out std_logic
+		output_last 	: out std_logic;
+		output_user		: out std_logic_vector(USER_WIDTH - 1 downto 0)
 	);
 end AXIS_MERGER_BASE;
 
@@ -61,17 +66,18 @@ begin
 		end if;
 	end process;
 
-	comb: process(port_curr, input_valid, input_data, input_last, output_ready)
+	comb: process(port_curr, input_valid, input_data, input_last, input_user, input_merge, output_ready)
 	begin
 		port_next <= port_curr;
 		input_ready <= (others => '0');
 		input_ready(port_curr) <= output_ready;
 		output_valid <= input_valid(port_curr);
 		output_data  <= input_data(DATA_WIDTH*(port_curr+1) - 1 downto DATA_WIDTH*port_curr);
+		output_user  <= input_user(USER_WIDTH*(port_curr+1) - 1 downto USER_WIDTH*port_curr);
 		output_last  <= input_last(port_curr);
 		
 		if input_valid(port_curr) = '1' and output_ready = '1' then
-			if input_last(port_curr) = '1' then
+			if input_merge(port_curr) = '1' then
 				if port_curr = NUMBER_OF_PORTS - 1 then
 					port_next <= 0;
 				else

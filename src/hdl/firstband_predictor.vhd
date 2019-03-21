@@ -34,8 +34,8 @@ entity FIRSTBAND_PREDICTOR is
 		x_valid			: in  std_logic;
 		x_ready			: out std_logic;
 		x_data			: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		x_last_row		: in  std_logic;	--1 if the current sample is the last of its row
-		x_last_slice	: in  std_logic;	--1 if the current sample is the last of its block
+		x_last_r		: in  std_logic;	--1 if the current sample is the last of its row
+		x_last_s		: in  std_logic;	--1 if the current sample is the last of its block
 		--output prediction
 		xtilde_ready: in std_logic;
 		xtilde_valid: out std_logic;
@@ -60,8 +60,8 @@ architecture Behavioral of FIRSTBAND_PREDICTOR is
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
 
 	--last buffer
-	signal x_last_row_buf, x_last_row_buf_next: std_logic;
-	signal x_last_slice_buf, x_last_slice_buf_next: std_logic;
+	signal x_last_r_buf, x_last_r_buf_next: std_logic;
+	signal x_last_s_buf, x_last_s_buf_nexf: std_logic;
 begin
 
 	seq: process(clk)
@@ -71,14 +71,14 @@ begin
 				state_curr <= IDLE;
 				first_row  <= true;
 				first_col  <= true;
-				x_last_row_buf <= '0';
-				x_last_slice_buf <= '0';
+				x_last_r_buf <= '0';
+				x_last_s_buf <= '0';
 				current_sample <= (others => '0');
 				left_sample <= (others => '0');
 			else				
 				state_curr <= state_next;
-				x_last_row_buf <= x_last_row_buf_next;
-				x_last_slice_buf <= x_last_slice_buf_next;
+				x_last_r_buf <= x_last_r_buf_next;
+				x_last_s_buf <= x_last_s_buf_nexf;
 				current_sample <= current_sample_next;
 				left_sample <= left_sample_next;
 				first_row <= first_row_next;
@@ -87,15 +87,15 @@ begin
 		end if;
 	end process;
 	
-	comb: process(state_curr, xtilde_ready, x_valid, x_last_row_buf, x_last_slice_buf, x_last_slice, x_last_row,
+	comb: process(state_curr, xtilde_ready, x_valid, x_last_r_buf, x_last_s_buf, x_last_s, x_last_r,
 		x_data, left_sample, current_sample, first_row, first_col)
 	begin
 		x_ready <= '0';
 		shift_enable <= '0';
 		xtilde_valid <= '0';
 		state_next <= state_curr;
-		x_last_row_buf_next <= x_last_row_buf;
-		x_last_slice_buf_next <= x_last_slice_buf;
+		x_last_r_buf_next <= x_last_r_buf;
+		x_last_s_buf_nexf <= x_last_s_buf;
 		fifo_rst_force <= '0';
 		current_sample_next <= current_sample;
 		left_sample_next <= left_sample;
@@ -108,15 +108,15 @@ begin
 			if x_valid = '1' then
 				current_sample_next <= x_data;
 				left_sample_next <= current_sample;
-				x_last_row_buf_next <= x_last_row;
-				x_last_slice_buf_next <= x_last_slice;
+				x_last_r_buf_next <= x_last_r;
+				x_last_s_buf_nexf <= x_last_s;
 				shift_enable <= '1';
 				state_next <= PREDICTING;
 			end if;
 		elsif state_curr = PREDICTING then
 			xtilde_valid <= '1';
 			if xtilde_ready = '1' then
-				if x_last_row_buf = '1' and x_last_slice_buf = '1' then
+				if x_last_r_buf = '1' and x_last_s_buf = '1' then
 					first_row_next <= true;
 					first_col_next <= true;
 					fifo_rst_force <= '1';
@@ -126,11 +126,11 @@ begin
 					if x_valid = '1' then
 						current_sample_next <= x_data;
 						left_sample_next <= current_sample;
-						x_last_row_buf_next <= x_last_row;
-						x_last_slice_buf_next <= x_last_slice;
+						x_last_r_buf_next <= x_last_r;
+						x_last_s_buf_nexf <= x_last_s;
 						shift_enable <= '1';
 						state_next <= PREDICTING;
-						if x_last_row_buf = '1' then
+						if x_last_r_buf = '1' then
 							first_row_next <= false;
 							first_col_next <= true;
 						else
@@ -177,7 +177,7 @@ begin
 		end if;
 	end process;
 
-	xtilde_last <= x_last_slice_buf;
+	xtilde_last <= x_last_s_buf;
 
 	
 
