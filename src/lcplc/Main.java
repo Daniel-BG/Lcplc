@@ -94,7 +94,7 @@ public class Main {
 					}
 					//compress block
 					try {
-						this.compress(block, blockBands, blockLines, blockSamples, bos);
+						this.compress(block, blockBands, blockLines, blockSamples, compressedBlocks == BLOCKS_TO_CODE - 1,  bos);
 					} catch (IOException e) {
 						e.printStackTrace();
 						System.exit(0);
@@ -167,7 +167,7 @@ public class Main {
 		}
 		
 		
-		public void compress(int[][][] block, int bands, int lines, int samples, BitOutputStream bos) throws IOException {
+		public void compress(int[][][] block, int bands, int lines, int samples, boolean flushBlock, BitOutputStream bos) throws IOException {
 			Sampler.setSamplePath(samplerBaseDir);
 			Sampler.setSampleExt(sampleExt);
 			//samplers for testing in verilog/vhdl
@@ -289,7 +289,7 @@ public class Main {
 					xSampler_last_r.sample(s == samples-1 ? 1 : 0);
 					xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
 					xSampler_last_b.sample(s == samples-1 && l == lines-1 && 0 == bands-1 ? 1 : 0);
-					xSampler_last_i.sample(0);
+					xSampler_last_i.sample(s == samples-1 && l == lines-1 && 0 == bands-1 && flushBlock ? 1 : 0);
 					
 					xtildeSampler.sample(prediction);
 					xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
@@ -387,7 +387,7 @@ public class Main {
 						xSampler_last_r.sample(s == samples-1 ? 1 : 0);
 						xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
 						xSampler_last_b.sample(s == samples-1 && l == lines-1 && b == bands-1 ? 1 : 0);
-						xSampler_last_i.sample(0);
+						xSampler_last_i.sample(s == samples-1 && l == lines-1 && b == bands-1 && flushBlock ? 1 : 0);
 						
 						xtildeSampler.sample((int) prediction);
 						xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);

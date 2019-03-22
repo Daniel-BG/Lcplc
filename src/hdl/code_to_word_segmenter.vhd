@@ -160,12 +160,12 @@ begin
 			
 			if input_valid = '1' and output_ready = '1' then
 				if input_position_counter = inner_counter then
-					if input_position_end_flag then
+					if input_last = '1' then
+						state_next <= CLEAR_AFTER_LAST;
+					end if;
+					if input_position_end_flag or input_last = '1' then
 						output_ends_word <= '1';
 						output_last <= input_last;
-						if input_last = '1' then
-							state_next <= CLEAR_AFTER_LAST;
-						end if;
 						inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
 					else
 						--if input_position = input_position_buff
@@ -213,13 +213,14 @@ begin
 								output_data <= input_data_buff(input_data_buff'high downto input_data_buff'high - 2**WORD_WIDTH_LOG + 1)
 											or input_data(input_data'high downto input_data'high - 2**WORD_WIDTH_LOG + 1);
 								if input_position_counter = inner_counter then
-									state_next <= WORKING;
-									if input_position_end_flag then
+									if input_last = '1' then
+										state_next <= CLEAR_AFTER_LAST;
+									else
+										state_next <= WORKING;	
+									end if;
+									if input_position_end_flag or input_last = '1' then
 										output_ends_word <= '1';
 										output_last <= input_last;
-										if input_last = '1' then
-											state_next <= CLEAR_AFTER_LAST;
-										end if;
 										inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
 									else
 										--nothing
@@ -229,6 +230,7 @@ begin
 									inner_counter_next <= std_logic_vector(unsigned(inner_counter) - to_unsigned(1, inner_counter'length));
 									input_position_buff_next <= input_position;
 									input_data_buff_next <= input_data(input_data'high - 2**WORD_WIDTH_LOG downto 0) & (2**WORD_WIDTH_LOG - 1 downto 0 => '0');
+									input_last_buff_next <= input_last;
 									state_next <= BUFFERED;
 								end if;
 							end if;
