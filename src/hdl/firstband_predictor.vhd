@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------------
 -- Company: UCM
--- Engineer: Daniel Báscones
+-- Engineer: Daniel BÃ¡scones
 -- 
 -- Create Date: 21.02.2019 09:22:48
 -- Design Name: 
@@ -37,7 +37,7 @@ entity FIRSTBAND_PREDICTOR is
 		x_last_r		: in  std_logic;	--1 if the current sample is the last of its row
 		x_last_s		: in  std_logic;	--1 if the current sample is the last of its block
 		--output prediction
-		xtilde_ready: in std_logic;
+		xtilde_ready: in  std_logic;
 		xtilde_valid: out std_logic;
 		xtilde_data : out std_logic_vector(DATA_WIDTH - 1 downto 0);
 		xtilde_last : out std_logic --last slice
@@ -45,108 +45,118 @@ entity FIRSTBAND_PREDICTOR is
 end FIRSTBAND_PREDICTOR;
 
 architecture Behavioral of FIRSTBAND_PREDICTOR is
-	type firstband_state_t is (IDLE, PREDICTING);
-	signal state_curr, state_next: firstband_state_t;
-	signal first_row, first_row_next: boolean;
-	signal first_col, first_col_next: boolean;
+	--first stage: control signals and pass x_data, x_data_prev, x_data_up, x_last_r, x_last_s to next stage
+	type first_stage_state_t is (FIRST_ROW, OTHER_ROWS);
+	signal first_stage_state_curr, first_stage_state_next: first_stage_state_t; 
 
-	--queue system for previous samples
-	signal current_sample, current_sample_next, left_sample, left_sample_next, upper_sample: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal shift_enable: std_logic;
 	signal fifo_rst, fifo_rst_force: std_logic;
-	signal fifo_output_ready: std_logic;
+	signal fifo_in_valid, fifo_out_ready: std_logic;
+	signal fifo_in_data, fifo_out_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 
-	--prediction
+	signal data_prev_latch: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal data_prev_latch_enable: std_logic;
+	signal data_up_latch: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal data_up_latch_enable: std_logic;
+	signal data_latch: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal data_latch_last_s, data_latch_last_r, data_latch_first_row, data_latch_first_col, data_latch_first_row_next: std_logic;
+	signal data_latch_enable: std_logic;
+
+	signal first_latch_in_ready, first_latch_in_valid: std_logic;
+	signal first_latch_out_ready, first_latch_out_valid: std_logic;
+	signal first_latch_occupied: std_logic;
+	signal first_latch_last_r, first_latch_last_s: std_logic;
+	signal first_latch_data_c, first_latch_data_l, first_latch_data_u: std_logic_vector(DATA_WIDTH - 1 downto 0);
+
+	--second stage
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
-
-	--last buffer
-	signal x_last_r_buf, x_last_r_buf_next: std_logic;
-	signal x_last_s_buf, x_last_s_buf_nexf: std_logic;
+	
+	signal olatch_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal olatch_ready, olatch_valid, olatch_last: std_logic;
 begin
 
-	seq: process(clk)
+	---------------------------------------
+	--FIRST STAGE-> GENERATE NEIGHBORHOOD--
+	---------------------------------------
+	input_seq: process(clk)
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				state_curr <= IDLE;
-				first_row  <= true;
-				first_col  <= true;
-				x_last_r_buf <= '0';
-				x_last_s_buf <= '0';
-				current_sample <= (others => '0');
-				left_sample <= (others => '0');
-			else				
-				state_curr <= state_next;
-				x_last_r_buf <= x_last_r_buf_next;
-				x_last_s_buf <= x_last_s_buf_nexf;
-				current_sample <= current_sample_next;
-				left_sample <= left_sample_next;
-				first_row <= first_row_next;
-				first_col <= first_col_next;
-			end if;
-		end if;
-	end process;
-	
-	comb: process(state_curr, xtilde_ready, x_valid, x_last_r_buf, x_last_s_buf, x_last_s, x_last_r,
-		x_data, left_sample, current_sample, first_row, first_col)
-	begin
-		x_ready <= '0';
-		shift_enable <= '0';
-		xtilde_valid <= '0';
-		state_next <= state_curr;
-		x_last_r_buf_next <= x_last_r_buf;
-		x_last_s_buf_nexf <= x_last_s_buf;
-		fifo_rst_force <= '0';
-		current_sample_next <= current_sample;
-		left_sample_next <= left_sample;
-		
-		first_row_next <= first_row;
-		first_col_next <= first_col;
-		
-		if state_curr = IDLE then
-			x_ready <= '1';
-			if x_valid = '1' then
-				current_sample_next <= x_data;
-				left_sample_next <= current_sample;
-				x_last_r_buf_next <= x_last_r;
-				x_last_s_buf_nexf <= x_last_s;
-				shift_enable <= '1';
-				state_next <= PREDICTING;
-			end if;
-		elsif state_curr = PREDICTING then
-			xtilde_valid <= '1';
-			if xtilde_ready = '1' then
-				if x_last_r_buf = '1' and x_last_s_buf = '1' then
-					first_row_next <= true;
-					first_col_next <= true;
-					fifo_rst_force <= '1';
-					state_next <= IDLE;
-				else
-					x_ready <= '1';
-					if x_valid = '1' then
-						current_sample_next <= x_data;
-						left_sample_next <= current_sample;
-						x_last_r_buf_next <= x_last_r;
-						x_last_s_buf_nexf <= x_last_s;
-						shift_enable <= '1';
-						state_next <= PREDICTING;
-						if x_last_r_buf = '1' then
-							first_row_next <= false;
-							first_col_next <= true;
-						else
-							first_col_next <= false;
-						end if;
-					else
-						state_next <= IDLE;
-					end if;
+				first_stage_state_curr <= FIRST_ROW;
+				data_latch_last_r <= '1'; --important to go to first col!!
+			else
+				first_stage_state_curr <= first_stage_state_next;
+				if data_prev_latch_enable = '1' then
+					data_prev_latch <= data_latch;
+				end if;
+				if data_latch_enable = '1' then
+					data_latch 				<= x_data;
+					data_latch_last_s 		<= x_last_s;
+					data_latch_last_r 		<= x_last_r;
+					data_latch_first_row 	<= data_latch_first_row_next;
+					data_latch_first_col    <= data_latch_last_r;
+				end if;
+				if data_up_latch_enable = '1' then
+					data_up_latch <= fifo_out_data;
 				end if;
 			end if;
 		end if;
-	end process;	
+	end process;
 
-					
+	input_comb: process(first_stage_state_curr, first_latch_in_ready, x_valid, x_last_s, x_last_r)
+	begin
+		fifo_in_valid				<= '0';
+		fifo_out_ready 				<= '0';
+		x_ready						<= '0';
+		first_latch_in_valid		<= '0';
+
+		data_prev_latch_enable 		<= '0';
+		data_latch_enable 			<= '0';
+		data_up_latch_enable   		<= '0';
+		data_latch_first_row_next 	<= '0';
+
+		fifo_rst_force 				<= '0';
+		
+		first_stage_state_next      <= first_stage_state_curr;
+
+		if first_stage_state_curr = FIRST_ROW then
+			x_ready <= first_latch_in_ready;
+			first_latch_in_valid <= x_valid;
+			if first_latch_in_ready = '1' and x_valid = '1' then
+				fifo_in_valid <= '1';
+
+				data_prev_latch_enable		<= '1';
+				data_latch_enable 			<= '1';
+				data_latch_first_row_next 	<= '1';
+
+				if x_last_s = '1' then
+					fifo_rst_force <= '1';
+				elsif x_last_r = '1' then
+					first_stage_state_next <= OTHER_ROWS;
+				end if;
+			end if;
+		elsif first_stage_state_curr = OTHER_ROWS then
+			x_ready <= first_latch_in_ready;
+			first_latch_in_valid <= x_valid;
+			if first_latch_in_ready = '1' and x_valid = '1' then
+				fifo_in_valid	<= '1';
+				fifo_out_ready	<= '1';
+
+				data_prev_latch_enable		<= '1';
+				data_latch_enable 			<= '1';
+				data_up_latch_enable    	<= '1';
+				data_latch_first_row_next 	<= '0';
+
+				if x_last_s = '1' then
+					fifo_rst_force <= '1';
+					first_stage_state_next <= FIRST_ROW;
+				end if;
+			end if;
+		end if;
+
+	end process;
+
 	fifo_rst <= rst or fifo_rst_force;
-	fifo_output_ready <= '1' when shift_enable = '1' and not first_row else '0';
+	fifo_in_data <= x_data;
 	shift_reg_prev_line: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
@@ -154,31 +164,73 @@ begin
 		)
 		Port map (
 			clk => clk, rst => fifo_rst,
-			input_valid => shift_enable,
+			input_valid => fifo_in_valid,
 			input_ready => open, --assume always ready
-			input_data  => x_data,
-			output_ready=> fifo_output_ready,
+			input_data  => fifo_in_data,
+			output_ready=> fifo_out_ready,
 			output_valid=> open, --assume always valid
-			output_data => upper_sample
+			output_data => fifo_out_data
 		);
-		
-	upleft_addition <= std_logic_vector(unsigned("0" & upper_sample) + unsigned("0" & left_sample));
-	prediction_gen: process(first_col, first_row, upper_Sample, left_sample, upleft_addition)
+
+	---------------------
+	--FIRST LATCH LOGIC--
+	---------------------
+	first_latch_seq: process(clk)
 	begin
-		if first_col and first_row then
-			xtilde_data <= (others => '0');
+		if rising_edge(clk) then
+			if rst = '1' then
+				first_latch_occupied <= '0';
+			else
+				if first_latch_in_ready = '1' and first_latch_in_valid = '1' then
+					first_latch_occupied <= '1';
+				elsif first_latch_out_valid = '1' and first_latch_out_ready = '1' then
+					first_latch_occupied <= '0';
+				end if;
+			end if;
+		end if;
+	end process;
+	first_latch_in_ready  <= first_latch_out_ready or not first_latch_occupied;
+	first_latch_out_valid <= first_latch_occupied;
+
+	---------------------------------------
+	--SECOND STAGE-> CALCULATE PREDICTION--
+	---------------------------------------
+	first_latch_out_ready <= olatch_ready;
+	olatch_valid <= first_latch_out_valid;
+
+	upleft_addition <= std_logic_vector(unsigned("0" & data_up_latch) + unsigned("0" & data_prev_latch));
+	prediction_gen: process(data_latch_first_col, data_latch_first_row, data_up_latch, data_prev_latch, upleft_addition)
+	begin
+		if data_latch_first_col = '1' and data_latch_first_row = '1' then
+			olatch_data <= (others => '0');
 			--prediction <= (prediction'high downto current_sample'high+1 => '0') & current_sample;
-		elsif first_col then
-			xtilde_data <= std_logic_vector(resize(unsigned(upper_sample), xtilde_data'length));
-		elsif first_row then
-			xtilde_data <= std_logic_vector(resize(unsigned(left_sample), xtilde_data'length));
+		elsif data_latch_first_col = '1' then
+			olatch_data <= data_up_latch;
+		elsif data_latch_first_row = '1' then
+			olatch_data <= data_prev_latch;
 		else
-			xtilde_data <= std_logic_vector(resize(unsigned(upleft_addition(upleft_addition'high downto 1)), xtilde_data'length));
+			olatch_data <= upleft_addition(upleft_addition'high downto 1);
 		end if;
 	end process;
 
-	xtilde_last <= x_last_s_buf;
-
+	olatch_last <= data_latch_last_s;
 	
+	--output
+	output_latch: entity work.AXIS_LATCHED_CONNECTION 
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			input_data	=> olatch_data,
+			input_ready => olatch_ready,
+			input_valid => olatch_valid,
+			input_last  => olatch_last,
+			output_data	=> xtilde_data,
+			output_ready=> xtilde_ready,
+			output_valid=> xtilde_valid,
+			output_last => xtilde_last
+		);
+
 
 end Behavioral;

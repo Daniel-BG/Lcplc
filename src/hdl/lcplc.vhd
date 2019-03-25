@@ -271,7 +271,7 @@ begin
 	x_1_red_last_b <= x_1_red_flags_data(x_1_red_flags_data'high - 1);
 		
 	--first band predictor
-	first_band_predictor: entity work.FIRSTBAND_PREDICTOR_NEW
+	first_band_predictor: entity work.FIRSTBAND_PREDICTOR
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG
@@ -769,7 +769,7 @@ begin
 			--input axi port
 			input_valid => kj_valid,
 			input_ready => kj_ready,
-			input_data	 => kj_data,
+			input_data	=> kj_data,
 			--out axi port
 			output_ready=> kj_delay_ready,
 			output_data => kj_delay_data,

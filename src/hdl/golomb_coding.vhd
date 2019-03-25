@@ -131,9 +131,6 @@ begin
 	
 	quotient <= std_logic_vector(shift_right(unsigned(joint_value_data), joint_param_data));
 	
-	--insert minififo here if clk period goes out of the window
-	
-	
 	seq: process(clk)
 	begin
 		if rising_edge(clk) then

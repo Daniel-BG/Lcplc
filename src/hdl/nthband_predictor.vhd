@@ -280,21 +280,6 @@ begin
 			output_ready  => prediction_stage_1_ready,
 			output_last   => prediction_stage_1_last
 		);
-		
-	--shifter b4 final stage
--- 	signed_shifter: entity work.POWER_OF_TWO_SIGNED_SHIFTER
---		Generic map (
---			DATA_WIDTH => prediction_stage_1_data'length,
---			SHAMT => ALPHA_WIDTH - 1
---		)
---		Port map ( 
---			input_data	=> prediction_stage_1_data,
---			input_ready => prediction_stage_1_out_ready,
---			input_valid => prediction_stage_1_out_valid,
---			output_data	=> prediction_stage_1_shifted_data,
---			output_ready=> prediction_stage_1_shifted_ready,
---			output_valid=> prediction_stage_1_shifted_valid
---		);
 	
 	--third stage		
 	prediction_stage_2: entity work.AXIS_ARITHMETIC_OP
