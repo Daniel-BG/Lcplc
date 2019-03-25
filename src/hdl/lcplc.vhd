@@ -271,7 +271,7 @@ begin
 	x_1_red_last_b <= x_1_red_flags_data(x_1_red_flags_data'high - 1);
 		
 	--first band predictor
-	first_band_predictor: entity work.FIRSTBAND_PREDICTOR
+	first_band_predictor: entity work.FIRSTBAND_PREDICTOR_NEW
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG

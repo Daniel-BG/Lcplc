@@ -62,14 +62,14 @@ module test_firstband_predictor;
 		);		
 		
 	
-	firstband_predictor #(.DATA_WIDTH(DATA_WIDTH), .BLOCK_WIDTH_LOG_MAX(BLOCK_WIDTH_LOG_MAX)) PREDICTOR
+	firstband_predictor_new #(.DATA_WIDTH(DATA_WIDTH), .MAX_SLICE_SIZE_LOG(BLOCK_WIDTH_LOG_MAX)) PREDICTOR
 		(
 			.clk(clk), .rst(rst),
 			.x_valid(gen_valid),
 			.x_ready(gen_ready),
 			.x_data(gen_data),
-			.x_last_row(gen_last_r),
-			.x_last_slice(gen_last_s),
+			.x_last_r(gen_last_r),
+			.x_last_s(gen_last_s),
 			.xtilde_ready(pred_ready),
 			.xtilde_valid(pred_valid),
 			.xtilde_data(pred_data),

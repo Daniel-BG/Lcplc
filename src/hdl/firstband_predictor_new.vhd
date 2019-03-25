@@ -69,6 +69,9 @@ architecture Behavioral of FIRSTBAND_PREDICTOR_NEW is
 
 	--second stage
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
+	
+	signal olatch_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal olatch_ready, olatch_valid, olatch_last: std_logic;
 begin
 
 	---------------------------------------
@@ -192,24 +195,42 @@ begin
 	---------------------------------------
 	--SECOND STAGE-> CALCULATE PREDICTION--
 	---------------------------------------
-	first_latch_out_ready <= xtilde_ready;
-	xtilde_valid <= first_latch_out_valid;
+	first_latch_out_ready <= olatch_ready;
+	olatch_valid <= first_latch_out_valid;
 
 	upleft_addition <= std_logic_vector(unsigned("0" & data_up_latch) + unsigned("0" & data_prev_latch));
 	prediction_gen: process(data_latch_first_col, data_latch_first_row, data_up_latch, data_prev_latch, upleft_addition)
 	begin
 		if data_latch_first_col = '1' and data_latch_first_row = '1' then
-			xtilde_data <= (others => '0');
+			olatch_data <= (others => '0');
 			--prediction <= (prediction'high downto current_sample'high+1 => '0') & current_sample;
 		elsif data_latch_first_col = '1' then
-			xtilde_data <= std_logic_vector(resize(unsigned(data_up_latch), xtilde_data'length));
+			olatch_data <= data_up_latch;
 		elsif data_latch_first_row = '1' then
-			xtilde_data <= std_logic_vector(resize(unsigned(data_prev_latch), xtilde_data'length));
+			olatch_data <= data_prev_latch;
 		else
-			xtilde_data <= std_logic_vector(resize(unsigned(upleft_addition(upleft_addition'high downto 1)), xtilde_data'length));
+			olatch_data <= upleft_addition(upleft_addition'high downto 1);
 		end if;
 	end process;
 
-	xtilde_last <= data_latch_last_s;
+	olatch_last <= data_latch_last_s;
+	
+	--output
+	output_latch: entity work.AXIS_LATCHED_CONNECTION 
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			input_data	=> olatch_data,
+			input_ready => olatch_ready,
+			input_valid => olatch_valid,
+			input_last  => olatch_last,
+			output_data	=> xtilde_data,
+			output_ready=> xtilde_ready,
+			output_valid=> xtilde_valid,
+			output_last => xtilde_last
+		);
+
 
 end Behavioral;

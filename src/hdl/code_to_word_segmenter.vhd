@@ -96,7 +96,7 @@ begin
 		Generic map (
 			DATA_WIDTH_0 => FULL_INPUT_WIDTH,
 			DATA_WIDTH_1 => POSITION_WIDTH,
-			LATCH		 => false,
+			LATCH		 => true,
 			LAST_POLICY  => LAST_POLICY
 		)
 		Port map (
