@@ -80,8 +80,6 @@ public class GolombCoDec {
 		bos.writeBits(remainder, this.powerOfTwo, BitStreamConstants.ORDERING_LEFTMOST_FIRST);*/
 	}
 	
-	private static int MAX_QUOT = 0;
-	
 	/**
 	 * Wrapper for {@link #setParameter(int)} and {@link #decode(BitInputStream)}
 	 */

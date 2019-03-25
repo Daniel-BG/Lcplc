@@ -52,6 +52,8 @@ public class Main {
 		private static final int BLOCKS_TO_CODE = 3;
 		private static final int MAX_LINES_PER_BLOCK = 16;
 		private static final int MAX_SAMPLES_PER_BLOCK = 16;
+		private static final int SAMPLE_DEPTH = 16;
+		
 		
 		
 		public void test() {
@@ -416,7 +418,7 @@ public class Main {
 					//code block as normal
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
-							decodedBlock[b][l][s] = savedxhat[l][s];
+							decodedBlock[b][l][s] = Utils.clamp(savedxhat[l][s], 0, (1 << SAMPLE_DEPTH) - 1);
 							if (l == 0 && s == 0) {
 								expGolombZero.encode(savedMappedError[l][s], bos);
 							} else {
@@ -429,7 +431,7 @@ public class Main {
 					//skip block
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
-							decodedBlock[b][l][s] = savedPrediction[l][s];
+							decodedBlock[b][l][s] = Utils.clamp(savedPrediction[l][s], 0, (1 << SAMPLE_DEPTH) - 1);
 						}
 					}
 				}
@@ -608,10 +610,10 @@ public class Main {
 							int qErr = Mapper.unmapError(mappedError);
 							int error = iutq.dequantize(qErr);
 							
-							decodedBlock[b][l][s] = (int) prediction + error;
+							decodedBlock[b][l][s] = Utils.clamp((int) prediction + error, 0, (1 << SAMPLE_DEPTH) - 1);
 							acc.add(Math.abs(error));		//update Rj after coding
 						} else {
-							decodedBlock[b][l][s] = (int) prediction;
+							decodedBlock[b][l][s] = Utils.clamp((int) prediction, 0, (1 << SAMPLE_DEPTH) - 1);
 						}
 					}
 				}
@@ -621,136 +623,3 @@ public class Main {
 		}
 	}	
 }
-
-
-/**
- * 
- * 		public void compress(int[][][] block, int bands, int lines, int samples) {
-			long[][][] decodedBlock = new long[bands][lines][samples];
-			long[][][] decodedBlockInt = new long[bands][lines][samples];
-			
-			//compress first band
-			int[][] band = block[0];
-			for (int l = 0; l < lines; l++) {
-				for (int s = 0; s < samples; s++) {
-					if (l == 0 && s == 0) {
-						//code first sample
-						System.out.println("Coding first: " + band[l][s]);
-						decodedBlock[0][l][s] = band[l][s];
-						decodedBlockInt[0][l][s] = band[l][s];
-					} else {
-						int prediction = 0;
-						if (l == 0) {
-							prediction = band[l][s-1];
-						} else if (s == 0) {
-							prediction = band[l-1][s];
-						} else {
-							prediction = band[l-1][s] + band[l][s-1];
-							prediction /= 2;
-						}
-						
-						int error = band[l][s] - prediction;
-						//quantize error if necessary
-						decodedBlock[0][l][s] = prediction + error;
-						decodedBlockInt[0][l][s] = prediction + error;
-						
-						//code mapped error
-						int mappedError = error > 0 ? (2*error - 1) : (-2*error);
-						//System.out.println("Coding value (" + l + "," + s + "): " + mappedError + " (original: " + band[l][s] + ")");
-						 
-					}
-				}		
-			}
-			
-			//compress rest of bands
-			for (int b = 1; b < bands; b++) {
-				band = block[b];
-				
-				//generate means. we'll see where these means have to be from
-				long currAcc = 0;
-				long prevAcc = 0;
-				double currMean = 0;
-				double prevMean = 0;
-				for (int l = 0; l < lines; l++) {
-					for (int s = 0; s < samples; s++) {
-						currAcc += band[l][s];
-						prevAcc += decodedBlockInt[b-1][l][s];
-						currMean += band[l][s];
-						prevMean += decodedBlock[b-1][l][s];
-					}
-				}
-				currMean /= (double) (lines*samples);
-				prevMean /= (double) (lines*samples);
-				
-				//System.out.println("Accs are: " + currAcc + "," + prevAcc + "    " + currMean + "," + prevMean);
-				
-				//generate alpha value. Could try to generate it using the original band as well to see performance
-				long alphaNAcc = 0;
-				long alphaDAcc = 0;
-				long simpleAlphaNacc = 0;
-				long simpleAlphaDacc = 0;
-				long sampleCnt = lines*samples;
-				double alphaN = 0;
-				double alphaD = 0;
-				for (int l = 0; l < lines; l++) {
-					for (int s = 0; s < samples; s++) {
-						alphaNAcc += ( decodedBlockInt[b-1][l][s]*sampleCnt - prevAcc)*( band[l][s]*sampleCnt - currAcc);
-						alphaDAcc += ( decodedBlockInt[b-1][l][s]*sampleCnt - prevAcc)*( decodedBlockInt[b-1][l][s]*sampleCnt - prevAcc);
-						simpleAlphaNacc += ( decodedBlockInt[b-1][l][s] - prevAcc/sampleCnt)*( band[l][s] - currAcc/sampleCnt);
-						simpleAlphaDacc += ( decodedBlockInt[b-1][l][s] - prevAcc/sampleCnt)*( decodedBlockInt[b-1][l][s] - prevAcc/sampleCnt);
-						
-						alphaN += ((double) decodedBlock[b-1][l][s] - prevMean)*((double) band[l][s] - currMean);
-						alphaD += ((double) decodedBlock[b-1][l][s] - prevMean)*((double) decodedBlock[b-1][l][s] - prevMean);
-					}
-				}
-				
-				
-				double alpha = alphaN/alphaD;
-				long depth = 10;
-				long alphaScaled = findAlpha(alphaNAcc, alphaDAcc, depth);
-				long simpleAlphaScaled = findAlpha(simpleAlphaNacc, simpleAlphaDacc, depth);
-				long alphaScaleVal = 512;
-				long muScaled = currAcc / sampleCnt;
-				//System.out.println("Current alpha and mean (int): " + ((double) alphaScaled / (double) alphaScaleVal) + ":" + ((double) simpleAlphaScaled / (double) alphaScaleVal) + "," + muScaled);
-				
-				
-				//quantize alpha
-				double alphaHat = (double) ((int) (alpha * 1024)) / 1024;
-				double currMeanHat = (int) currMean;
-				//System.out.println("Current alpha and mean (dbl): " + alphaHat + "," + currMeanHat);
-				
-				long distortionDbl = 0;
-				long distortionInt = 0;
-				
-				for (int l = 0; l < lines; l++) {
-					for (int s = 0; s < samples; s++) {
-						long prediction = (int) (currMeanHat + (decodedBlock[b-1][l][s] - prevMean)*alphaHat);
-						long error = band[l][s] - prediction;
-						//quantize error if necessary
-						distortionDbl += error*error;
-						decodedBlock[b][l][s] = (int) prediction + (int) error;
-						
-						//code mapped error
-						long mappedError = error > 0 ? (2*error - 1) : (-2*error);
-						//System.out.println("Coding value (dbl) (" + b + "," + l + "," + s + "): " + mappedError + " (original: " + band[l][s] + ")");
-						
-						//prediction for integers
-						prediction = muScaled + (decodedBlockInt[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled/alphaScaleVal;
-						error = band[l][s] - prediction;
-						decodedBlockInt[b][l][s] = prediction + error;
-						distortionInt += error*error;
-						mappedError = error > 0 ? (2*error - 1) : (-2*error);
-						//System.out.println("Coding value (int) (" + b + "," + l + "," + s + "): " + mappedError + " (original: " + band[l][s] + ")");
-					}
-				}
-				
-				distortionDbl /= sampleCnt*sampleCnt;
-				distortionInt /= sampleCnt*sampleCnt;
-				
-				System.out.println("Distortion was : " + distortionDbl + " " + distortionInt);
-			}
-		}
-		
-	*/
- 
-
