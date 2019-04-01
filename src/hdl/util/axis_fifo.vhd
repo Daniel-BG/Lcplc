@@ -24,8 +24,10 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity AXIS_FIFO is
 	Generic (
-		constant DATA_WIDTH: positive := 32;
-		constant FIFO_DEPTH: positive := 256 --greater than 2!! (otherwise use other AXIS LINKS)
+		DATA_WIDTH: positive := 32;
+		FIFO_DEPTH: positive := 256; --greater than 2!! (otherwise use other AXIS LINKS)
+		ALMOST_FULL_THRESHOLD	: positive := 128;
+		ALMOST_EMPTY_THRESHOLD	: positive := 128
 	);
 	Port ( 
 		clk		: in  STD_LOGIC;
@@ -37,7 +39,10 @@ entity AXIS_FIFO is
 		--out axi port
 		output_ready	: in  STD_LOGIC;
 		output_data		: out STD_LOGIC_VECTOR (DATA_WIDTH - 1 downto 0);
-		output_valid	: out STD_LOGIC
+		output_valid	: out STD_LOGIC;
+		--output flags
+		flag_almost_full	: out std_logic;
+		flag_almost_empty	: out std_logic
 	);
 end AXIS_FIFO;
 
@@ -60,6 +65,9 @@ architecture Behavioral of AXIS_FIFO is
 	
 	signal almost_full, almost_empty: boolean;
 begin
+
+	flag_almost_full  <= '1' when occupancy >= ALMOST_FULL_THRESHOLD else '0';
+	flag_almost_empty <= '1' when occupancy <= ALMOST_EMPTY_THRESHOLD else '0';
 
 	seq: process(clk)
 	begin
