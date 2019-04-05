@@ -42,7 +42,8 @@ entity lcplc_controller is
 		LCPLC_DOWNSHIFT				: integer := 1;
 		LCPLC_THRESHOLD				: std_logic_vector := "100000000000000";
 		--ddr3 axi generics
-		DDR3_AXI_ADDR_WIDTH			: integer := 32
+		DDR3_AXI_ADDR_WIDTH			: integer := 32;
+		DDR3_AXI_DATA_BYTES_LOG		: integer := 2 --make sure this is >= than max(LCPLC_OUTPUT_BYTES_LOG, LCPLC_DATA_BYTES_LOG)
 	);
 	Port (
 		-------------------------------------------------
@@ -89,8 +90,8 @@ entity lcplc_controller is
 		d_m_axi_awvalid		: out std_logic;
 		d_m_axi_awready		: in  std_logic;
 		--data write channel
-		d_m_axi_wdata		: out std_logic_vector((2**LCPLC_OUTPUT_BYTES_LOG)*8 - 1 downto 0);
-		d_m_axi_wstrb		: out std_logic_vector((2**LCPLC_OUTPUT_BYTES_LOG) - 1 downto 0);
+		d_m_axi_wdata		: out std_logic_vector((2**DDR3_AXI_DATA_BYTES_LOG)*8 - 1 downto 0);
+		d_m_axi_wstrb		: out std_logic_vector((2**DDR3_AXI_DATA_BYTES_LOG) - 1 downto 0);
 		d_m_axi_wlast		: out std_logic;
 		d_m_axi_wvalid		: out std_logic;
 		d_m_axi_wready		: in  std_logic;
@@ -110,7 +111,7 @@ entity lcplc_controller is
 		d_m_axi_arvalid		: out std_logic;
 		d_m_axi_arready		: in  std_logic;
 		--read data channel
-		d_m_axi_rdata		: in  std_logic_vector((2**LCPLC_DATA_BYTES_LOG)*8 - 1 downto 0);
+		d_m_axi_rdata		: in  std_logic_vector((2**DDR3_AXI_DATA_BYTES_LOG)*8 - 1 downto 0);
 		d_m_axi_rresp		: in  std_logic_vector(AXI_BRESP_WIDTH - 1 downto 0);
 		d_m_axi_rlast		: in  std_logic;
 		d_m_axi_rvalid		: in  std_logic;
@@ -138,6 +139,13 @@ architecture Behavioral of lcplc_controller is
 	constant C_S_AXI_REG_STATUS_LOCALADDR: integer := 128;  --status of lcplc
 	constant C_S_AXI_REG_INBYTE_LOCALADDR: integer := 132;	--number of bytes read from mem so far
 	constant C_S_AXI_REG_OUTBYT_LOCALADDR: integer := 136;  --number of bytes output so far
+	constant C_S_AXI_REG_DDRWST_LOCALADDR: integer := 140;  --ddr write status register
+	constant C_S_AXI_REG_DDRRST_LOCALADDR: integer := 144;  --ddr read status register
+	constant C_S_AXI_REG_CNCLKL_LOCALADDR: integer := 148;  --lower part of clock count for control bus
+	constant C_S_AXI_REG_CNCLKU_LOCALADDR: integer := 152;  --upper part of clock count for control bus
+	constant C_S_AXI_REG_MMCLKL_LOCALADDR: integer := 156;  --lower part of clock count for memory bus
+	constant C_S_AXI_REG_MMCLKU_LOCALADDR: integer := 160;  --upper part of clock count for memory bus
+
 	--codes for running the core by writing to status registe
 	constant CONTROL_CODE_RESET		: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) := std_logic_vector(to_unsigned(127, (2**CONTROLLER_DATA_BYTES_LOG)*8));
 	constant CONTROL_CODE_START_0	: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) := std_logic_vector(to_unsigned(62, (2**CONTROLLER_DATA_BYTES_LOG)*8));
@@ -148,8 +156,14 @@ architecture Behavioral of lcplc_controller is
 		s_axi_reg_tgaddr,
 		s_axi_reg_bcksmp, s_axi_reg_bcklin,
 		s_axi_reg_status, s_axi_reg_inbyte, s_axi_reg_outbyt,
+		s_axi_reg_ddrwst, s_axi_reg_ddrrst,
 		s_axi_reg_inbyte_next, s_axi_reg_outbyt_next: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
 
+	signal s_axi_reg_cnclk, s_axi_reg_mmclk: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
+	alias s_axi_reg_cnclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_cnclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
+	alias s_axi_reg_cnclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_cnclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
+	alias s_axi_reg_mmclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_mmclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
+	alias s_axi_reg_mmclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_mmclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
 
 	signal s_axi_reg_wren, s_axi_reg_readen: std_logic; 
 
@@ -185,6 +199,7 @@ architecture Behavioral of lcplc_controller is
 
 	signal ddr_read_bytes_remaining_next, ddr_read_bytes_remaining_curr: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
 	signal ddr_read_addr_next, ddr_read_addr_curr: std_logic_vector(DDR3_AXI_ADDR_WIDTH - 1 downto 0);
+	signal ddr_read_align_next, ddr_read_align_curr: std_logic_vector(DDR3_AXI_DATA_BYTES_LOG - LCPLC_DATA_BYTES_LOG - 1 downto 0);
 
 	signal ififo_rst: std_logic;
 	signal ififo_input_valid, ififo_input_ready, ififo_output_ready, ififo_output_valid: std_logic;
@@ -211,6 +226,14 @@ architecture Behavioral of lcplc_controller is
 	signal core_output_last: std_logic;
 	 
 begin
+
+	assert DDR3_AXI_DATA_BYTES_LOG >= LCPLC_DATA_BYTES_LOG 
+	report "Need at least as many bytes in the ddr axi bus as in the LCPLC input"
+	severity error;
+
+	assert DDR3_AXI_DATA_BYTES_LOG = LCPLC_OUTPUT_BYTES_LOG
+	report "Ddr axi bus must be exactly as wide as LCPLC output width. Different widths are currently unsupported"
+	severity error;
 
 	------------------------------
 	--CONTROLLER WRITE PROCESSES--
@@ -352,6 +375,18 @@ begin
 						c_s_axi_readdata <= s_axi_reg_inbyte;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_OUTBYT_LOCALADDR then
 						c_s_axi_readdata <= s_axi_reg_outbyt;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_DDRWST_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_ddrwst;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_DDRRST_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_ddrrst;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_CNCLKU_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_cnclku;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_CNCLKL_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_cnclkl;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_MMCLKU_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_mmclku;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_MMCLKL_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_mmclkl;
 					end if;
 				end if;
 			end if;
@@ -472,6 +507,7 @@ begin
 				ddr_read_state_curr <= ddr_read_state_next;
 				ddr_read_bytes_remaining_curr <= ddr_read_bytes_remaining_next;
 				ddr_read_addr_curr <= ddr_read_addr_next;
+				ddr_read_align_curr <= ddr_read_align_next;
 				s_axi_reg_inbyte <= s_axi_reg_inbyte_next;
 			end if;
 		end if;
@@ -488,17 +524,19 @@ begin
 	d_m_axi_araddr	<= ddr_read_addr_curr;
 	--end fixed AXI signals
 	ddr_read_comb: process(ddr_read_state_curr, 
-		ddr_read_bytes_remaining_curr, ddr_read_addr_curr,
+		ddr_read_bytes_remaining_curr, ddr_read_addr_curr, ddr_read_align_curr,
 		control_input_transfer_enable, control_input_reset,
 		s_axi_reg_byteno, s_axi_reg_staddr, s_axi_reg_inbyte,
 		d_m_axi_arready, d_m_axi_rvalid, d_m_axi_rlast, ififo_input_ready)
 	begin
+		s_axi_reg_ddrrst <= x"00000000";
 		--control signals defaults
 		ddr_read_state_next <= ddr_read_state_curr;
 		control_input_transfer_done <= '0';
 		control_input_idle <= '0';
 		ddr_read_bytes_remaining_next <= ddr_read_bytes_remaining_curr;
 		ddr_read_addr_next <= ddr_read_addr_curr;
+		ddr_read_align_next <= ddr_read_align_curr;
 		--axi defaults
 		d_m_axi_arvalid	<= '0';
 		d_m_axi_arlen	<= (others => '0');
@@ -509,6 +547,7 @@ begin
 		s_axi_reg_inbyte_next <= s_axi_reg_inbyte;
 
 		if ddr_read_state_curr = DDR_READ_IDLE then
+			s_axi_reg_ddrrst <= x"00000001";
 			control_input_idle <= '1';
 			--wait for central control to enable us
 			if control_input_transfer_enable = '1' then
@@ -517,13 +556,16 @@ begin
 				ddr_read_addr_next <= s_axi_reg_staddr;
 			end if;
 		elsif ddr_read_state_curr = DDR_READ_REQUEST then
+			s_axi_reg_ddrrst <= x"00000010";
+			--align for read mux
+			ddr_read_align_next			  <= ddr_read_addr_curr(DDR3_AXI_DATA_BYTES_LOG - 1 downto LCPLC_DATA_BYTES_LOG);
 			--if we still have more than the max transaction of bytes left, perform a transaction
 			if ddr_read_bytes_remaining_curr(ddr_read_bytes_remaining_curr'high downto AXI_LEN_WIDTH + LCPLC_DATA_BYTES_LOG)
 					/= (ddr_read_bytes_remaining_curr'high downto AXI_LEN_WIDTH + LCPLC_DATA_BYTES_LOG => '0') then
 				d_m_axi_arvalid 		<= '1';
 				d_m_axi_arlen 			<= (others => '1');
 				if d_m_axi_arready = '1' then
-					s_axi_reg_inbyte_next <= std_logic_vector(unsigned(s_axi_reg_inbyte) + to_unsigned(1, s_axi_reg_inbyte'length));
+					s_axi_reg_inbyte_next <= std_logic_vector(unsigned(s_axi_reg_inbyte) + to_unsigned(2**LCPLC_DATA_BYTES_LOG, s_axi_reg_inbyte'length));
 					ddr_read_bytes_remaining_next <= std_logic_vector(unsigned(ddr_read_bytes_remaining_curr) - to_unsigned(2**(AXI_LEN_WIDTH+LCPLC_DATA_BYTES_LOG), ddr_read_bytes_remaining_curr'length));
 					ddr_read_addr_next			  <= std_logic_vector(unsigned(ddr_read_addr_curr) 			  + to_unsigned(2**(AXI_LEN_WIDTH+LCPLC_DATA_BYTES_LOG), 			ddr_read_addr_curr'length));
 					ddr_read_state_next 		  <= DDR_READ_TRANSFER;
@@ -534,7 +576,7 @@ begin
 				d_m_axi_arvalid 		<= '1';
 				d_m_axi_arlen 			<= std_logic_vector(unsigned(ddr_read_bytes_remaining_curr(AXI_LEN_WIDTH + LCPLC_DATA_BYTES_LOG - 1 downto LCPLC_DATA_BYTES_LOG)) - to_unsigned(1, AXI_LEN_WIDTH));
 				if d_m_axi_arready = '1' then
-					s_axi_reg_inbyte_next <= std_logic_vector(unsigned(s_axi_reg_inbyte) + to_unsigned(1, s_axi_reg_inbyte'length));
+					s_axi_reg_inbyte_next <= std_logic_vector(unsigned(s_axi_reg_inbyte) + to_unsigned(2**LCPLC_DATA_BYTES_LOG, s_axi_reg_inbyte'length));
 					ddr_read_bytes_remaining_next <= (others => '0');
 					ddr_read_state_next 		  <= DDR_READ_TRANSFER;
 				end if;
@@ -547,16 +589,31 @@ begin
 				end if;
 			end if;
 		elsif ddr_read_state_curr = DDR_READ_TRANSFER then
+			s_axi_reg_ddrrst <= x"00000100";
 			ififo_input_valid <= d_m_axi_rvalid;
 			d_m_axi_rready <= ififo_input_ready;
-			if d_m_axi_rlast = '1' then
-				--burst is finished, go back to requesting transactions
-				ddr_read_state_next <= DDR_READ_REQUEST;
+			if d_m_axi_rvalid = '1' and ififo_input_ready = '1' then
+				ddr_read_align_next	<= std_logic_vector(unsigned(ddr_read_align_curr) + to_unsigned(1, ddr_read_align_curr'length));
+				if d_m_axi_rlast = '1' then
+					--burst is finished, go back to requesting transactions
+					ddr_read_state_next <= DDR_READ_REQUEST;
+				end if;
 			end if;
 		end if;
 	end process;
 
-	ififo_input_data <= d_m_axi_rdata;
+	gen_ififo_input: if DDR3_AXI_DATA_BYTES_LOG > LCPLC_DATA_BYTES_LOG generate
+		assign_ififo_input_data: process(d_m_axi_rdata, ddr_read_align_curr)
+		begin
+			ififo_input_data <= d_m_axi_rdata((2**LCPLC_DATA_BYTES_LOG)*8 - 1 downto 0);
+			for i in 0 to 2**(DDR3_AXI_DATA_BYTES_LOG - LCPLC_DATA_BYTES_LOG) - 1 loop	
+				if unsigned(ddr_read_align_curr) = to_unsigned(i, ddr_read_align_curr'length) then
+					ififo_input_data <= d_m_axi_rdata((2**LCPLC_DATA_BYTES_LOG)*8*(i+1) - 1 downto (2**LCPLC_DATA_BYTES_LOG)*8*i);
+					exit;
+				end if;
+			end loop;
+		end process;
+	end generate;
 	ififo_rst <= not d_m_axi_resetn;
 	input_sample_fifo: entity work.AXIS_FIFO
 		Generic map (
@@ -673,6 +730,8 @@ begin
 			control_output_transfer_enable, control_output_reset, s_axi_reg_outbyt,
 			s_axi_reg_tgaddr, d_m_axi_awready, d_m_axi_wready, d_m_axi_bvalid, core_output_valid, core_output_last)
 	begin
+		s_axi_reg_ddrwst <= x"00000000";
+		
 		ddr_write_state_next <= ddr_write_state_curr;
 		control_output_idle <= '0';
 		ddr_write_addr_next <= ddr_write_addr_curr;
@@ -689,23 +748,27 @@ begin
 		s_axi_reg_outbyt_next <= s_axi_reg_outbyt;
 
 		if ddr_write_state_curr = DDR_WRITE_IDLE then
+			s_axi_reg_ddrwst <= x"00000001";
 			control_output_idle <= '1';
 			if control_output_transfer_enable = '1' then
 				ddr_write_state_next <= DDR_WRITE_REQUEST;
 				ddr_write_addr_next  <= s_axi_reg_tgaddr;
 			end if;
 		elsif ddr_write_state_curr = DDR_WRITE_REQUEST then
+			s_axi_reg_ddrwst <= x"00000010";
 			d_m_axi_awvalid <= '1';
 			if d_m_axi_awready = '1' then
 				ddr_write_state_next <= DDR_WRITE_TRANSFER;
 				ddr_write_transactions_left_next <= (others => '1');
+				ddr_write_addr_next			  	 <= std_logic_vector(unsigned(ddr_write_addr_curr) + to_unsigned(2**(AXI_LEN_WIDTH+LCPLC_OUTPUT_BYTES_LOG), ddr_write_addr_curr'length));
 			end if;
 		elsif ddr_write_state_curr = DDR_WRITE_TRANSFER then
+			s_axi_reg_ddrwst <= x"00000100";
 			core_output_ready	<= d_m_axi_wready;
 			d_m_axi_wvalid 		<= core_output_valid;
 			d_m_axi_wstrb		<= (others => '1');
 			if core_output_valid = '1' and d_m_axi_wready = '1' then
-				s_axi_reg_outbyt_next <= std_logic_vector(unsigned(s_axi_reg_outbyt) + to_unsigned(1, s_axi_reg_outbyt'length));
+				s_axi_reg_outbyt_next <= std_logic_vector(unsigned(s_axi_reg_outbyt) + to_unsigned(2**LCPLC_OUTPUT_BYTES_LOG, s_axi_reg_outbyt'length));
 				if ddr_write_transactions_left_curr = (ddr_write_transactions_left_curr'range => '0') then
 					d_m_axi_wlast <= '1';
 					if core_output_last = '0' then
@@ -723,10 +786,12 @@ begin
 			end if;
 		--finishing transaction with empty bytes to avoid overwriting of stuff
 		elsif ddr_write_state_curr = DDR_WRITE_TRANSFER_NOSTRB then
+			s_axi_reg_ddrwst <= x"00001000";
 			d_m_axi_wvalid <= '1';
 			d_m_axi_wstrb <= (others => '0');
 			if d_m_axi_wready = '1' then
-				s_axi_reg_outbyt_next <= std_logic_vector(unsigned(s_axi_reg_outbyt) + to_unsigned(1, s_axi_reg_outbyt'length));
+				--don't count these as bytes sent
+				--s_axi_reg_outbyt_next <= std_logic_vector(unsigned(s_axi_reg_outbyt) + to_unsigned(1, s_axi_reg_outbyt'length));
 				if ddr_write_transactions_left_curr = (ddr_write_transactions_left_curr'range => '0') then
 					d_m_axi_wlast <= '1';
 					ddr_write_state_next <= DDR_WRITE_LAST_RESPONSE;
@@ -735,16 +800,19 @@ begin
 				end if;
 			end if;
 		elsif ddr_write_state_curr = DDR_WRITE_RESPONSE then
+			s_axi_reg_ddrwst <= x"00010000";
 			d_m_axi_bready <= '1';
 			if d_m_axi_bvalid = '1' then
 				ddr_write_state_next <= DDR_WRITE_REQUEST;
 			end if;
 		elsif ddr_write_state_curr = DDR_WRITE_LAST_RESPONSE then
+			s_axi_reg_ddrwst <= x"00100000";
 			d_m_axi_bready <= '1';
 			if d_m_axi_bvalid = '1' then
 				ddr_write_state_next <= DDR_WRITE_FINISH;
 			end if;
 		elsif ddr_write_state_curr = DDR_WRITE_FINISH then
+			s_axi_reg_ddrwst <= x"01000000";
 			control_output_transfer_done <= '1';
 			if control_output_reset = '1' then
 				ddr_write_state_next <= DDR_WRITE_IDLE;
@@ -752,6 +820,29 @@ begin
 		end if;
 	end process;
 
+	--------------------------
+	--CLOCK STATUS REGISTERS--
+	--------------------------
+	clk_control_update: process(c_s_axi_clk)
+	begin
+		if rising_edge(c_s_axi_clk) then
+			if c_s_axi_resetn = '0' then
+				s_axi_reg_cnclk <= (others => '0');
+			else
+				s_axi_reg_cnclk <= std_logic_vector(unsigned(s_axi_reg_cnclk) + to_unsigned(1, s_axi_reg_cnclk'length));
+			end if;
+		end if;
+	end process;
+	clk_data_update: process(d_m_axi_clk)
+	begin
+		if rising_edge(d_m_axi_clk) then
+			if d_m_axi_resetn = '0' then
+				s_axi_reg_mmclk <= (others => '0');
+			else
+				s_axi_reg_mmclk <= std_logic_vector(unsigned(s_axi_reg_mmclk) + to_unsigned(1, s_axi_reg_mmclk'length));
+			end if;
+		end if;
+	end process;
 
 
 end Behavioral;
