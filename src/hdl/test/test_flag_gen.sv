@@ -37,11 +37,11 @@ module test_flag_gen;
 	wire[MAX_IMAGE_SAMPLE_LOG-1:0] config_image_samples;
 	wire[MAX_IMAGE_LINE_LOG  -1:0] config_image_lines;
 	wire[MAX_IMAGE_BAND_LOG  -1:0] config_image_bands;
-	assign config_block_samples = 2; //3 total
-	assign config_block_lines   = 2; //3 total
-	assign config_image_samples = 6; //7 total
-	assign config_image_lines   = 6; //7 total
-	assign config_image_bands   = 2; //3 total
+	assign config_block_samples = 1; //
+	assign config_block_lines   = 1; //
+	assign config_image_samples = 2; //
+	assign config_image_lines   = 2; //
+	assign config_image_bands   = 1; //
     
 	//controls
 	reg clk, rst;
@@ -72,7 +72,7 @@ module test_flag_gen;
 			.input_data(drain_data)
 		);
 
-	flag_generator_blocked
+	flag_generator
 		#(
 			.DATA_WIDTH(DATA_WIDTH),
 			.MAX_BLOCK_SAMPLE_LOG(MAX_BLOCK_SAMPLE_LOG),

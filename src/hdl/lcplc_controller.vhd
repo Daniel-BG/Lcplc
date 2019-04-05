@@ -31,12 +31,20 @@ entity lcplc_controller is
 		--lcplc axis generics -- propagated to DDR3
 		LCPLC_DATA_BYTES_LOG		: integer := 1;
 		LCPLC_OUTPUT_BYTES_LOG		: integer := 2; 
+		LCPLC_MAX_BLOCK_SAMPLE_LOG	: integer := 4;
+		LCPLC_MAX_BLOCK_LINE_LOG	: integer := 4;
+		LCPLC_MAX_IMAGE_SAMPLE_LOG	: integer := 12;
+		LCPLC_MAX_IMAGE_LINE_LOG	: integer := 12;
+		LCPLC_MAX_IMAGE_BAND_LOG	: integer := 12;
+		LCPLC_ALPHA_WIDTH			: integer := 10;
+		LCPLC_ACCUMULATOR_WINDOW	: integer := 32;	
+		LCPLC_UPSHIFT				: integer := 1;
+		LCPLC_DOWNSHIFT				: integer := 1;
+		LCPLC_THRESHOLD				: std_logic_vector := "100000000000000";
 		--ddr3 axi generics
 		DDR3_AXI_ADDR_WIDTH			: integer := 32
 	);
 	Port (
-		--clk and reset for lcplc
-		lcplc_ctrl_clk, lcplc_ctrl_resetn: in std_logic;
 		-------------------------------------------------
 		--CONTROLLER AXI SLAVE INTERFACE
 		--c_s_axi_<name> (control slave axi <signal_name>
@@ -62,7 +70,7 @@ entity lcplc_controller is
 		c_s_axi_wvalid		: in  std_logic;
 		--write response channel
 		c_s_axi_bready		: in  std_logic;
-		c_s_axi_bresp		: out  std_logic_vector(AXI_BRESP_WIDTH - 1 downto 0);
+		c_s_axi_bresp		: out std_logic_vector(AXI_BRESP_WIDTH - 1 downto 0);
 		c_s_axi_bvalid		: out std_logic;
 		-------------------------------------------------
 		--DDR AXI MASTER INTERFACE
@@ -124,6 +132,8 @@ architecture Behavioral of lcplc_controller is
 	constant C_S_AXI_REG_LINENO_LOCALADDR: integer := 20;	--number of lines in image   (y-dim)
 	constant C_S_AXI_REG_BANDNO_LOCALADDR: integer := 24;	--number of bands in image	 (z-dim)
 	constant C_S_AXI_REG_TGADDR_LOCALADDR: integer := 28;   --addr start of output data
+	constant C_S_AXI_REG_BCKSMP_LOCALADDR: integer := 32; 	--number of samples in block
+	constant C_S_AXI_REG_BCKLIN_LOCALADDR: integer := 36;	--number of lines in block
 	--read only status registers (local addresses)
 	constant C_S_AXI_REG_STATUS_LOCALADDR: integer := 128;  --status of lcplc
 	constant C_S_AXI_REG_INBYTE_LOCALADDR: integer := 132;	--number of bytes read from mem so far
@@ -136,7 +146,10 @@ architecture Behavioral of lcplc_controller is
 	signal s_axi_reg_ctrlrg, s_axi_reg_staddr, s_axi_reg_smplwi,
 		s_axi_reg_byteno, s_axi_reg_smplno, s_axi_reg_lineno, s_axi_reg_bandno,
 		s_axi_reg_tgaddr,
-		s_axi_reg_status, s_axi_reg_inbyte, s_axi_reg_outbyt: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
+		s_axi_reg_bcksmp, s_axi_reg_bcklin,
+		s_axi_reg_status, s_axi_reg_inbyte, s_axi_reg_outbyt,
+		s_axi_reg_inbyte_next, s_axi_reg_outbyt_next: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
+
 
 	signal s_axi_reg_wren, s_axi_reg_readen: std_logic; 
 
@@ -171,32 +184,31 @@ architecture Behavioral of lcplc_controller is
 	signal ddr_read_state_curr, ddr_read_state_next: ddr_read_state_t;
 
 	signal ddr_read_bytes_remaining_next, ddr_read_bytes_remaining_curr: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
-	signal ddr_read_addr_next, ddr_read_addr_curr: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
+	signal ddr_read_addr_next, ddr_read_addr_curr: std_logic_vector(DDR3_AXI_ADDR_WIDTH - 1 downto 0);
 
 	signal ififo_rst: std_logic;
 	signal ififo_input_valid, ififo_input_ready, ififo_output_ready, ififo_output_valid: std_logic;
 	signal ififo_input_data, ififo_output_data: std_logic_vector((2**LCPLC_DATA_BYTES_LOG)*8 - 1 downto 0);
+
+	--ddr write states
+	type ddr_write_state_t is (DDR_WRITE_IDLE, DDR_WRITE_REQUEST, DDR_WRITE_TRANSFER, DDR_WRITE_TRANSFER_NOSTRB, DDR_WRITE_RESPONSE, DDR_WRITE_LAST_RESPONSE, DDR_WRITE_FINISH);
+	signal ddr_write_state_curr, ddr_write_state_next: ddr_write_state_t;
 	
+	signal ddr_write_addr_curr, ddr_write_addr_next: std_logic_vector(DDR3_AXI_ADDR_WIDTH - 1 downto 0);
+	signal ddr_write_transactions_left_curr, ddr_write_transactions_left_next: std_logic_vector(AXI_LEN_WIDTH - 1 downto 0);
+
 	---------------------------------------------------
-	--LCPLC AXIS MASTER INTERFACE
-	--l_m_axis_<name> (lcplc master axis <signal_name>)
+	--LCPLC SIGNALS
 	---------------------------------------------------
 	signal lcplc_clk, lcplc_rst: std_logic;
-	--write data channel
-	--signal l_m_axis_wvalid	: std_logic;
-	--signal l_m_axis_wready	: std_logic;
-	--signal l_m_axis_wdata	: std_logic_vector((2**LCPLC_DATA_BYTES_LOG)*8 - 1 downto 0);
-	--signal l_m_axis_wlast_r	: std_logic;
-	--signal l_m_axis_wlast_s	: std_logic;
-	--signal l_m_axis_wlast_b	: std_logic;
-	--signal l_m_axis_wlast_i	: std_logic;
-	----read data channel
-	--signal l_m_axis_rdata		: std_logic_vector((2**LCPLC_OUTPUT_BYTES_LOG)*8 - 1 downto 0);
-	--signal l_m_axis_rvalid		: std_logic;
-	--signal l_m_axis_rready		: std_logic;
-	--signal l_m_axis_rlast		: std_logic;
-	
 
+	signal core_input_data: std_logic_vector((2**LCPLC_DATA_BYTES_LOG)*8 - 1 downto 0);
+	signal core_input_last_r, core_input_last_s, core_input_last_b, core_input_last_i: std_logic;
+	signal core_input_ready, core_input_valid: std_logic;
+
+	signal core_output_data: std_logic_vector((2**LCPLC_OUTPUT_BYTES_LOG)*8 - 1 downto 0);
+	signal core_output_ready, core_output_valid: std_logic;
+	signal core_output_last: std_logic;
 	 
 begin
 
@@ -230,6 +242,10 @@ begin
 						s_axi_reg_bandno <= c_s_axi_writedata_curr;
 					elsif local_c_s_axi_writeaddr = C_S_AXI_REG_TGADDR_LOCALADDR then
 						s_axi_reg_tgaddr <= c_s_axi_writedata_curr;
+					elsif local_c_s_axi_writeaddr = C_S_AXI_REG_BCKSMP_LOCALADDR then
+						s_axi_reg_bcksmp <= c_s_axi_writedata_curr;
+					elsif local_c_s_axi_writeaddr = C_S_AXI_REG_BCKLIN_LOCALADDR then
+						s_axi_reg_bcklin <= c_s_axi_writedata_curr;
 					end if;
 				end if;
 			end if;
@@ -326,6 +342,10 @@ begin
 						c_s_axi_readdata <= s_axi_reg_bandno;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_TGADDR_LOCALADDR then
 						c_s_axi_readdata <= s_axi_reg_tgaddr;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_BCKSMP_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_bcksmp;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_BCKLIN_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_bcklin;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_STATUS_LOCALADDR then
 						c_s_axi_readdata <= s_axi_reg_status;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_INBYTE_LOCALADDR then
@@ -373,10 +393,10 @@ begin
 	---------------------------
 	--CONTROLLER MAIN PROCESS--
 	---------------------------
-	controller_main_seq: process(lcplc_ctrl_clk)
+	controller_main_seq: process(c_s_axi_clk)
 	begin
-		if rising_edge(lcplc_ctrl_clk) then
-			if lcplc_ctrl_resetn = '0' then
+		if rising_edge(c_s_axi_clk) then
+			if c_s_axi_resetn = '0' then
 				control_main_state_curr <= CONTROL_IDLE;
 			else
 				control_main_state_curr <= control_main_state_next;
@@ -385,7 +405,6 @@ begin
 	end process;
 
 
-	lcplc_clk <= lcplc_ctrl_clk;
 	controller_main_comb: process(control_main_state_curr, s_axi_reg_ctrlrg, 
 		control_input_transfer_done, control_output_transfer_done, control_input_idle, control_output_idle)
 	begin
@@ -448,10 +467,12 @@ begin
 		if rising_edge(d_m_axi_clk) then
 			if d_m_axi_resetn = '0' then
 				ddr_read_state_curr <= DDR_READ_IDLE;
+				s_axi_reg_inbyte	<= (others => '0');
 			else
 				ddr_read_state_curr <= ddr_read_state_next;
 				ddr_read_bytes_remaining_curr <= ddr_read_bytes_remaining_next;
 				ddr_read_addr_curr <= ddr_read_addr_next;
+				s_axi_reg_inbyte <= s_axi_reg_inbyte_next;
 			end if;
 		end if;
 	end process;
@@ -466,7 +487,11 @@ begin
 	d_m_axi_arqos   <= AXI_QOS_EIGHT;
 	d_m_axi_araddr	<= ddr_read_addr_curr;
 	--end fixed AXI signals
-	ddr_read_comb: process(ddr_read_state_curr)
+	ddr_read_comb: process(ddr_read_state_curr, 
+		ddr_read_bytes_remaining_curr, ddr_read_addr_curr,
+		control_input_transfer_enable, control_input_reset,
+		s_axi_reg_byteno, s_axi_reg_staddr, s_axi_reg_inbyte,
+		d_m_axi_arready, d_m_axi_rvalid, d_m_axi_rlast, ififo_input_ready)
 	begin
 		--control signals defaults
 		ddr_read_state_next <= ddr_read_state_curr;
@@ -477,6 +502,11 @@ begin
 		--axi defaults
 		d_m_axi_arvalid	<= '0';
 		d_m_axi_arlen	<= (others => '0');
+		d_m_axi_rready 	<= '0';
+		--
+		ififo_input_valid <= '0';
+		--
+		s_axi_reg_inbyte_next <= s_axi_reg_inbyte;
 
 		if ddr_read_state_curr = DDR_READ_IDLE then
 			control_input_idle <= '1';
@@ -493,6 +523,7 @@ begin
 				d_m_axi_arvalid 		<= '1';
 				d_m_axi_arlen 			<= (others => '1');
 				if d_m_axi_arready = '1' then
+					s_axi_reg_inbyte_next <= std_logic_vector(unsigned(s_axi_reg_inbyte) + to_unsigned(1, s_axi_reg_inbyte'length));
 					ddr_read_bytes_remaining_next <= std_logic_vector(unsigned(ddr_read_bytes_remaining_curr) - to_unsigned(2**(AXI_LEN_WIDTH+LCPLC_DATA_BYTES_LOG), ddr_read_bytes_remaining_curr'length));
 					ddr_read_addr_next			  <= std_logic_vector(unsigned(ddr_read_addr_curr) 			  + to_unsigned(2**(AXI_LEN_WIDTH+LCPLC_DATA_BYTES_LOG), 			ddr_read_addr_curr'length));
 					ddr_read_state_next 		  <= DDR_READ_TRANSFER;
@@ -503,6 +534,7 @@ begin
 				d_m_axi_arvalid 		<= '1';
 				d_m_axi_arlen 			<= std_logic_vector(unsigned(ddr_read_bytes_remaining_curr(AXI_LEN_WIDTH + LCPLC_DATA_BYTES_LOG - 1 downto LCPLC_DATA_BYTES_LOG)) - to_unsigned(1, AXI_LEN_WIDTH));
 				if d_m_axi_arready = '1' then
+					s_axi_reg_inbyte_next <= std_logic_vector(unsigned(s_axi_reg_inbyte) + to_unsigned(1, s_axi_reg_inbyte'length));
 					ddr_read_bytes_remaining_next <= (others => '0');
 					ddr_read_state_next 		  <= DDR_READ_TRANSFER;
 				end if;
@@ -517,7 +549,6 @@ begin
 		elsif ddr_read_state_curr = DDR_READ_TRANSFER then
 			ififo_input_valid <= d_m_axi_rvalid;
 			d_m_axi_rready <= ififo_input_ready;
-			ififo_input_data <= d_m_axi_rdata;
 			if d_m_axi_rlast = '1' then
 				--burst is finished, go back to requesting transactions
 				ddr_read_state_next <= DDR_READ_REQUEST;
@@ -525,6 +556,7 @@ begin
 		end if;
 	end process;
 
+	ififo_input_data <= d_m_axi_rdata;
 	ififo_rst <= not d_m_axi_resetn;
 	input_sample_fifo: entity work.AXIS_FIFO
 		Generic map (
@@ -543,6 +575,65 @@ begin
 			output_valid	=> ififo_output_valid
 		);
 
+	flag_gen: entity work.FLAG_GENERATOR
+		Generic map (
+			DATA_WIDTH				=> (2**LCPLC_DATA_BYTES_LOG)*8,
+			MAX_BLOCK_SAMPLE_LOG	=> LCPLC_MAX_BLOCK_SAMPLE_LOG,
+			MAX_BLOCK_LINE_LOG		=> LCPLC_MAX_BLOCK_LINE_LOG,
+			MAX_IMAGE_SAMPLE_LOG	=> LCPLC_MAX_IMAGE_SAMPLE_LOG,
+			MAX_IMAGE_LINE_LOG		=> LCPLC_MAX_IMAGE_LINE_LOG,
+			MAX_IMAGE_BAND_LOG		=> LCPLC_MAX_IMAGE_BAND_LOG
+		)
+		port map (
+			clk => d_m_axi_clk, rst => ififo_rst,
+			config_block_samples	=> s_axi_reg_bcksmp(LCPLC_MAX_BLOCK_SAMPLE_LOG - 1 downto 0),
+			config_block_lines		=> s_axi_reg_bcklin(LCPLC_MAX_BLOCK_LINE_LOG - 1 downto 0),
+			config_image_samples	=> s_axi_reg_smplno(LCPLC_MAX_IMAGE_SAMPLE_LOG - 1 downto 0),
+			config_image_lines		=> s_axi_reg_lineno(LCPLC_MAX_IMAGE_LINE_LOG - 1 downto 0),
+			config_image_bands		=> s_axi_reg_bandno(LCPLC_MAX_IMAGE_BAND_LOG - 1 downto 0),
+			raw_input_data			=> ififo_output_data,
+			raw_input_ready			=> ififo_output_ready,
+			raw_input_valid			=> ififo_output_valid,
+			output_data 			=> core_input_data,
+			output_last_r			=> core_input_last_r,
+			output_last_s			=> core_input_last_s,
+			output_last_b			=> core_input_last_b,
+			output_last_i			=> core_input_last_i,
+			output_ready 			=> core_input_ready,
+			output_valid 			=> core_input_valid
+		);
+
+	lcplc_clk <= d_m_axi_clk;
+	--core: entity work.LCPLC
+	--	Generic map (
+	--		DATA_WIDTH => (2**LCPLC_DATA_BYTES_LOG)*8,
+	--		WORD_WIDTH_LOG => LCPLC_OUTPUT_BYTES_LOG+3,
+	--		MAX_SLICE_SIZE_LOG => LCPLC_MAX_BLOCK_SAMPLE_LOG + LCPLC_MAX_BLOCK_LINE_LOG,
+	--		ALPHA_WIDTH => LCPLC_ALPHA_WIDTH,
+	--		ACCUMULATOR_WINDOW => LCPLC_ACCUMULATOR_WINDOW,
+	--		UPSHIFT => LCPLC_UPSHIFT,
+	--		DOWNSHIFT => LCPLC_DOWNSHIFT,
+	--		THRESHOLD => LCPLC_THRESHOLD
+	--	)
+	--	Port map (
+	--		clk => lcplc_clk, rst => lcplc_rst,
+	--		x_valid 	=> core_input_valid,
+	--		x_ready 	=> core_input_ready,
+	--		x_data 		=> core_input_data,
+	--		x_last_r	=> core_input_last_r,
+	--		x_last_s	=> core_input_last_s,
+	--		x_last_b	=> core_input_last_b,
+	--		x_last_i 	=> core_input_last_i,
+	--		output_data => core_output_data,
+	--		output_ready=> core_output_ready,
+	--		output_valid=> core_output_valid,
+	--		output_last => core_output_last
+	--	);
+	core_output_data	<= x"0000" & core_input_data;
+	core_input_ready    <= core_output_ready;
+	core_output_valid	<= core_input_valid;
+	core_output_last	<= core_input_last_i;
+
 	--TODO
 	--axi thing that takes inputs and counts and asserts signals as needed counting for irregular borders
 	--the output from that thing outside
@@ -550,8 +641,117 @@ begin
 	--that plugging the coder in the middle will work
 
 	--------------------------------
-	--DDR TO CORE OUTPUT PROCESSES--
+	--CORE TO DDR OUTPUT PROCESSES--
 	--------------------------------
+	ddr_write_seq: process(d_m_axi_clk)
+	begin
+		if rising_edge(d_m_axi_clk) then
+			if d_m_axi_resetn = '0' then
+				ddr_write_state_curr <= DDR_WRITE_IDLE;
+				s_axi_reg_outbyt <= (others => '0');
+			else
+				ddr_write_state_curr <= ddr_write_state_next;
+				ddr_write_addr_curr  <= ddr_write_addr_next;
+				ddr_write_transactions_left_curr <= ddr_write_transactions_left_next;
+				s_axi_reg_outbyt     <= s_axi_reg_outbyt_next;
+			end if;
+		end if;
+	end process;
+
+	--fixed signals
+	d_m_axi_awlen	<= (others => '1'); --set all by default (we don't know how many we'll have) (when we run out set wstrb to zero)
+	d_m_axi_awsize	<= std_logic_vector(to_unsigned(LCPLC_OUTPUT_BYTES_LOG, d_m_axi_arsize'length));
+	d_m_axi_awburst	<= AXI_BURST_INCR;
+	d_m_axi_awlock  <= AXI_LOCK_UNLOCKED;
+	d_m_axi_awcache <= AXI_CACHE_NORMAL_NONCACHE_NONBUFF;
+	d_m_axi_awprot  <= AXI_PROT_UNPRIVILEDGED_NONSECURE_DATA;
+	d_m_axi_awqos   <= AXI_QOS_EIGHT;
+	d_m_axi_awaddr	<= ddr_write_addr_curr;
+	--
+	d_m_axi_wdata  <= core_output_data;
+	ddr_write_comb: process(ddr_write_state_curr, ddr_write_addr_curr, ddr_write_transactions_left_curr,
+			control_output_transfer_enable, control_output_reset, s_axi_reg_outbyt,
+			s_axi_reg_tgaddr, d_m_axi_awready, d_m_axi_wready, d_m_axi_bvalid, core_output_valid, core_output_last)
+	begin
+		ddr_write_state_next <= ddr_write_state_curr;
+		control_output_idle <= '0';
+		ddr_write_addr_next <= ddr_write_addr_curr;
+		d_m_axi_awvalid 	<= '0';
+		ddr_write_transactions_left_next <= ddr_write_transactions_left_curr;
+		core_output_ready	<= '0';
+		d_m_axi_wvalid 		<= '0';
+		d_m_axi_wlast 		<= '0';
+		d_m_axi_wstrb		<= (others => '0');
+		d_m_axi_bready 		<= '0';
+
+		control_output_transfer_done <= '0';
+		
+		s_axi_reg_outbyt_next <= s_axi_reg_outbyt;
+
+		if ddr_write_state_curr = DDR_WRITE_IDLE then
+			control_output_idle <= '1';
+			if control_output_transfer_enable = '1' then
+				ddr_write_state_next <= DDR_WRITE_REQUEST;
+				ddr_write_addr_next  <= s_axi_reg_tgaddr;
+			end if;
+		elsif ddr_write_state_curr = DDR_WRITE_REQUEST then
+			d_m_axi_awvalid <= '1';
+			if d_m_axi_awready = '1' then
+				ddr_write_state_next <= DDR_WRITE_TRANSFER;
+				ddr_write_transactions_left_next <= (others => '1');
+			end if;
+		elsif ddr_write_state_curr = DDR_WRITE_TRANSFER then
+			core_output_ready	<= d_m_axi_wready;
+			d_m_axi_wvalid 		<= core_output_valid;
+			d_m_axi_wstrb		<= (others => '1');
+			if core_output_valid = '1' and d_m_axi_wready = '1' then
+				s_axi_reg_outbyt_next <= std_logic_vector(unsigned(s_axi_reg_outbyt) + to_unsigned(1, s_axi_reg_outbyt'length));
+				if ddr_write_transactions_left_curr = (ddr_write_transactions_left_curr'range => '0') then
+					d_m_axi_wlast <= '1';
+					if core_output_last = '0' then
+						ddr_write_state_next <= DDR_WRITE_RESPONSE;
+					else
+						ddr_write_state_next <= DDR_WRITE_LAST_RESPONSE;
+					end if;
+				else
+					ddr_write_transactions_left_next <= std_logic_vector(unsigned(ddr_write_transactions_left_curr) - to_unsigned(1, ddr_write_transactions_left_curr'length));
+					if core_output_last = '1' then
+						--last word but we still are on the write transaction. Change state to go to disable strobing
+						ddr_write_state_next <= DDR_WRITE_TRANSFER_NOSTRB;
+					end if;
+				end if;
+			end if;
+		--finishing transaction with empty bytes to avoid overwriting of stuff
+		elsif ddr_write_state_curr = DDR_WRITE_TRANSFER_NOSTRB then
+			d_m_axi_wvalid <= '1';
+			d_m_axi_wstrb <= (others => '0');
+			if d_m_axi_wready = '1' then
+				s_axi_reg_outbyt_next <= std_logic_vector(unsigned(s_axi_reg_outbyt) + to_unsigned(1, s_axi_reg_outbyt'length));
+				if ddr_write_transactions_left_curr = (ddr_write_transactions_left_curr'range => '0') then
+					d_m_axi_wlast <= '1';
+					ddr_write_state_next <= DDR_WRITE_LAST_RESPONSE;
+				else
+					ddr_write_transactions_left_next <= std_logic_vector(unsigned(ddr_write_transactions_left_curr) - to_unsigned(1, ddr_write_transactions_left_curr'length));
+				end if;
+			end if;
+		elsif ddr_write_state_curr = DDR_WRITE_RESPONSE then
+			d_m_axi_bready <= '1';
+			if d_m_axi_bvalid = '1' then
+				ddr_write_state_next <= DDR_WRITE_REQUEST;
+			end if;
+		elsif ddr_write_state_curr = DDR_WRITE_LAST_RESPONSE then
+			d_m_axi_bready <= '1';
+			if d_m_axi_bvalid = '1' then
+				ddr_write_state_next <= DDR_WRITE_FINISH;
+			end if;
+		elsif ddr_write_state_curr = DDR_WRITE_FINISH then
+			control_output_transfer_done <= '1';
+			if control_output_reset = '1' then
+				ddr_write_state_next <= DDR_WRITE_IDLE;
+			end if;
+		end if;
+	end process;
+
 
 
 end Behavioral;
