@@ -24,7 +24,7 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity BINARY_QUANTIZER is
 	Generic (
-		--up=1, down=0 leaves it the same
+		--0 leaves it the same
 		SHIFT		: integer := 0;
 		DATA_WIDTH	: integer := 16;
 		USER_WIDTH	: integer := 1
@@ -66,6 +66,10 @@ architecture Behavioral of BINARY_QUANTIZER is
 	signal stage_1_user, stage_2_user: std_logic_vector(USER_WIDTH - 1 downto 0);
 
 begin
+
+	assert SHIFT < DATA_WIDTH and SHIFT >= 0
+	report "Check the quantizer parameters"
+	severity error;
 
 	device_enable <= '1' when valid_stages(STAGES - 1) = '0' or output_ready = '1' else '0';
 	input_ready <= device_enable;
