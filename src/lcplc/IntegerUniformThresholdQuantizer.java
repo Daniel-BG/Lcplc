@@ -2,7 +2,7 @@
 
 package lcplc;
 
-public class IntegerUniformThresholdQuantizer {
+public class IntegerUniformThresholdQuantizer implements Quantizer {
 	
 	private int downscale;
 	private int upscale;

@@ -37,10 +37,9 @@ entity LCPLC is
 		--window with which predictions are made. Smaller windows adapt better to fast changes, while 
 		--bigger windows are better for smoother images
 		ACCUMULATOR_WINDOW: integer := 32;
-		--quantizer up and downshift. With every downshift, a bit is lost so that compression is better
+		--quantizer shift. With every shift, a bit is lost so that compression is better
 		--but accuracy is lower
-		UPSHIFT: integer := 1;
-		DOWNSHIFT: integer := 1;
+		QUANTIZER_SHIFT: integer := 0;
 		--threshold for compression. If distortion is greater than this threshold for a certain slice,
 		--the slice is compressed. Otherwise the slice is skipped. Set to zero for lossless compression.
 		THRESHOLD: std_logic_vector := "100000000000000" 
@@ -542,8 +541,7 @@ begin
 			DATA_WIDTH => DATA_WIDTH,
 			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG,
 			ACCUMULATOR_WINDOW => ACCUMULATOR_WINDOW,
-			UPSHIFT => UPSHIFT,
-			DOWNSHIFT => DOWNSHIFT,
+			QUANTIZER_SHIFT => QUANTIZER_SHIFT,
 			THRESHOLD => THRESHOLD
 		)
 		Port map (

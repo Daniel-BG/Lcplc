@@ -30,8 +30,7 @@ entity ERROR_CALC is
 		DATA_WIDTH: positive := 16;
 		MAX_SLICE_SIZE_LOG: positive := 8;
 		ACCUMULATOR_WINDOW: positive := 32;
-		UPSHIFT: positive := 1;
-		DOWNSHIFT: positive := 1;
+		QUANTIZER_SHIFT: integer := 0;
 		THRESHOLD: std_logic_vector := "100000000000000" --has to be std_logic_vector because its value might be greater than 2^32-1: the max of positive
 	);
 	Port (
@@ -373,8 +372,7 @@ begin
 	--error quant/dequant
 	error_quantizer: entity work.BINARY_QUANTIZER
 		Generic map (
-			UPSHIFT => UPSHIFT,
-			DOWNSHIFT_MINUS_1 => DOWNSHIFT - 1,
+			SHIFT => QUANTIZER_SHIFT,
 			DATA_WIDTH => PREDICTION_WIDTH,
 			USER_WIDTH => 3
 		)
@@ -417,8 +415,7 @@ begin
 	--error dequantizer
 	error_dequantizer: entity work.BINARY_DEQUANTIZER
 		Generic map (
-			UPSHIFT => UPSHIFT,
-			DOWNSHIFT_MINUS_1 => DOWNSHIFT - 1,
+			SHIFT => QUANTIZER_SHIFT,
 			DATA_WIDTH => PREDICTION_WIDTH,
 			USER_WIDTH => 1
 		)

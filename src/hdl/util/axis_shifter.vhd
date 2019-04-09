@@ -120,10 +120,39 @@ begin
 		memory_next(i) <= shifted_values(i-1); --when shiftamt_curr(i-1)(i-1) = '1' else memory_curr(i-1);
 	end generate;
 	gen_shamt_final: for i in 0 to STAGES - 1 generate
-		shiftamt_final(i) <= 
-			  (SHIFT_WIDTH - 1 downto BITS_PER_STAGE*(i+1) => '0')
-			& shiftamt_curr(i)(minval(BITS_PER_STAGE*(i+1) - 1, SHIFT_WIDTH - 1) downto BITS_PER_STAGE*i) 
-			& (BITS_PER_STAGE*i - 1 downto 0 => '0');
+		gen_opt_0: if SHIFT_WIDTH - 1 < BITS_PER_STAGE*(i+1) and BITS_PER_STAGE*i - 1 < 0 generate
+			shiftamt_final(i) <= 
+				shiftamt_curr(i)(minval(BITS_PER_STAGE*(i+1) - 1, SHIFT_WIDTH - 1) downto BITS_PER_STAGE*i);
+		end generate;
+		gen_opt_1: if SHIFT_WIDTH - 1 < BITS_PER_STAGE*(i+1) and BITS_PER_STAGE*i - 1 >= 0 generate
+			shiftamt_final(i) <= 
+				shiftamt_curr(i)(minval(BITS_PER_STAGE*(i+1) - 1, SHIFT_WIDTH - 1) downto BITS_PER_STAGE*i) 
+				& (BITS_PER_STAGE*i - 1 downto 0 => '0');
+		end generate;
+		gen_opt_2: if SHIFT_WIDTH - 1 >= BITS_PER_STAGE*(i+1) and BITS_PER_STAGE*i - 1 < 0 generate
+			shiftamt_final(i) <= 
+				  (SHIFT_WIDTH - 1 downto BITS_PER_STAGE*(i+1) => '0')
+				& shiftamt_curr(i)(minval(BITS_PER_STAGE*(i+1) - 1, SHIFT_WIDTH - 1) downto BITS_PER_STAGE*i);
+		end generate;
+		gen_opt_3: if SHIFT_WIDTH - 1 >= BITS_PER_STAGE*(i+1) and BITS_PER_STAGE*i - 1 >= 0 generate
+			shiftamt_final(i) <= 
+				  (SHIFT_WIDTH - 1 downto BITS_PER_STAGE*(i+1) => '0')
+				& shiftamt_curr(i)(minval(BITS_PER_STAGE*(i+1) - 1, SHIFT_WIDTH - 1) downto BITS_PER_STAGE*i) 
+				& (BITS_PER_STAGE*i - 1 downto 0 => '0');
+		end generate;
+		
+		
+		--shiftamt_final(i) <= 
+		--	  (SHIFT_WIDTH - 1 downto BITS_PER_STAGE*(i+1) => '0')
+		--	& shiftamt_curr(i)(minval(BITS_PER_STAGE*(i+1) - 1, SHIFT_WIDTH - 1) downto BITS_PER_STAGE*i) 
+		--	& (BITS_PER_STAGE*i - 1 downto 0 => '0');
+			
+		--shiftamt_final(i) <= 
+		--	std_logic_vector(resize(unsigned(
+		--		shiftamt_curr(i)(minval(BITS_PER_STAGE*(i+1) - 1, SHIFT_WIDTH - 1) downto BITS_PER_STAGE*i) 
+		--		& (BITS_PER_STAGE*i - 1 downto 0 => '0')
+		--	) , SHIFT_WIDTH));
+			
 	end generate;
 	
 	gen_left_shift: if LEFT generate

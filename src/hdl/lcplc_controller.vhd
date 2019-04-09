@@ -38,8 +38,7 @@ entity lcplc_controller is
 		LCPLC_MAX_IMAGE_BAND_LOG	: integer := 12;
 		LCPLC_ALPHA_WIDTH			: integer := 10;
 		LCPLC_ACCUMULATOR_WINDOW	: integer := 32;	
-		LCPLC_UPSHIFT				: integer := 1;
-		LCPLC_DOWNSHIFT				: integer := 1;
+		LCPLC_QUANTIZER_SHIFT		: integer := 0;
 		LCPLC_THRESHOLD				: std_logic_vector := "100000000000000";
 		--ddr3 axi generics
 		DDR3_AXI_ADDR_WIDTH			: integer := 32;
@@ -661,35 +660,34 @@ begin
 		);
 
 	lcplc_clk <= d_m_axi_clk;
-	--core: entity work.LCPLC
-	--	Generic map (
-	--		DATA_WIDTH => (2**LCPLC_DATA_BYTES_LOG)*8,
-	--		WORD_WIDTH_LOG => LCPLC_OUTPUT_BYTES_LOG+3,
-	--		MAX_SLICE_SIZE_LOG => LCPLC_MAX_BLOCK_SAMPLE_LOG + LCPLC_MAX_BLOCK_LINE_LOG,
-	--		ALPHA_WIDTH => LCPLC_ALPHA_WIDTH,
-	--		ACCUMULATOR_WINDOW => LCPLC_ACCUMULATOR_WINDOW,
-	--		UPSHIFT => LCPLC_UPSHIFT,
-	--		DOWNSHIFT => LCPLC_DOWNSHIFT,
-	--		THRESHOLD => LCPLC_THRESHOLD
-	--	)
-	--	Port map (
-	--		clk => lcplc_clk, rst => lcplc_rst,
-	--		x_valid 	=> core_input_valid,
-	--		x_ready 	=> core_input_ready,
-	--		x_data 		=> core_input_data,
-	--		x_last_r	=> core_input_last_r,
-	--		x_last_s	=> core_input_last_s,
-	--		x_last_b	=> core_input_last_b,
-	--		x_last_i 	=> core_input_last_i,
-	--		output_data => core_output_data,
-	--		output_ready=> core_output_ready,
-	--		output_valid=> core_output_valid,
-	--		output_last => core_output_last
-	--	);
-	core_output_data	<= x"0000" & core_input_data;
-	core_input_ready    <= core_output_ready;
-	core_output_valid	<= core_input_valid;
-	core_output_last	<= core_input_last_i;
+	core: entity work.LCPLC
+		Generic map (
+			DATA_WIDTH => (2**LCPLC_DATA_BYTES_LOG)*8,
+			WORD_WIDTH_LOG => LCPLC_OUTPUT_BYTES_LOG+3,
+			MAX_SLICE_SIZE_LOG => LCPLC_MAX_BLOCK_SAMPLE_LOG + LCPLC_MAX_BLOCK_LINE_LOG,
+			ALPHA_WIDTH => LCPLC_ALPHA_WIDTH,
+			ACCUMULATOR_WINDOW => LCPLC_ACCUMULATOR_WINDOW,
+			QUANTIZER_SHIFT => LCPLC_QUANTIZER_SHIFT,
+			THRESHOLD => LCPLC_THRESHOLD
+		)
+		Port map (
+			clk => lcplc_clk, rst => lcplc_rst,
+			x_valid 	=> core_input_valid,
+			x_ready 	=> core_input_ready,
+			x_data 		=> core_input_data,
+			x_last_r	=> core_input_last_r,
+			x_last_s	=> core_input_last_s,
+			x_last_b	=> core_input_last_b,
+			x_last_i 	=> core_input_last_i,
+			output_data => core_output_data,
+			output_ready=> core_output_ready,
+			output_valid=> core_output_valid,
+			output_last => core_output_last
+		);
+	--core_output_data	<= x"0000" & core_input_data;
+	--core_input_ready    <= core_output_ready;
+	--core_output_valid	<= core_input_valid;
+	--core_output_last	<= core_input_last_i;
 
 	--TODO
 	--axi thing that takes inputs and counts and asserts signals as needed counting for irregular borders

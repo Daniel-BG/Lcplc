@@ -28,8 +28,7 @@ module test_lcplc;
 	parameter MAX_SLICE_SIZE_LOG = 8;
 	parameter ALPHA_WIDTH = 10;
 	parameter ACCUMULATOR_WINDOW = 32;
-	parameter UPSHIFT = 1;
-	parameter DOWNSHIFT = 1;
+	parameter QUANTIZER_SHIFT = 0;
 	parameter THRESHOLD = 0;
 	
 	parameter PERIOD = 10;
@@ -115,8 +114,7 @@ module test_lcplc;
 		.MAX_SLICE_SIZE_LOG(MAX_SLICE_SIZE_LOG),
 		.ALPHA_WIDTH(ALPHA_WIDTH),
 		.ACCUMULATOR_WINDOW(ACCUMULATOR_WINDOW),
-		.UPSHIFT(UPSHIFT),
-		.DOWNSHIFT(DOWNSHIFT),
+		.QUANTIZER_SHIFT(QUANTIZER_SHIFT),
 		.THRESHOLD(THRESHOLD)
 	) coder_instance (
 		.clk(clk),

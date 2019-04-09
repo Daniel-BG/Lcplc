@@ -43,8 +43,10 @@ public class Main {
 		
 		private static final int CONST_ACC_QUANT = 32;
 		//delta = down/up
+		private static final boolean CONST_Q_ONLYSHIFT = true;
 		private static final int CONST_UTQ_UPSCALE = 2;
 		private static final int CONST_UTQ_DOWNSCALE = 1;
+		private static final int CONST_SQ_DOWNSCALE = 0;
 		//set gamma to zero to avoid block skipping
 		private static final int CONST_GAMMA = 0;
 		
@@ -224,7 +226,11 @@ public class Main {
 			ExpGolombCoDec expGolombZero = new ExpGolombCoDec(0);
 			GolombCoDec golombCoDec = new GolombCoDec(0);
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
-			IntegerUniformThresholdQuantizer iutq = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE);
+			Quantizer quantizer;
+			if (CONST_Q_ONLYSHIFT)
+				quantizer = new ShifterQuantizer(CONST_SQ_DOWNSCALE);
+			else
+				quantizer = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE); 
 			
 			
 			expGolombZero.startSampling("egz_input", "egz_code", "egz_quant");
@@ -249,8 +255,8 @@ public class Main {
 						decodedBlock[0][l][s] = block[0][l][s];
 						acc.add(0);*/
 						
-						int quant = iutq.quantize(block[0][l][s]);
-						int dequant = iutq.dequantize(quant);
+						int quant = quantizer.quantize(block[0][l][s]);
+						int dequant = quantizer.dequantize(quant);
 						
 						mappedError = Mapper.mapError(quant); //Mapper.mapError(block[0][l][s]);
 						
@@ -270,8 +276,8 @@ public class Main {
 						
 						
 						error = block[0][l][s] - (int) prediction;
-						int qErr  = iutq.quantize(error);
-						error 	  = iutq.dequantize(qErr);
+						int qErr  = quantizer.quantize(error);
+						error 	  = quantizer.dequantize(qErr);
 						decodedBlock[0][l][s] = (int) prediction + error;
 
 						kj = findkj(acc);
@@ -370,8 +376,8 @@ public class Main {
 						//quantize error and replace it with the
 						//unquantized version since this is the one
 						//the decoder will have
-						int qErr  = iutq.quantize((int) error);
-						error 	  = iutq.dequantize(qErr);
+						int qErr  = quantizer.quantize((int) error);
+						error 	  = quantizer.dequantize(qErr);
 						long mappedError = Mapper.mapError(qErr);
 						savedMappedError[l][s] = (int) mappedError;
 						
@@ -542,7 +548,11 @@ public class Main {
 			ExpGolombCoDec expGolombZero = new ExpGolombCoDec(0);
 			GolombCoDec golombCoDec = new GolombCoDec(0);
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
-			IntegerUniformThresholdQuantizer iutq = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE);
+			Quantizer quantizer;
+			if (CONST_Q_ONLYSHIFT)
+				quantizer = new ShifterQuantizer(CONST_SQ_DOWNSCALE);
+			else
+				quantizer = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE); 
 			
 			//decompress first band
 			int[][] decodedBand = decodedBlock[0];
@@ -553,7 +563,7 @@ public class Main {
 						acc.add(0);*/
 						int mappedErr = expGolombZero.decode(bis);
 						int quant = Mapper.unmapError(mappedErr);
-						int dequant = iutq.dequantize(quant);
+						int dequant = quantizer.dequantize(quant);
 						decodedBlock[0][l][s] = dequant;
 						acc.add(dequant);
 					} else {
@@ -564,7 +574,7 @@ public class Main {
 						
 						int mappedError = golombCoDec.decode(kj, bis);
 						int qErr = Mapper.unmapError(mappedError);
-						int error = iutq.dequantize(qErr);
+						int error = quantizer.dequantize(qErr);
 						//quantize error if necessary (losing information)
 						decodedBlock[0][l][s] = prediction + error;
 						acc.add(Math.abs(error));		//update Rj after coding
@@ -608,7 +618,7 @@ public class Main {
 							}
 							
 							int qErr = Mapper.unmapError(mappedError);
-							int error = iutq.dequantize(qErr);
+							int error = quantizer.dequantize(qErr);
 							
 							decodedBlock[b][l][s] = Utils.clamp((int) prediction + error, 0, (1 << SAMPLE_DEPTH) - 1);
 							acc.add(Math.abs(error));		//update Rj after coding

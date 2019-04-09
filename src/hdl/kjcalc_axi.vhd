@@ -103,8 +103,9 @@ begin
 	calc_rj_shift: process(input_rj, input_j) 
 		variable rj_shifted_tmp: std_logic_vector(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0);
 	begin
-		rj_shifted_tmp := (others => '0');
-		for i in J_WIDTH-1 downto 0 loop
+		--default to having a '1' only in the lowest position of J to avoid null ranges in the loop
+		rj_shifted_tmp := input_rj(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto 0);
+		for i in J_WIDTH-1 downto 1 loop
 			if input_j(i) = '1' then
 				rj_shifted_tmp := (i - 1 downto 0 => '0') & input_rj(DATA_WIDTH + EXTRA_RJ_WIDTH - 1 downto i);
 				exit;
