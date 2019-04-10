@@ -28,8 +28,10 @@ module test_lcplc;
 	parameter MAX_SLICE_SIZE_LOG = 8;
 	parameter ALPHA_WIDTH = 10;
 	parameter ACCUMULATOR_WINDOW = 32;
+	parameter QUANTIZER_SHIFT_WIDTH = 4;
+	
 	parameter QUANTIZER_SHIFT = 0;
-	parameter THRESHOLD = 0;
+	wire[63:0] THRESHOLD = 16'h0000_0000_0000_0000;
 	
 	parameter PERIOD = 10;
 	reg clk, rst;
@@ -114,8 +116,7 @@ module test_lcplc;
 		.MAX_SLICE_SIZE_LOG(MAX_SLICE_SIZE_LOG),
 		.ALPHA_WIDTH(ALPHA_WIDTH),
 		.ACCUMULATOR_WINDOW(ACCUMULATOR_WINDOW),
-		.QUANTIZER_SHIFT(QUANTIZER_SHIFT),
-		.THRESHOLD(THRESHOLD)
+		.QUANTIZER_SHIFT_WIDTH(QUANTIZER_SHIFT_WIDTH)
 	) coder_instance (
 		.clk(clk),
 		.rst(rst),
@@ -129,7 +130,9 @@ module test_lcplc;
 		.output_data(output_data),
 		.output_ready(output_ready),
 		.output_valid(output_valid),
-		.output_last(output_last)
+		.output_last(output_last),
+		.cfg_quant_shift(QUANTIZER_SHIFT),
+		.cfg_threshold(THRESHOLD)
 	);
 
 endmodule

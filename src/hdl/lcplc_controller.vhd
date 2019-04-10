@@ -38,8 +38,7 @@ entity lcplc_controller is
 		LCPLC_MAX_IMAGE_BAND_LOG	: integer := 12;
 		LCPLC_ALPHA_WIDTH			: integer := 10;
 		LCPLC_ACCUMULATOR_WINDOW	: integer := 32;	
-		LCPLC_QUANTIZER_SHIFT		: integer := 0;
-		LCPLC_THRESHOLD				: std_logic_vector := "100000000000000";
+		LCPLC_QUANTIZER_SHIFT_WIDTH	: integer := 4;
 		--ddr3 axi generics
 		DDR3_AXI_ADDR_WIDTH			: integer := 32;
 		DDR3_AXI_DATA_BYTES_LOG		: integer := 2 --make sure this is >= than max(LCPLC_OUTPUT_BYTES_LOG, LCPLC_DATA_BYTES_LOG)
@@ -134,6 +133,10 @@ architecture Behavioral of lcplc_controller is
 	constant C_S_AXI_REG_TGADDR_LOCALADDR: integer := 28;   --addr start of output data
 	constant C_S_AXI_REG_BCKSMP_LOCALADDR: integer := 32; 	--number of samples in block
 	constant C_S_AXI_REG_BCKLIN_LOCALADDR: integer := 36;	--number of lines in block
+	constant C_S_AXI_REG_THRESL_LOCALADDR: integer := 40;	--threshold lower part
+	constant C_S_AXI_REG_THRESU_LOCALADDR: integer := 44;   --threshold upper part
+	constant C_S_AXI_REG_QSHIFT_LOCALADDR: integer := 48;   --shift value for quantizer
+	 
 	--read only status registers (local addresses)
 	constant C_S_AXI_REG_STATUS_LOCALADDR: integer := 128;  --status of lcplc
 	constant C_S_AXI_REG_INBYTE_LOCALADDR: integer := 132;	--number of bytes read from mem so far
@@ -144,6 +147,11 @@ architecture Behavioral of lcplc_controller is
 	constant C_S_AXI_REG_CNCLKU_LOCALADDR: integer := 152;  --upper part of clock count for control bus
 	constant C_S_AXI_REG_MMCLKL_LOCALADDR: integer := 156;  --lower part of clock count for memory bus
 	constant C_S_AXI_REG_MMCLKU_LOCALADDR: integer := 160;  --upper part of clock count for memory bus
+	--lcplc generics to know how it was configured
+	constant C_S_AXI_REG_GENSIZ_LOCALADDR: integer := 192;  --lcplc input and output axis sizes
+	constant C_S_AXI_REG_GENMAX_LOCALADDR: integer := 196;  --max size allowed for block and image
+	constant C_S_AXI_REG_GENOTH_LOCALADDR: integer := 200; 	--others
+	constant C_S_AXI_REG_GENBUS_LOCALADDR: integer := 204; 	--info about control and data buses
 	--debug register
 	constant C_S_AXI_REG_DBGREG_LOCALADDR: integer := 252;
 
@@ -152,6 +160,7 @@ architecture Behavioral of lcplc_controller is
 	constant CONTROL_CODE_START_0	: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) := std_logic_vector(to_unsigned(62, (2**CONTROLLER_DATA_BYTES_LOG)*8));
 	constant CONTROL_CODE_START_1	: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) := std_logic_vector(to_unsigned(63, (2**CONTROLLER_DATA_BYTES_LOG)*8));
 
+	--metaconfig registers
 	signal s_axi_reg_ctrlrg, s_axi_reg_staddr, s_axi_reg_smplwi,
 		s_axi_reg_byteno, s_axi_reg_smplno, s_axi_reg_lineno, s_axi_reg_bandno,
 		s_axi_reg_tgaddr,
@@ -160,12 +169,17 @@ architecture Behavioral of lcplc_controller is
 		s_axi_reg_ddrwst, s_axi_reg_ddrrst,
 		s_axi_reg_dbgreg,
 		s_axi_reg_inbyte_next, s_axi_reg_outbyt_next: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
-
+	--clock registers
 	signal s_axi_reg_cnclk, s_axi_reg_mmclk: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
 	alias s_axi_reg_cnclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_cnclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
 	alias s_axi_reg_cnclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_cnclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
 	alias s_axi_reg_mmclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_mmclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
 	alias s_axi_reg_mmclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_mmclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
+	--lcplc config registers
+	signal s_axi_reg_qshift: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
+	signal s_axi_reg_thres: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
+	alias s_axi_reg_thresu: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_thres((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
+	alias s_axi_reg_thresl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_thres((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
 
 	signal s_axi_reg_wren, s_axi_reg_readen: std_logic; 
 
@@ -288,6 +302,12 @@ begin
 						s_axi_reg_bcksmp <= c_s_axi_writedata_curr;
 					elsif local_c_s_axi_writeaddr = C_S_AXI_REG_BCKLIN_LOCALADDR then
 						s_axi_reg_bcklin <= c_s_axi_writedata_curr;
+					elsif local_c_s_axi_writeaddr = C_S_AXI_REG_THRESL_LOCALADDR then
+						s_axi_reg_thresl <= c_s_axi_writedata_curr;
+					elsif local_c_s_axi_writeaddr = C_S_AXI_REG_THRESU_LOCALADDR then
+						s_axi_reg_thresu <= c_s_axi_writedata_curr;
+					elsif local_c_s_axi_writeaddr = C_S_AXI_REG_QSHIFT_LOCALADDR then
+						s_axi_reg_qshift <= c_s_axi_writedata_curr;
 					end if;
 				end if;
 			end if;
@@ -408,6 +428,33 @@ begin
 						c_s_axi_readdata <= s_axi_reg_mmclkl;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_DBGREG_LOCALADDR then
 						c_s_axi_readdata <= s_axi_reg_dbgreg;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_THRESL_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_thresl;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_THRESU_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_thresu;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_QSHIFT_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_qshift;
+					--generics read ports
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_GENSIZ_LOCALADDR then
+						c_s_axi_readdata <= std_logic_vector(to_unsigned(LCPLC_DATA_BYTES_LOG, 16))
+										&	std_logic_vector(to_unsigned(LCPLC_OUTPUT_BYTES_LOG, 16));
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_GENMAX_LOCALADDR then
+						c_s_axi_readdata <= std_logic_vector(to_unsigned(LCPLC_MAX_IMAGE_BAND_LOG, 8))
+										&	std_logic_vector(to_unsigned(LCPLC_MAX_IMAGE_LINE_LOG, 4))
+										&	std_logic_vector(to_unsigned(LCPLC_MAX_IMAGE_SAMPLE_LOG, 4))
+										&	std_logic_vector(to_unsigned(LCPLC_MAX_BLOCK_LINE_LOG, 12))
+										& 	std_logic_vector(to_unsigned(LCPLC_MAX_BLOCK_SAMPLE_LOG, 4));
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_GENOTH_LOCALADDR then
+						c_s_axi_readdata <= std_logic_vector(to_unsigned(LCPLC_ACCUMULATOR_WINDOW, 16))
+										&	std_logic_vector(to_unsigned(LCPLC_ALPHA_WIDTH, 8))
+										&	std_logic_vector(to_unsigned(LCPLC_QUANTIZER_SHIFT_WIDTH, 8));
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_GENBUS_LOCALADDR then
+						c_s_axi_readdata <= std_logic_vector(to_unsigned(CONTROLLER_ADDR_WIDTH, 8))
+										&	std_logic_vector(to_unsigned(CONTROLLER_DATA_BYTES_LOG, 8))
+										&	std_logic_vector(to_unsigned(DDR3_AXI_ADDR_WIDTH, 8))
+										&	std_logic_vector(to_unsigned(DDR3_AXI_DATA_BYTES_LOG, 8));
+					else --fallback to all zeroes
+						c_s_axi_readdata <= (others => '0');
 					end if;
 				end if;
 			end if;
@@ -723,8 +770,7 @@ begin
 			MAX_SLICE_SIZE_LOG => LCPLC_MAX_BLOCK_SAMPLE_LOG + LCPLC_MAX_BLOCK_LINE_LOG,
 			ALPHA_WIDTH => LCPLC_ALPHA_WIDTH,
 			ACCUMULATOR_WINDOW => LCPLC_ACCUMULATOR_WINDOW,
-			QUANTIZER_SHIFT => LCPLC_QUANTIZER_SHIFT,
-			THRESHOLD => LCPLC_THRESHOLD
+			QUANTIZER_SHIFT_WIDTH => LCPLC_QUANTIZER_SHIFT_WIDTH
 		)
 		Port map (
 			clk => lcplc_clk, rst => lcplc_rst,
@@ -738,7 +784,10 @@ begin
 			output_data => core_output_data,
 			output_ready=> core_output_ready,
 			output_valid=> core_output_valid,
-			output_last => core_output_last
+			output_last => core_output_last,
+			--config stuff
+			cfg_quant_shift	=> s_axi_reg_qshift(LCPLC_QUANTIZER_SHIFT_WIDTH - 1 downto 0),
+			cfg_threshold	=> s_axi_reg_thres(((2**LCPLC_DATA_BYTES_LOG)*8 + 3)*2 + LCPLC_MAX_BLOCK_SAMPLE_LOG + LCPLC_MAX_BLOCK_LINE_LOG - 1 downto 0)
 		);
 --	core_output_data	<= x"0000" & core_input_data;
 --	core_input_ready    <= core_output_ready;

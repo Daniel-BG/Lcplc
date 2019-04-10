@@ -39,10 +39,7 @@ entity LCPLC is
 		ACCUMULATOR_WINDOW: integer := 32;
 		--quantizer shift. With every shift, a bit is lost so that compression is better
 		--but accuracy is lower
-		QUANTIZER_SHIFT: integer := 0;
-		--threshold for compression. If distortion is greater than this threshold for a certain slice,
-		--the slice is compressed. Otherwise the slice is skipped. Set to zero for lossless compression.
-		THRESHOLD: std_logic_vector := "100000000000000" 
+		QUANTIZER_SHIFT_WIDTH: integer := 4
 	);
 	Port (
 		clk, rst		: in	std_logic;
@@ -56,7 +53,12 @@ entity LCPLC is
 		output_data		: out 	std_logic_vector(2**WORD_WIDTH_LOG - 1 downto 0);
 		output_ready	: in	std_logic;
 		output_valid	: out	std_logic;
-		output_last		: out 	std_logic
+		output_last		: out 	std_logic;
+		--config
+		--threshold for compression. If distortion is greater than this threshold for a certain slice,
+		--the slice is compressed. Otherwise the slice is skipped. Set to zero for lossless compression.
+		cfg_quant_shift	: in  std_logic_vector(QUANTIZER_SHIFT_WIDTH - 1 downto 0);
+		cfg_threshold	: in  std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0)
 	);
 end LCPLC;
 
@@ -541,8 +543,7 @@ begin
 			DATA_WIDTH => DATA_WIDTH,
 			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG,
 			ACCUMULATOR_WINDOW => ACCUMULATOR_WINDOW,
-			QUANTIZER_SHIFT => QUANTIZER_SHIFT,
-			THRESHOLD => THRESHOLD
+			QUANTIZER_SHIFT_WIDTH => QUANTIZER_SHIFT_WIDTH
 		)
 		Port map (
 			clk => clk, rst	=> rst,
@@ -576,7 +577,9 @@ begin
 			xhatout_last_b  => xhat_last_b,
 			d_flag_valid	=> d_flag_valid,
 			d_flag_ready	=> d_flag_ready,
-			d_flag_data 	=> d_flag_data
+			d_flag_data 	=> d_flag_data,
+			cfg_quant_shift => cfg_quant_shift,
+			cfg_threshold   => cfg_threshold
 		);
 		
 	--get substituter helper flags

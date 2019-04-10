@@ -25,7 +25,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity BINARY_QUANTIZER is
 	Generic (
 		--0 leaves it the same
-		SHIFT		: integer := 0;
+		SHIFT_WIDTH	: integer := 4;
 		DATA_WIDTH	: integer := 16;
 		USER_WIDTH	: integer := 1
 	);
@@ -40,7 +40,9 @@ entity BINARY_QUANTIZER is
 		output_valid: out std_logic;
 		output_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
 		output_last : out std_logic;
-		output_user : out std_logic_vector(USER_WIDTH - 1 downto 0)
+		output_user : out std_logic_vector(USER_WIDTH - 1 downto 0);
+		--configuration ports
+		input_shift	: in  std_logic_vector(SHIFT_WIDTH - 1 downto 0)
 	);
 end BINARY_QUANTIZER;
 
@@ -67,7 +69,7 @@ architecture Behavioral of BINARY_QUANTIZER is
 
 begin
 
-	assert SHIFT < DATA_WIDTH and SHIFT >= 0
+	assert 2**SHIFT_WIDTH <= DATA_WIDTH
 	report "Check the quantizer parameters"
 	severity error;
 
@@ -105,21 +107,20 @@ begin
 	--stage 1
 	input_sign_extended <= input_data(DATA_WIDTH - 1) & input_data;
 	abs_val <= input_sign_extended when input_data(DATA_WIDTH - 1) = '0' else std_logic_vector(-signed(input_sign_extended));
-	gen_zero_shift: if SHIFT = 0 generate
-		added_downshift <= abs_val;
-	end generate;
-	gen_shift: if SHIFT > 0 generate
-		added_downshift <= std_logic_vector(unsigned(abs_val) + to_unsigned(2**(SHIFT - 1), DATA_WIDTH + 1));
-	end generate;
+	added_downshift_comb: process(abs_val, input_shift)
+	begin
+		if input_shift = (input_shift'range => '0') then
+			added_downshift <= abs_val;
+		else
+			added_downshift <= std_logic_vector(
+				unsigned(abs_val) + shift_left(to_unsigned(1, added_downshift'length), to_integer(unsigned(input_shift) - to_unsigned(1, input_shift'length)))
+			);
+		end if;
+	end process;
 
 	--stage 2
-	gen_zero_shift_2: if SHIFT = 0 generate
-		downshifted <= stage_1_reg;
-	end generate;
-	gen_shift_2: if SHIFT > 0 generate
-		downshifted <= (SHIFT - 1 downto 0 => '0') & stage_1_reg(DATA_WIDTH downto SHIFT);
-	end generate;
-	
+	downshifted <= std_logic_vector(shift_right(unsigned(stage_1_reg), to_integer(unsigned(input_shift))));
+
 	downshifted_inverse <= std_logic_vector(-signed(downshifted));
 	quantized_data <= downshifted(DATA_WIDTH - 1 downto 0) when input_sign = '0' else downshifted_inverse(DATA_WIDTH - 1 downto 0);
 	

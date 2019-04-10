@@ -30,8 +30,7 @@ entity ERROR_CALC is
 		DATA_WIDTH: positive := 16;
 		MAX_SLICE_SIZE_LOG: positive := 8;
 		ACCUMULATOR_WINDOW: positive := 32;
-		QUANTIZER_SHIFT: integer := 0;
-		THRESHOLD: std_logic_vector := "100000000000000" --has to be std_logic_vector because its value might be greater than 2^32-1: the max of positive
+		QUANTIZER_SHIFT_WIDTH: integer := 4
 	);
 	Port (
 		clk, rst		: in  std_logic;
@@ -72,7 +71,10 @@ entity ERROR_CALC is
 		xhatout_last_b	: out std_logic;
 		d_flag_valid	: out std_logic;
 		d_flag_ready	: in  std_logic;
-		d_flag_data 	: out std_logic
+		d_flag_data 	: out std_logic;
+		--config stuff
+		cfg_quant_shift	: in  std_logic_vector(QUANTIZER_SHIFT_WIDTH - 1 downto 0);
+		cfg_threshold	: in  std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0)
 	);
 end ERROR_CALC;
 
@@ -98,7 +100,7 @@ architecture Behavioral of ERROR_CALC is
 	signal xtilde_clamped_raw_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
 	--fifo for xhatout calculation later (after quantizing/dequantizing the error)
-	constant XHATOUT_CALC_FIFO_DEPTH: positive := 8; --as much as the quantizing and dequantizing take
+	constant XHATOUT_CALC_FIFO_DEPTH: positive := 10; --as much as the quantizing and dequantizing take
 	signal xhatout_calc_fifo_ready, xhatout_calc_fifo_valid: std_logic;
 	signal xhatout_calc_fifo_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
 	
@@ -346,7 +348,6 @@ begin
 			output_ready=> distortion_ready
 		);
 		
-	d_flag_thres <= std_logic_vector(resize(unsigned(THRESHOLD),(DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG));
 	d_threshold_comparator: entity work.AXIS_COMPARATOR
 		Generic map (
 			DATA_WIDTH => (DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG,
@@ -360,7 +361,7 @@ begin
 			input_0_data  => distortion_data,
 			input_0_valid => distortion_valid,
 			input_0_ready => distortion_ready,
-			input_1_data  => d_flag_thres,
+			input_1_data  => cfg_threshold,
 			input_1_valid => '1',
 			input_1_ready => open,
 			output_data	  => d_flag_data,
@@ -372,7 +373,7 @@ begin
 	--error quant/dequant
 	error_quantizer: entity work.BINARY_QUANTIZER
 		Generic map (
-			SHIFT => QUANTIZER_SHIFT,
+			SHIFT_WIDTH => QUANTIZER_SHIFT_WIDTH,
 			DATA_WIDTH => PREDICTION_WIDTH,
 			USER_WIDTH => 3
 		)
@@ -385,7 +386,8 @@ begin
 			output_ready => error_quant_ready,
 			output_valid => error_quant_valid,
 			output_data  => error_quant_data,
-			output_user  => error_quant_last_ibs
+			output_user  => error_quant_last_ibs,
+			input_shift  => cfg_quant_shift
 		);
 		
 	--splitter for quantized error 
@@ -415,7 +417,7 @@ begin
 	--error dequantizer
 	error_dequantizer: entity work.BINARY_DEQUANTIZER
 		Generic map (
-			SHIFT => QUANTIZER_SHIFT,
+			SHIFT_WIDTH => QUANTIZER_SHIFT_WIDTH,
 			DATA_WIDTH => PREDICTION_WIDTH,
 			USER_WIDTH => 1
 		)
@@ -430,7 +432,8 @@ begin
 			output_valid => error_unquant_valid,
 			output_data  => error_unquant_data,
 			output_last  => error_unquant_last_s,
-			output_user  => error_unquant_last_b_stdlv
+			output_user  => error_unquant_last_b_stdlv,
+			input_shift  => cfg_quant_shift
 		);
 		
 	--splitter for error dequantizer
