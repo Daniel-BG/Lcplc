@@ -3,6 +3,7 @@ package lcplc;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Map.Entry;
 
@@ -20,7 +21,7 @@ public class Main {
 	//USE THIS SINCE ITS DATA TYPE 12: UNSIGNED TWO BYTE!!
 	static String input = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.dat";
 	static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.hdr";
-	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data/";
+	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data_2/";
 	static String sampleExt = ".smpl";
 
 
@@ -80,6 +81,9 @@ public class Main {
 			ByteArrayOutputStream adbaos = new ByteArrayOutputStream();
 			BitOutputStream bos = new BitOutputStream(adbaos);
 			
+			ByteArrayOutputStream rawBinBaos = new ByteArrayOutputStream();
+			BitOutputStream rawBinIn = new BitOutputStream(rawBinBaos);
+			
 			int compressedBlocks = 0;
 			for (int l = 0; l < imgLines; l += MAX_LINES_PER_BLOCK) {
 				for (int s = 0; s < imgSamples; s += MAX_SAMPLES_PER_BLOCK) {
@@ -93,6 +97,9 @@ public class Main {
 						for (int ll = 0; ll < blockLines; ll++) {
 							for (int ss = 0; ss < blockSamples; ss++) {
 								block[bb][ll][ss] = hid.getValueAt(bb, ll+l, ss+s);
+								try {
+									rawBinIn.writeBits(hid.getValueAt(bb, ll+l, ss+s), 16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+								} catch (IOException e) {e.printStackTrace();}
 							}
 						}
 					}
@@ -168,6 +175,53 @@ public class Main {
 				System.exit(0);
 			}
 			
+			//output raw input and raw output (in read raster order)
+			try {
+				rawBinIn.flush();
+				byte[] rbb = rawBinBaos.toByteArray();
+				//change endianness
+				for (int i = 0; i < rbb.length; i += 4) {
+					byte[] tmp = new byte[4];
+					tmp[0] = rbb[i];
+					tmp[1] = rbb[i+1];
+					tmp[2] = rbb[i+2];
+					tmp[3] = rbb[i+3];
+					// swap
+					rbb[i] 	 = tmp[1];
+					rbb[i+1] = tmp[0];
+					rbb[i+2] = tmp[3];
+					rbb[i+3] = tmp[2];
+				}
+				FileOutputStream stream = new FileOutputStream(samplerBaseDir + "rawIn.bin");
+				stream.write(rbb);
+				stream.close();
+				
+				stream = new FileOutputStream(samplerBaseDir + "rawOut.bin");
+				for (int i = 0; i < bytesoutput.length - 4; i += 4) {
+					byte[] tmp = new byte[4];
+					tmp[0] = bytesoutput[i];
+					tmp[1] = bytesoutput[i+1];
+					tmp[2] = bytesoutput[i+2];
+					tmp[3] = bytesoutput[i+3];
+					// swap
+					bytesoutput[i] 	 = tmp[1];
+					bytesoutput[i+1] = tmp[0];
+					bytesoutput[i+2] = tmp[3];
+					bytesoutput[i+3] = tmp[2];
+				}
+				stream.write(bytesoutput);
+				stream.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+			try {
+				bos.close();
+				rawBinIn.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 		
 		

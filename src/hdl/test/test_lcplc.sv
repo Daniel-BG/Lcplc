@@ -52,16 +52,35 @@ module test_lcplc;
 	always #(PERIOD/2) clk = ~clk;
 	
 	initial begin
-		gen_x_enable = 0;
-		output_checker_enable = 0;
-
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
 		rst = 0;
-
-		gen_x_enable = 1;
-		output_checker_enable = 1;
+	end
+	
+	
+	initial begin
+		gen_x_enable = 0;
+		
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*3)
+			gen_x_enable = 1;
+			#(PERIOD)
+			gen_x_enable = 0;
+		end
+	end
+	
+	initial begin
+		output_checker_enable = 0;
+		
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*7)
+			output_checker_enable = 1;
+			#(PERIOD)
+			output_checker_enable = 0;
+		end
 	end
 	
 	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X)) GEN_x
