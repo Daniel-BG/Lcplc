@@ -42,6 +42,11 @@ end WORD_MERGER;
 
 architecture Behavioral of WORD_MERGER is
 	signal data_buf, data_buf_next: std_logic_vector(WORD_WIDTH-1 downto 0);
+
+	signal data_buf_full, data_buf_full_next: std_logic;
+	signal data_buf_last, data_buf_last_next: std_logic;
+
+	signal output_valid_in, input_ready_in: std_logic;
 	
 begin
 	
@@ -50,22 +55,45 @@ begin
 		if rising_Edge(clk) then
 			if rst = '1' then
 				data_buf <= (others => '0');
+				data_buf_full <= '0';
+				data_buf_last <= '0';
 			else
 				data_buf <= data_buf_next;
+				data_buf_full <= data_buf_full_next;
+				data_buf_last <= data_buf_last_next;
 			end if;
 		end if;
 	end process;
-	
-	
-	data_buf_next <=	
-		(others => '0') 		when input_ends_word = '1' and input_valid = '1' else
-		data_buf				when input_valid = '0' else
-		data_buf or input_data; 
-	
-	output_data <= input_data or data_buf;
-	input_ready <= output_ready;
-	output_valid <= ((input_ends_word or input_last) and input_valid);
-	output_last <= input_last;
 
+	
+	output_valid_in <= data_buf_full;
+	output_valid 	<= output_valid_in;
+	input_ready_in  <= '1' when data_buf_full = '0' or output_ready = '1' else '0';
+	input_ready  	<= input_ready_in;
+	output_last     <= data_buf_last;
+	output_data		<= data_buf;
+
+	calc_next: process(output_valid_in, input_ready_in, output_ready, input_valid,
+		data_buf, data_buf_full, data_buf_last, input_data, input_last, input_ends_word)
+	begin
+		--defaults
+		data_buf_next <= data_buf;
+		data_buf_full_next <= data_buf_full;
+		data_buf_last_next <= data_buf_last;
+		--
+		if output_valid_in = '1' and output_ready = '1' and input_ready_in = '1' and input_valid = '1' then
+			data_buf_next <= input_data;
+			data_buf_last_next <= input_last;
+			data_buf_full_next <= input_ends_word;
+		elsif output_valid_in = '1' and output_ready = '1' then
+			data_buf_next <= (data_buf_next'range => '0');
+			data_buf_last_next <= '0';
+			data_buf_full_next <= '0';
+		elsif input_ready_in = '1' and input_valid = '1' then
+			data_buf_next <= data_buf or input_data;
+			data_buf_last_next <= data_buf_last or input_last;
+			data_buf_full_next <= input_ends_word;
+		end if;
+	end process;
 
 end Behavioral;
