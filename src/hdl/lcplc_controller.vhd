@@ -113,7 +113,20 @@ entity lcplc_controller is
 		d_m_axi_rresp		: in  std_logic_vector(AXI_BRESP_WIDTH - 1 downto 0);
 		d_m_axi_rlast		: in  std_logic;
 		d_m_axi_rvalid		: in  std_logic;
-		d_m_axi_rready		: out std_logic
+		d_m_axi_rready		: out std_logic;
+		----
+		----debug signals clocked to d_m_axi_clk
+		dbg_out_0			: out std_logic_vector(31 downto 0);
+		dbg_out_1			: out std_logic_vector(31 downto 0);
+		dbg_out_2			: out std_logic_vector(31 downto 0);
+		dbg_out_3			: out std_logic_vector(31 downto 0);
+		dbg_out_4			: out std_logic_vector(31 downto 0);
+		dbg_out_5			: out std_logic_vector(31 downto 0);
+		dbg_out_6			: out 	std_logic_vector(72 downto 0);
+		dbg_out_7			: out 	std_logic_vector(8 downto 0);
+		dbg_out_8			: out 	std_logic_vector(8 downto 0);
+		dbg_out_9			: out 	std_logic_vector(40 downto 0);
+		dbg_out_10			: out 	std_logic_vector(40 downto 0)
 	);
 
 end lcplc_controller;
@@ -248,7 +261,7 @@ architecture Behavioral of lcplc_controller is
 	signal core_output_data: std_logic_vector((2**LCPLC_OUTPUT_BYTES_LOG)*8 - 1 downto 0);
 	signal core_output_ready, core_output_valid: std_logic;
 	signal core_output_last: std_logic;
-	 
+	
 begin
 	-- DEBUG BEGIN
 	s_axi_reg_dbgreg <= 
@@ -257,6 +270,14 @@ begin
 		& 				"0" & core_output_last  & core_output_valid  & core_output_ready 
 		& 				"0" &  				"0" & ififo_output_valid & ififo_output_ready
 		& ififo_almost_empty& 				"0" & ififo_input_valid  & ififo_input_ready; 
+		
+	dbg_out_0 <= core_input_ready & core_input_valid & "00"
+				& core_input_last_r & core_input_last_s & core_input_last_b & core_input_last_i 
+				& "00000000" 
+				& core_input_data;
+				
+	dbg_out_1 <= core_output_ready & core_output_valid
+				& core_output_data(29 downto 0);		
 	-- DEBUG END
 
 
@@ -787,7 +808,16 @@ begin
 			output_last => core_output_last,
 			--config stuff
 			cfg_quant_shift	=> s_axi_reg_qshift(LCPLC_QUANTIZER_SHIFT_WIDTH - 1 downto 0),
-			cfg_threshold	=> s_axi_reg_thres(((2**LCPLC_DATA_BYTES_LOG)*8 + 3)*2 + LCPLC_MAX_BLOCK_SAMPLE_LOG + LCPLC_MAX_BLOCK_LINE_LOG - 1 downto 0)
+			cfg_threshold	=> s_axi_reg_thres(((2**LCPLC_DATA_BYTES_LOG)*8 + 3)*2 + LCPLC_MAX_BLOCK_SAMPLE_LOG + LCPLC_MAX_BLOCK_LINE_LOG - 1 downto 0),
+			dbg_out_0 => dbg_out_2,
+			dbg_out_1 => dbg_out_3,
+			dbg_out_2 => dbg_out_4,
+			dbg_out_3 => dbg_out_5,
+			dbg_out_4 => dbg_out_6,
+			dbg_out_5 => dbg_out_7,
+			dbg_out_6 => dbg_out_8,
+			dbg_out_7 => dbg_out_9,
+			dbg_out_8 => dbg_out_10
 		);
 --	core_output_data	<= x"0000" & core_input_data;
 --	core_input_ready    <= core_output_ready;

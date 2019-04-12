@@ -67,7 +67,15 @@ entity CODER is
 		output_data	: out	std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
 		output_valid: out	std_logic;
 		output_ready: in 	std_logic;
-		output_last	: out 	std_logic --triggers for ehat_last_i input
+		output_last	: out 	std_logic; --triggers for ehat_last_i input
+		--
+		dbg_out_0		: out std_logic_vector(31 downto 0);
+		dbg_out_1		: out std_logic_vector(31 downto 0);
+		dbg_out_2			: out 	std_logic_vector(72 downto 0);
+		dbg_out_3			: out 	std_logic_vector(8 downto 0);
+		dbg_out_4			: out 	std_logic_vector(8 downto 0);
+		dbg_out_5			: out 	std_logic_vector(40 downto 0);
+		dbg_out_6			: out 	std_logic_vector(40 downto 0)
 	);
 end CODER;
 
@@ -153,7 +161,17 @@ architecture Behavioral of CODER is
 	signal packer_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
 	signal packer_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 
+	signal debug_state: std_logic_vector(11 downto 0);
 begin
+	--debug signals
+	dbg_out_0 <= packer_code(31 downto 0); --the others are probaably not used anyway
+	dbg_out_1 <= (packer_ready and packer_valid) & packer_last & packer_length
+				& x"00"
+				& (control_valid and control_ready) & "0" & control_output_data 
+				& debug_state;
+	--debug signals
+
+
 	ehat_splitter_input_data <= ehat_last_i & ehat_last_b & ehat_last_s & ehat_data;
 
 	--ehat splitter into ehat and control
@@ -451,15 +469,19 @@ begin
 		packer_code   <= (others => '0');
 		packer_length <= (others => '0');
 		packer_last   <= '0';
+		
+		debug_state <= x"000";
 
 		--FIRST BLOCK DOES NOT OUTPUT FLAG NOR ALPHA/XMEAN
 		if state_curr = DISCARD_FLAG then
+			debug_state <= x"001";
 			d_flag_2_ready <= '1';
 			if d_flag_2_valid = '1' then
 				state_next <= OUTPUT_EXP_GOL;
 			end if;
 		--OUTPUT FLAG AND SAVE IT FOR LATER
 		elsif state_curr = OUTPUT_FLAG then
+			debug_state <= x"002";
 			d_flag_2_ready <= packer_ready;
 			packer_valid <= d_flag_2_valid;
 			packer_code  <= (CODING_LENGTH_MAX - 1 downto 1 => '0') & d_flag_2_data;
@@ -473,6 +495,7 @@ begin
 			end if;
 		--OUTPUT ALPHA AND XMEAN THEN GO TO GOLOMB CODING
 		elsif state_curr = OUTPUT_XMEAN_ALPHA then
+			debug_state <= x"004";
 			sync_xmean_alpha_ready <= packer_ready;
 			packer_valid <= sync_xmean_alpha_valid;
 			packer_code  <= (CODING_LENGTH_MAX - 1 downto sync_xmean_alpha_data'high + 1 => '0') & sync_xmean_alpha_data;
@@ -483,6 +506,7 @@ begin
 		--ALPHA AND XMEAN END THE SLICE. 
 		--FIRST READ CONTROL TO KNOW IF IT ENDS THE BLOCK OR NOT
 		elsif state_curr = OUTPUT_XMEAN_ALPHA_LAST then
+			debug_state <= x"008";
 			control_ready <= '1';
 			if control_valid = '1' then
 				control_end_image_buff_next <= control_end_image;
@@ -491,6 +515,7 @@ begin
 			end if;
 		--OUTPUT EXP GOLOMB CODER RESULT
 		elsif state_curr = OUTPUT_EXP_GOL then
+			debug_state <= x"010";
 			eg_ready     <= packer_ready;
 			packer_valid <= eg_valid;
 			packer_code  <= eg_code;
@@ -500,6 +525,7 @@ begin
 			end if;
 		--LOAD GOLOMB CODER RESULT (WE CAN'T OUTPUT YET)
 		elsif state_curr = OUTPUT_GOL then
+			debug_state <= x"020";
 			golomb_ready <= '1';
 			if golomb_valid = '1' then
 				golomb_last_buf_next <= golomb_last;
@@ -511,6 +537,7 @@ begin
 		--IF THIS IS THE LAST SAMPLE, MERGE WITH CONTROL
 		--IN EXTRA STATE TO DECIDE ON CONTORL SIGNALS
 		elsif state_curr = OUTPUT_GOL_PRIMED then
+			debug_state <= x"040";
 			if golomb_last_buf = '1' then
 				--get the control state (should be already processed and available)
 				--and go to final output state
@@ -540,6 +567,7 @@ begin
 		--OUTPUT THE LAST GOLOMB SAMPLE, AND FLUSH 
 		--BUFFERS IF NECESSARY
 		elsif state_curr = OUTPUT_GOL_LAST then
+			debug_state <= x"080";
 			packer_valid <= '1';
 			packer_code  <= golomb_code_buf;
 			packer_length<= golomb_length_buf;
@@ -554,6 +582,7 @@ begin
 		--READ CONTROL DATA AND EITHER GO INTO 
 		--DISCARD OR OUTPUT FLAG MODE NEXT
 		elsif state_curr = END_SLICE_XALPHA then
+			debug_state <= x"100";
 			sync_xmean_alpha_ready <= packer_ready;
 			packer_valid <= sync_xmean_alpha_valid;
 			packer_code  <= (CODING_LENGTH_MAX - 1 downto sync_xmean_alpha_data'high + 1 => '0') & sync_xmean_alpha_data;
@@ -584,7 +613,12 @@ begin
 			output_data			=> output_data,
 			output_valid		=> output_valid,
 			output_ready		=> output_ready,
-			output_last 		=> output_last
+			output_last 		=> output_last,
+			dbg_out_0			=> dbg_out_2,
+			dbg_out_1			=> dbg_out_3,
+			dbg_out_2			=> dbg_out_4,
+			dbg_out_3			=> dbg_out_5,
+			dbg_out_4			=> dbg_out_6			
 		);
 		
 

@@ -76,8 +76,8 @@ architecture Behavioral of AXIS_SHIFTER is
 	
 	attribute KEEP of shiftamt_curr: signal is KEEP_DEFAULT;
 	
-	signal valid: std_logic_vector(STAGES downto 0);
-	signal last: std_logic_vector(STAGES downto 0);
+	signal valid, valid_next: std_logic_vector(STAGES downto 0);
+	signal last, last_next: std_logic_vector(STAGES downto 0);
 	signal enable: std_logic;
 begin
 
@@ -195,29 +195,46 @@ begin
 --		end if;
 --		--valid(0) <= '1' when enable = '1' and synced_valid = '1' else '0';
 --	end process;
+
+	next_valid_last_assign: process(synced_last, synced_valid, enable, valid, last)
+	begin
+		last_next(0) <= synced_last;
+		if enable = '1' and synced_valid = '1' then
+			valid_next(0) <= '1';
+		else
+			valid_next(0) <= '0';
+		end if;
+		for i in 1 to STAGES loop
+			valid_next(i) <= valid(i);
+			last_next (i) <= last (i);
+		end loop;
+	
+	end process;
+--	valid_next: std_logic_vector(STAGES downto 0);
+--	signal last, last_next
 	
 	seq: process(clk, rst, synced_data, synced_shift, synced_valid, enable, synced_last)
 	begin
 		memory_curr(0) <= std_logic_vector(resize(unsigned(synced_data), OUTPUT_WIDTH));
 		shiftamt_curr(0) <= synced_shift;
-		last(0) <= synced_last;
-		if enable = '1' and synced_valid = '1' then
-			valid(0) <= '1';
-		else
-			valid(0) <= '0';
-		end if;
+--		last(0) <= synced_last;
+--		if enable = '1' and synced_valid = '1' then
+--			valid(0) <= '1';
+--		else
+--			valid(0) <= '0';
+--		end if;
 
 		if rising_edge(clk) then
 			if rst = '1' then	
-				valid(valid'high downto 1) <= (others => '0');
-				last (last'high  downto 1) <= (others => '0');
+				valid(valid'high downto 0) <= (others => '0');
+				last (last'high  downto 0) <= (others => '0');
 			else
 				if enable = '1' then
 					--do all necessary shifting
 					for i in 1 to STAGES loop
 						memory_curr(i) <= memory_next(i);
-						valid(i) <= valid(i-1);
-						last (i) <= last (i-1);
+						valid(i) <= valid_next(i-1);
+						last (i) <= last_next (i-1);
 					end loop;
 					for i in 1 to STAGES - 1 loop
 						shiftamt_curr(i) <= shiftamt_curr(i-1);

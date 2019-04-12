@@ -41,7 +41,13 @@ entity CODING_OUTPUT_PACKER is
 		output_data			: out	std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
 		output_valid		: out	std_logic;
 		output_ready		: in 	std_logic;
-		output_last  		: out 	std_logic
+		output_last  		: out 	std_logic;
+		--debug
+		dbg_out_0			: out 	std_logic_vector(72 downto 0);
+		dbg_out_1			: out 	std_logic_vector(8 downto 0);
+		dbg_out_2			: out 	std_logic_vector(8 downto 0);
+		dbg_out_3			: out 	std_logic_vector(40 downto 0);
+		dbg_out_4			: out 	std_logic_vector(40 downto 0)
 	);
 end CODING_OUTPUT_PACKER;
 
@@ -122,8 +128,15 @@ architecture Behavioral of CODING_OUTPUT_PACKER is
 	--merger
 	signal merger_data: std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
 	signal merger_valid, merger_ready, merger_last: std_logic;
+
 begin
-								  
+	--debug
+	dbg_out_0 <= shifted_ready & shifted_valid & shifted_last & shifted_data;
+	dbg_out_1 <= len_cnt_ready_buf & len_cnt_valid_buf & len_cnt_data_buf;
+	dbg_out_2 <= final_shift_ready & final_shift_valid & final_shift_data;
+	dbg_out_3 <= sss_1_ready_buf & sss_1_valid_buf & sss_1_data_code_buf;
+	dbg_out_4 <= sss_1_ready & sss_1_valid & sss_1_data_code;
+	-------							  
 								  
 	--splitter (one for shifter, one for c2w_segmenter)
 	shifter_segmenter_splitter_input <= input_code_data & input_length_data;

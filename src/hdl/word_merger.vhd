@@ -84,7 +84,7 @@ begin
 		if output_valid_in = '1' and output_ready = '1' and input_ready_in = '1' and input_valid = '1' then
 			data_buf_next <= input_data;
 			data_buf_last_next <= input_last;
-			data_buf_full_next <= input_ends_word;
+			data_buf_full_next <= input_ends_word or input_last;
 		elsif output_valid_in = '1' and output_ready = '1' then
 			data_buf_next <= (data_buf_next'range => '0');
 			data_buf_last_next <= '0';
@@ -92,7 +92,7 @@ begin
 		elsif input_ready_in = '1' and input_valid = '1' then
 			data_buf_next <= data_buf or input_data;
 			data_buf_last_next <= data_buf_last or input_last;
-			data_buf_full_next <= input_ends_word;
+			data_buf_full_next <= data_buf_full or input_ends_word or input_last;
 		end if;
 	end process;
 

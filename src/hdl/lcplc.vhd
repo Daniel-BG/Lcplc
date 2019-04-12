@@ -58,7 +58,17 @@ entity LCPLC is
 		--threshold for compression. If distortion is greater than this threshold for a certain slice,
 		--the slice is compressed. Otherwise the slice is skipped. Set to zero for lossless compression.
 		cfg_quant_shift	: in  std_logic_vector(QUANTIZER_SHIFT_WIDTH - 1 downto 0);
-		cfg_threshold	: in  std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0)
+		cfg_threshold	: in  std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0);
+		--
+		dbg_out_0		: out std_logic_vector(31 downto 0);
+		dbg_out_1		: out std_logic_vector(31 downto 0);
+		dbg_out_2		: out std_logic_vector(31 downto 0);
+		dbg_out_3		: out std_logic_vector(31 downto 0);
+		dbg_out_4		: out 	std_logic_vector(72 downto 0);
+		dbg_out_5		: out 	std_logic_vector(8 downto 0);
+		dbg_out_6			: out 	std_logic_vector(8 downto 0);
+		dbg_out_7			: out 	std_logic_vector(40 downto 0);
+		dbg_out_8			: out 	std_logic_vector(40 downto 0)
 	);
 end LCPLC;
 
@@ -211,6 +221,15 @@ architecture Behavioral of LCPLC is
 	signal kj_delay_ready, kj_delay_valid: std_logic;
 
 begin
+
+	--debug stuff
+	dbg_out_0 <= (merr_delay_ready and merr_delay_valid) & merr_delay_data(PREDICTION_WIDTH - 1 downto 0) --5 nibs
+				& (kj_delay_ready and kj_delay_valid) & "00" & kj_delay_data --2 nibs
+				& (d_flag_1_ready and d_flag_1_valid) & "00" & d_flag_1_data_stdlv; --1 nibs
+				
+	dbg_out_1 <= (alpha_1_ready and alpha_1_valid) & "0" & alpha_1_data --3 nibs
+				& (xmean_2_ready and xmean_1_valid) & "000" & xmean_1_data; --5 nibs
+	-------------
 
 	--input to first band predictor and second band predictor
 	x_flags_data <= x_last_i & x_last_b & x_last_s & x_last_r & x_data;
@@ -811,7 +830,14 @@ begin
 			output_data	=> output_data,
 			output_valid=> output_valid,
 			output_ready=> output_ready,
-			output_last => output_last
+			output_last => output_last,
+			dbg_out_0   => dbg_out_2,
+			dbg_out_1	=> dbg_out_3,
+			dbg_out_2	=> dbg_out_4,
+			dbg_out_3	=> dbg_out_5,
+			dbg_out_4   => dbg_out_6,
+			dbg_out_5	=> dbg_out_7,
+			dbg_out_6	=> dbg_out_8
 		);
 
 

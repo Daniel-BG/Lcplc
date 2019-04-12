@@ -71,7 +71,7 @@ begin
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				state_curr <= IDLE;
+				state_curr <= EMPTYING;
 				counter <= 0;
 				accumulator <= (others => '0');
 			else
@@ -101,9 +101,10 @@ begin
 			if input_valid = '1' then
 				if input_last = '1' then
 					state_next <= EMPTYING;
+				else
+					write_en <= '1';
+					state_next <= PRIMED;
 				end if;
-				write_en <= '1';
-				state_next <= PRIMED;
 				if counter = ACCUMULATOR_WINDOW then
 					read_en <= '1';
 					accumulator_next <= accumulator_next_substract;

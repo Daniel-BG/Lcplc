@@ -65,24 +65,73 @@ module test_coder;
 	always #(PERIOD/2) clk = ~clk;
 	
 	initial begin
-		gen_ehat_enable = 0;
-		gen_kj_enable = 0;
-		gen_dflag_enable = 0;
-		gen_alpha_enable = 0;
-		gen_xmean_enable = 0;
-		output_checker_enable = 0;
+//		gen_ehat_enable = 0;
+//		gen_kj_enable = 0;
+//		gen_dflag_enable = 0;
+//		gen_alpha_enable = 0;
+//		gen_xmean_enable = 0;
+//		output_checker_enable = 0;
 
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
 		rst = 0;
 
-		gen_ehat_enable = 1;
-		gen_kj_enable = 1;
-		gen_dflag_enable = 1;
-		gen_alpha_enable = 1;
-		gen_xmean_enable = 1;
-		output_checker_enable = 1;
+//		gen_ehat_enable = 1;
+//		gen_kj_enable = 1;
+//		gen_dflag_enable = 1;
+//		gen_alpha_enable = 1;
+//		gen_xmean_enable = 1;
+//		output_checker_enable = 1;
+	end
+	
+	initial begin
+		gen_ehat_enable = 0;
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*3) gen_ehat_enable = 1;
+			#(PERIOD) gen_ehat_enable = 0;
+		end
+	end
+	initial begin
+		gen_kj_enable = 0;
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*3) gen_kj_enable = 1;
+			#(PERIOD) gen_kj_enable = 0;
+		end
+	end
+	initial begin
+		gen_dflag_enable = 0;
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*5) gen_dflag_enable = 1;
+			#(PERIOD) gen_dflag_enable = 0;
+		end
+	end
+	initial begin
+		gen_alpha_enable = 0;
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*7) gen_alpha_enable = 1;
+			#(PERIOD) gen_alpha_enable = 0;
+		end
+	end
+	initial begin
+		gen_xmean_enable = 0;
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*4) gen_xmean_enable = 1;
+			#(PERIOD) gen_xmean_enable = 0;
+		end
+	end
+	initial begin
+		output_checker_enable = 0;
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*7) output_checker_enable = 1;
+			#(PERIOD) output_checker_enable = 0;
+		end
 	end
 	
 	helper_axis_reader #(.DATA_WIDTH(MAPPED_ERROR_WIDTH), .FILE_NAME(`GOLDEN_MERR)) GEN_ehat

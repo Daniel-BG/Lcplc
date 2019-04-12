@@ -43,20 +43,20 @@ module helper_axis_reader(
 
 	assign output_data  = value;
 	assign output_valid = output_valid_pre & enable;
-
-	initial begin
-		fd = $fopen(FILE_NAME, "r");
-		//SKIP+1 so that value loads the first value already
-		for (int i = 0; i < SKIP + 1; i++) begin
-			status = $fscanf(fd, "%d", value);
-			if (status != 1)
-				$error("Error when reading file (skipping values)");
-		end
-		output_valid_pre = 1;
-	end
 	
+
 	always @(posedge clk) begin
-		if (output_valid_pre == 1 && output_ready == 1 && enable == 1) begin
+		if (rst == 1) begin
+			$fclose(fd);
+			fd = $fopen(FILE_NAME, "r");
+			//SKIP+1 so that value loads the first value already
+			for (int i = 0; i < SKIP + 1; i++) begin
+				status = $fscanf(fd, "%d", value);
+				if (status != 1)
+					$error("Error when reading file (skipping values)");
+			end
+			output_valid_pre = 1;
+		end else if (output_valid_pre == 1 && output_ready == 1 && enable == 1) begin
 			if ($feof(fd)) begin
 				output_valid_pre = 0;
 				$info("End of file reached! %s", FILE_NAME);
