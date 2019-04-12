@@ -71,7 +71,7 @@ begin
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				state_curr <= IDLE;
+				state_curr <= EMPTYING;
 				counter <= 0;
 				accumulator <= (others => '0');
 			else

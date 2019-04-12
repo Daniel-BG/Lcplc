@@ -63,7 +63,12 @@ entity LCPLC is
 		dbg_out_0		: out std_logic_vector(31 downto 0);
 		dbg_out_1		: out std_logic_vector(31 downto 0);
 		dbg_out_2		: out std_logic_vector(31 downto 0);
-		dbg_out_3		: out std_logic_vector(31 downto 0)
+		dbg_out_3		: out std_logic_vector(31 downto 0);
+		dbg_out_4		: out 	std_logic_vector(72 downto 0);
+		dbg_out_5		: out 	std_logic_vector(8 downto 0);
+		dbg_out_6			: out 	std_logic_vector(8 downto 0);
+		dbg_out_7			: out 	std_logic_vector(40 downto 0);
+		dbg_out_8			: out 	std_logic_vector(40 downto 0)
 	);
 end LCPLC;
 
@@ -827,7 +832,12 @@ begin
 			output_ready=> output_ready,
 			output_last => output_last,
 			dbg_out_0   => dbg_out_2,
-			dbg_out_1	=> dbg_out_3
+			dbg_out_1	=> dbg_out_3,
+			dbg_out_2	=> dbg_out_4,
+			dbg_out_3	=> dbg_out_5,
+			dbg_out_4   => dbg_out_6,
+			dbg_out_5	=> dbg_out_7,
+			dbg_out_6	=> dbg_out_8
 		);
 
 

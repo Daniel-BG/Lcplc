@@ -70,7 +70,12 @@ entity CODER is
 		output_last	: out 	std_logic; --triggers for ehat_last_i input
 		--
 		dbg_out_0		: out std_logic_vector(31 downto 0);
-		dbg_out_1		: out std_logic_vector(31 downto 0)
+		dbg_out_1		: out std_logic_vector(31 downto 0);
+		dbg_out_2			: out 	std_logic_vector(72 downto 0);
+		dbg_out_3			: out 	std_logic_vector(8 downto 0);
+		dbg_out_4			: out 	std_logic_vector(8 downto 0);
+		dbg_out_5			: out 	std_logic_vector(40 downto 0);
+		dbg_out_6			: out 	std_logic_vector(40 downto 0)
 	);
 end CODER;
 
@@ -608,7 +613,12 @@ begin
 			output_data			=> output_data,
 			output_valid		=> output_valid,
 			output_ready		=> output_ready,
-			output_last 		=> output_last
+			output_last 		=> output_last,
+			dbg_out_0			=> dbg_out_2,
+			dbg_out_1			=> dbg_out_3,
+			dbg_out_2			=> dbg_out_4,
+			dbg_out_3			=> dbg_out_5,
+			dbg_out_4			=> dbg_out_6			
 		);
 		
 

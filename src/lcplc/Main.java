@@ -204,10 +204,10 @@ public class Main {
 					tmp[2] = bytesoutput[i+2];
 					tmp[3] = bytesoutput[i+3];
 					// swap
-					bytesoutput[i] 	 = tmp[1];
-					bytesoutput[i+1] = tmp[0];
-					bytesoutput[i+2] = tmp[3];
-					bytesoutput[i+3] = tmp[2];
+					bytesoutput[i] 	 = tmp[3];
+					bytesoutput[i+1] = tmp[2];
+					bytesoutput[i+2] = tmp[1];
+					bytesoutput[i+3] = tmp[0];
 				}
 				stream.write(bytesoutput);
 				stream.close();
