@@ -58,6 +58,11 @@ module test_coding_output_packer;
 	wire joint_gens_ready;
 	wire [DATA_WIDTH_0 - 1:0] joint_gens_bits;
 	wire [DATA_WIDTH_1 - 1:0] joint_gens_amt;
+	
+	wire packer_ready;
+	reg packer_valid;
+	reg [DATA_WIDTH_0 - 1:0] packer_code;
+	reg [DATA_WIDTH_1 - 1:0] packer_length;
 
 	axis_synchronizer_2 #(.DATA_WIDTH_0(DATA_WIDTH_0), .DATA_WIDTH_1(DATA_WIDTH_1)) SYNCRHONIZER
 		(
@@ -81,42 +86,91 @@ module test_coding_output_packer;
 	always #(PERIOD/2) clk = ~clk;
 	
 	initial begin
-		generator_0_enable = 0;
-		generator_1_enable = 0;
-		drain_enable = 0;
+//		generator_0_enable = 0;
+//		generator_1_enable = 0;
+//		drain_enable = 0;
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
-		#(PERIOD/2)
+		
+		//#(PERIOD/2)
 		rst = 0;
-		generator_0_enable = 1;
-		generator_1_enable = 1;
-		drain_enable = 1;
+//		generator_0_enable = 1;
+//		generator_1_enable = 1;
+//		drain_enable = 1;
+	end
+	
+	initial begin
+		generator_0_enable = 0;
+		generator_1_enable = 0;
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*2) generator_0_enable = 1;
+			generator_1_enable = 1;
+			#(PERIOD) generator_0_enable = 0;
+			generator_1_enable = 0;
+		end
+	end
+	initial begin
+		drain_enable = 0;
+		#(PERIOD*2)
+		while (1) begin
+			#(PERIOD*5) drain_enable = 1;
+			#(PERIOD) drain_enable = 0;
+		end
 	end
 
-	wire packer_valid, packer_ready;
-	wire [2**OUT_WIDTH_LOG-1:0] packer_data;
+	wire packer_out_valid, packer_out_ready;
+	wire [2**OUT_WIDTH_LOG-1:0] packer_out_data;
+	
+	//custom feed the packer
+	initial begin
+		packer_valid = 0;
+		#(PERIOD*4)
+		packer_code = 10028;
+		packer_length = 27;
+		packer_valid = 1;
+		@(posedge clk) wait (packer_ready == 1 && clk == 1);
+		packer_code = -14650;
+		packer_length = 14;
+		@(posedge clk) wait (packer_ready == 1 && clk == 1);
+		packer_code = -4444;
+		@(posedge clk) wait (packer_ready == 1 && clk == 1);
+		packer_code = -16370;
+		@(posedge clk) wait (packer_ready == 1 && clk == 1);
+		packer_code = -8172;
+		packer_length = 13;
+		@(posedge clk) wait (packer_ready == 1 && clk == 1);
+		packer_code = -8155;
+		@(posedge clk) wait (packer_ready == 1 && clk == 1);
+		packer_code = -8125;
+		@(posedge clk) wait (packer_ready == 1 && clk == 1);
+		packer_code = -8151;
+		@(posedge clk) wait (packer_ready == 1 && clk == 1);
+		packer_valid = 0;
+	end
 
 	coding_output_packer #(.CODE_WIDTH(DATA_WIDTH_0), .BIT_AMT_WIDTH(DATA_WIDTH_1), .OUTPUT_WIDTH_LOG(OUT_WIDTH_LOG)) packer
 		(
 			.clk(clk), .rst(rst),
-			.flush(0), .flushed(),
-			.input_code_data(joint_gens_bits),
-			.input_length_data(joint_gens_amt),
-			.input_valid(joint_gens_valid),
-			.input_ready(joint_gens_ready),
-			.output_data(packer_data),
-			.output_valid(packer_valid),
-			.output_ready(packer_ready)
+			.input_code_data(packer_code),
+			.input_length_data(packer_length),
+			.input_valid(packer_valid),
+			.input_ready(packer_ready),
+			.input_last(0),
+			.output_data(packer_out_data),
+			.output_valid(packer_out_valid),
+			.output_ready(packer_out_ready),
+			.output_last()
 		);
 
 
 	helper_axis_drain #(.DATA_WIDTH(2**OUT_WIDTH_LOG)) DRAIN
 		(
 			.clk(clk), .rst(rst), .enable(drain_enable),
-			.input_valid(packer_valid),
-			.input_ready(packer_ready),
-			.input_data(packer_data)
+			.input_valid(packer_out_valid),
+			.input_ready(packer_out_ready),
+			.input_data(packer_out_data)
 		);
 
 

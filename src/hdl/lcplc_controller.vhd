@@ -119,7 +119,9 @@ entity lcplc_controller is
 		dbg_out_0			: out std_logic_vector(31 downto 0);
 		dbg_out_1			: out std_logic_vector(31 downto 0);
 		dbg_out_2			: out std_logic_vector(31 downto 0);
-		dbg_out_3			: out std_logic_vector(31 downto 0)
+		dbg_out_3			: out std_logic_vector(31 downto 0);
+		dbg_out_4			: out std_logic_vector(31 downto 0);
+		dbg_out_5			: out std_logic_vector(31 downto 0)
 	);
 
 end lcplc_controller;
@@ -804,7 +806,9 @@ begin
 			cfg_quant_shift	=> s_axi_reg_qshift(LCPLC_QUANTIZER_SHIFT_WIDTH - 1 downto 0),
 			cfg_threshold	=> s_axi_reg_thres(((2**LCPLC_DATA_BYTES_LOG)*8 + 3)*2 + LCPLC_MAX_BLOCK_SAMPLE_LOG + LCPLC_MAX_BLOCK_LINE_LOG - 1 downto 0),
 			dbg_out_0 => dbg_out_2,
-			dbg_out_1 => dbg_out_3
+			dbg_out_1 => dbg_out_3,
+			dbg_out_2 => dbg_out_4,
+			dbg_out_3 => dbg_out_5
 		);
 --	core_output_data	<= x"0000" & core_input_data;
 --	core_input_ready    <= core_output_ready;

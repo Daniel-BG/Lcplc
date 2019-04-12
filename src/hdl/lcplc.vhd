@@ -61,7 +61,9 @@ entity LCPLC is
 		cfg_threshold	: in  std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0);
 		--
 		dbg_out_0		: out std_logic_vector(31 downto 0);
-		dbg_out_1		: out std_logic_vector(31 downto 0)
+		dbg_out_1		: out std_logic_vector(31 downto 0);
+		dbg_out_2		: out std_logic_vector(31 downto 0);
+		dbg_out_3		: out std_logic_vector(31 downto 0)
 	);
 end LCPLC;
 
@@ -823,7 +825,9 @@ begin
 			output_data	=> output_data,
 			output_valid=> output_valid,
 			output_ready=> output_ready,
-			output_last => output_last
+			output_last => output_last,
+			dbg_out_0   => dbg_out_2,
+			dbg_out_1	=> dbg_out_3
 		);
 
 

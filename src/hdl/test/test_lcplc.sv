@@ -57,6 +57,7 @@ module test_lcplc;
 		clk = 0;
 		rst = 1;
 		#(PERIOD*2)
+		#(PERIOD/2)
 		gen_x_enable = 1;
 		output_checker_enable = 1;
 		rst = 0;
