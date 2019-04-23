@@ -67,15 +67,7 @@ entity CODER is
 		output_data	: out	std_logic_vector(2**OUTPUT_WIDTH_LOG - 1 downto 0);
 		output_valid: out	std_logic;
 		output_ready: in 	std_logic;
-		output_last	: out 	std_logic; --triggers for ehat_last_i input
-		--
-		dbg_out_0		: out std_logic_vector(31 downto 0);
-		dbg_out_1		: out std_logic_vector(31 downto 0);
-		dbg_out_2			: out 	std_logic_vector(72 downto 0);
-		dbg_out_3			: out 	std_logic_vector(8 downto 0);
-		dbg_out_4			: out 	std_logic_vector(8 downto 0);
-		dbg_out_5			: out 	std_logic_vector(40 downto 0);
-		dbg_out_6			: out 	std_logic_vector(40 downto 0)
+		output_last	: out 	std_logic
 	);
 end CODER;
 
@@ -163,14 +155,6 @@ architecture Behavioral of CODER is
 
 	signal debug_state: std_logic_vector(11 downto 0);
 begin
-	--debug signals
-	dbg_out_0 <= packer_code(31 downto 0); --the others are probaably not used anyway
-	dbg_out_1 <= (packer_ready and packer_valid) & packer_last & packer_length
-				& x"00"
-				& (control_valid and control_ready) & "0" & control_output_data 
-				& debug_state;
-	--debug signals
-
 
 	ehat_splitter_input_data <= ehat_last_i & ehat_last_b & ehat_last_s & ehat_data;
 
@@ -613,12 +597,7 @@ begin
 			output_data			=> output_data,
 			output_valid		=> output_valid,
 			output_ready		=> output_ready,
-			output_last 		=> output_last,
-			dbg_out_0			=> dbg_out_2,
-			dbg_out_1			=> dbg_out_3,
-			dbg_out_2			=> dbg_out_4,
-			dbg_out_3			=> dbg_out_5,
-			dbg_out_4			=> dbg_out_6			
+			output_last 		=> output_last	
 		);
 		
 
