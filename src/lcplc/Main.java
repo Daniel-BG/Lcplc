@@ -197,7 +197,7 @@ public class Main {
 				stream.close();
 				
 				stream = new FileOutputStream(samplerBaseDir + "rawOut.bin");
-				for (int i = 0; i < bytesoutput.length - 4; i += 4) {
+				for (int i = 0; i <= bytesoutput.length - 4; i += 4) {
 					byte[] tmp = new byte[4];
 					tmp[0] = bytesoutput[i];
 					tmp[1] = bytesoutput[i+1];

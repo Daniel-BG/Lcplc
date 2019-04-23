@@ -181,7 +181,7 @@ begin
 	sss_1_data_code <=
 		sss_1_data(sss_1_data'high downto BIT_AMT_WIDTH)
 	    and
-	    not std_logic_vector(shift_left(to_signed(-1, CODE_WIDTH), to_integer(unsigned(sss_1_data_shift))));
+	    not std_logic_vector(shift_left(not to_unsigned(0, CODE_WIDTH), to_integer(unsigned(sss_1_data_shift))));
 
 	
 	
