@@ -1003,17 +1003,3 @@ begin
 
 
 end Behavioral;
-
-	--a process to input/output data from registers
-
-	--a process looks at the control register and, when the adequante sequence is triggered, starts moving through the compression process
-	--asserts start/stop signals for other processes, and then waits for end signals from other processes, indicating this in the status register
-	--that can be read from the controller
-	--should this have some sort of pause/reset?? probably would be useful
-	
-	--another process waits for the start signal to be asserted and starts reading from ddr and sending results to lcplc. Maybe this would be interesting to do in bursts
-	--so that we can ask for, lets say, 256 bytes and put them all as fast as possible in a queue, and then do the same when the queue is almost empty
-	
-	--another process waits for data to be output (after the module has started). 
-	--Maybe also wait for a certain amount (or a termination to be seen) before initiating a burst with many beats 
-	--when finished, asserts end of compression so that the main process can be reset  

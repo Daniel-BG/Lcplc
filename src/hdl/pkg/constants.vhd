@@ -6,7 +6,7 @@ package constants is
 	constant KEEP_DEFAULT: string := "TRUE";
 
 	attribute USE_DSP : string;
-	constant USE_DSP_ARITH_OP: string := "YES";
+	constant USE_DSP_ARITH_OP: string := "NO";
 
 	--AXI constants
 	constant AXI_BRESP_WIDTH: integer := 2;

@@ -77,7 +77,7 @@ architecture Behavioral of GOLOMB_CODING is
 	signal last_buff, last_buff_next: std_logic;
 	
 	--checkers
-	signal need_more_cycles: boolean;
+	signal need_more_cycles, need_more_cycles_next: boolean;
 	--last refer to when the quotient and remainder are both finally sent this cycle
 	--temp refer to when need_more_cycles is up and more cycles are needed for this specific instance
 		--only ones are output here
@@ -140,12 +140,14 @@ begin
 				remainder_buff <= (others => '0');
 				param_buff <= 0;
 				last_buff <= '0';
+				need_more_cycles <= false;
 			else
 				state_curr <= state_next;
 				quotient_buff  <= quotient_buff_next;
 				remainder_buff <= remainder_buff_next;
 				param_buff <= param_buff_next;
 				last_buff <= last_buff_next;
+				need_more_cycles <= need_more_cycles_next;
 			end if;
 		end if;
 	end process;
@@ -167,6 +169,7 @@ begin
 		remainder_buff_next <= remainder_buff;
 		param_buff_next <= param_buff;
 		last_buff_next <= last_buff;
+		need_more_cycles_next <= need_more_cycles;
 		--outputs
 		output_code   <= (others => '0');
 		output_length <= (others => '0');
@@ -180,6 +183,7 @@ begin
 				param_buff_next <= joint_param_data;
 				state_next <= QUOTREM_READ;
 				last_buff_next <= joint_last;
+				need_more_cycles_next <= quotient(DATA_WIDTH - 1 downto SLACK_LOG) /= (DATA_WIDTH - 1 downto SLACK_LOG => '0');
 			end if;
 		elsif state_curr = QUOTREM_READ then
 			output_valid <= '1';
@@ -194,6 +198,7 @@ begin
 						remainder_buff_next <= remainder;
 						param_buff_next <= joint_param_data;
 						last_buff_next <= joint_last;
+						need_more_cycles_next <= quotient(DATA_WIDTH - 1 downto SLACK_LOG) /= (DATA_WIDTH - 1 downto SLACK_LOG => '0');
 					else
 						state_next <= IDLE;
 					end if;
@@ -204,6 +209,7 @@ begin
 				if output_ready = '1' then
 					--only update quotient if we send data ofc
 					quotient_buff_next <= quotient_temp;
+					need_more_cycles_next <= quotient_temp(DATA_WIDTH - 1 downto SLACK_LOG) /= (DATA_WIDTH - 1 downto SLACK_LOG => '0');
 				end if;
 			end if;
 		end if;
@@ -212,7 +218,7 @@ begin
 	quotient_buff_extended <= '0' & quotient_buff; --just in case of overflows add 1 extra bit (very rare but possible)
 	--the -1 on output_width is important because we need one extra bit for the ZERO after all the QUOTIENT_BUFF ones
 	--need_more_cycles <= true when unsigned(quotient_buff_extended) + to_unsigned(param_buff, DATA_WIDTH + 1) > to_unsigned(OUTPUT_WIDTH - 1, DATA_WIDTH + 1) else false;
-	need_more_cycles <= quotient_buff(DATA_WIDTH - 1 downto SLACK_LOG) /= (DATA_WIDTH - 1 downto SLACK_LOG => '0');
+	--need_more_cycles <= quotient_buff(DATA_WIDTH - 1 downto SLACK_LOG) /= (DATA_WIDTH - 1 downto SLACK_LOG => '0');
 	
 	output_code_temp <= (others => '1');
 	output_length_temp <= 2**MAX_1_OUT_LOG when quotient_buff(DATA_WIDTH - 1 downto MAX_1_OUT_LOG) /= (DATA_WIDTH - 1 downto MAX_1_OUT_LOG => '0') else to_integer(unsigned(quotient_buff));
