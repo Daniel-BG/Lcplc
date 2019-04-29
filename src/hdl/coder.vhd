@@ -109,6 +109,11 @@ architecture Behavioral of CODER is
 	signal eg_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 	signal eg_valid, eg_ready: std_logic;
 
+	--exp zero golomb out latch
+	signal pre_eg_code: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
+	signal pre_eg_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
+	signal pre_eg_valid, pre_eg_ready: std_logic;
+
 	--syncer for merr and kj
 	signal sync_merr_kj_valid, sync_merr_kj_ready, sync_merr_kj_last: std_logic;
 	signal sync_merr_kj_merr: std_logic_vector(MAPPED_ERROR_WIDTH - 1 downto 0);
@@ -271,10 +276,26 @@ begin
 			input_data	=> diverter_0_data_filtered,
 			input_valid => diverter_0_valid_filtered,
 			input_ready	=> diverter_0_ready_filtered,
-			output_code	  => eg_code,
-			output_length => eg_length,
-			output_valid  => eg_valid,
-			output_ready  => eg_ready
+			output_code	  => pre_eg_code,
+			output_length => pre_eg_length,
+			output_valid  => pre_eg_valid,
+			output_ready  => pre_eg_ready
+		);
+	exp_zero_out_latch: entity work.AXIS_LATCHED_CONNECTION
+		Generic map (
+			DATA_WIDTH => CODING_LENGTH_MAX,
+			USER_WIDTH => CODING_LENGTH_MAX_LOG
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => pre_eg_ready,
+			input_valid => pre_eg_valid,
+			input_data  => pre_eg_code,
+			input_user  => pre_eg_length,
+			output_ready=> eg_ready,
+			output_valid=> eg_valid,
+			output_data => eg_code,
+			output_user => eg_length
 		);
 
 	--merger of diverter_1 and kj for normal golomb coding

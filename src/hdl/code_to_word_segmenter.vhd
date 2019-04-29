@@ -162,6 +162,7 @@ begin
 				if input_position_counter = inner_counter then
 					if input_last = '1' then
 						state_next <= CLEAR_AFTER_LAST;
+						input_position_buff_next <= (input_position_buff_next'range => '-');
 					end if;
 					if input_position_end_flag or input_last = '1' then
 						output_ends_word <= '1';
@@ -190,6 +191,7 @@ begin
 					if input_last_buff = '1' then
 						output_last <= '1';
 						state_next <= CLEAR_AFTER_LAST;
+						input_position_buff_next <= (input_position_buff_next'range => '-');
 					else
 						input_ready <= '1';
 						if input_valid = '0' then
@@ -215,6 +217,7 @@ begin
 								if input_position_counter = inner_counter then
 									if input_last = '1' then
 										state_next <= CLEAR_AFTER_LAST;
+										input_position_buff_next <= (input_position_buff_next'range => '-');
 									else
 										state_next <= WORKING;	
 									end if;
