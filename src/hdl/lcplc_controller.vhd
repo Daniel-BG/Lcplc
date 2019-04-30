@@ -45,6 +45,10 @@ entity lcplc_controller is
 	);
 	Port (
 		-------------------------------------------------
+		--LCPLC SIGNALS
+		-------------------------------------------------
+		lcplc_clk: in std_logic;
+		-------------------------------------------------
 		--CONTROLLER AXI SLAVE INTERFACE
 		--c_s_axi_<name> (control slave axi <signal_name>
 		-------------------------------------------------
@@ -147,6 +151,8 @@ architecture Behavioral of lcplc_controller is
 	constant C_S_AXI_REG_CNCLKU_LOCALADDR: integer := 152;  --upper part of clock count for control bus
 	constant C_S_AXI_REG_MMCLKL_LOCALADDR: integer := 156;  --lower part of clock count for memory bus
 	constant C_S_AXI_REG_MMCLKU_LOCALADDR: integer := 160;  --upper part of clock count for memory bus
+	constant C_S_AXI_REG_LCCLKL_LOCALADDR: integer := 164;  --lower part of clock count for memory bus
+	constant C_S_AXI_REG_LCCLKU_LOCALADDR: integer := 168;  --upper part of clock count for memory bus
 	--lcplc generics to know how it was configured
 	constant C_S_AXI_REG_GENSIZ_LOCALADDR: integer := 192;  --lcplc input and output axis sizes
 	constant C_S_AXI_REG_GENMAX_LOCALADDR: integer := 196;  --max size allowed for block and image
@@ -170,11 +176,13 @@ architecture Behavioral of lcplc_controller is
 		s_axi_reg_dbgreg,
 		s_axi_reg_inbyte_next, s_axi_reg_outbyt_next: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
 	--clock registers
-	signal s_axi_reg_cnclk, s_axi_reg_mmclk: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
+	signal s_axi_reg_cnclk, s_axi_reg_mmclk, s_axi_reg_lcclk, s_axi_reg_lcclk_pre: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
 	alias s_axi_reg_cnclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_cnclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
 	alias s_axi_reg_cnclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_cnclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
 	alias s_axi_reg_mmclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_mmclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
 	alias s_axi_reg_mmclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_mmclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
+	alias s_axi_reg_lcclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_lcclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
+	alias s_axi_reg_lcclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_lcclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
 	--lcplc config registers
 	signal s_axi_reg_qshift: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
 	signal s_axi_reg_thres: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
@@ -217,7 +225,7 @@ architecture Behavioral of lcplc_controller is
 	signal ddr_read_addr_next, ddr_read_addr_curr: std_logic_vector(DDR3_AXI_ADDR_WIDTH - 1 downto 0);
 	signal ddr_read_align_next, ddr_read_align_curr: std_logic_vector(DDR3_AXI_DATA_BYTES_LOG - LCPLC_DATA_BYTES_LOG - 1 downto 0);
 
-	signal ififo_almost_empty: std_logic;
+	signal ififo_almost_empty_pre, ififo_almost_empty: std_logic;
 	signal ififo_input_valid, ififo_input_ready, ififo_output_ready, ififo_output_valid: std_logic;
 	signal ififo_input_data, ififo_output_data: std_logic_vector((2**LCPLC_DATA_BYTES_LOG)*8 - 1 downto 0);
 
@@ -228,18 +236,19 @@ architecture Behavioral of lcplc_controller is
 	signal ddr_write_addr_curr, ddr_write_addr_next: std_logic_vector(DDR3_AXI_ADDR_WIDTH - 1 downto 0);
 	signal ddr_write_transactions_left_curr, ddr_write_transactions_left_next: std_logic_vector(AXI_LEN_WIDTH - 1 downto 0);
 
-	signal ofifo_seen_last: std_logic;
+	signal ofifo_seen_last, ofifo_seen_last_pre: std_logic;
 
-	signal ofifo_almost_full: std_logic;
-	signal ofifo_input_valid, ofifo_input_ready, ofifo_output_ready, ofifo_output_valid: std_logic;
-	signal ofifo_input_last_data, ofifo_output_last_data: std_logic_vector(2**(LCPLC_OUTPUT_BYTES_LOG)*8 downto 0); --leave one extra for 'last' flag
-	alias  ofifo_output_last: std_logic is ofifo_output_last_data(ofifo_output_last_data'high);
-	alias  ofifo_output_data: std_logic_vector(2**(LCPLC_OUTPUT_BYTES_LOG)*8 - 1 downto 0) is ofifo_output_last_data(ofifo_output_last_data'high-1 downto 0);
+	signal ofifo_almost_full_pre, ofifo_almost_full: std_logic;
+	signal ofifo_output_ready, ofifo_output_valid: std_logic;
+	signal ofifo_output_last: std_logic;
+	signal ofifo_output_data: std_logic_vector(2**(LCPLC_OUTPUT_BYTES_LOG)*8 - 1 downto 0);
 
 	---------------------------------------------------
 	--LCPLC SIGNALS
 	---------------------------------------------------
-	signal lcplc_clk, lcplc_rst: std_logic;
+	--signal lcplc_clk: std_logic;
+	signal lcplc_rst: std_logic;
+	signal lcplc_rstn: std_logic;
 
 	signal core_input_data: std_logic_vector((2**LCPLC_DATA_BYTES_LOG)*8 - 1 downto 0);
 	signal core_input_last_r, core_input_last_s, core_input_last_b, core_input_last_i: std_logic;
@@ -249,14 +258,53 @@ architecture Behavioral of lcplc_controller is
 	signal core_output_ready, core_output_valid: std_logic;
 	signal core_output_last: std_logic;
 	
+	-----------
+	--MODULES
+	-----------
+	COMPONENT axis_data_fifo_16b_512s
+		PORT (
+			s_axis_aresetn : IN STD_LOGIC;
+			s_axis_aclk : IN STD_LOGIC;
+			s_axis_tvalid : IN STD_LOGIC;
+			s_axis_tready : OUT STD_LOGIC;
+			s_axis_tdata : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+			m_axis_aclk : IN STD_LOGIC;
+			m_axis_tvalid : OUT STD_LOGIC;
+			m_axis_tready : IN STD_LOGIC;
+			m_axis_tdata : OUT STD_LOGIC_VECTOR(15 DOWNTO 0);
+			prog_empty : OUT STD_LOGIC
+		);
+	END COMPONENT;
+	COMPONENT axis_data_fifo_32b_512s
+		PORT (
+			s_axis_aresetn : IN STD_LOGIC;
+			s_axis_aclk : IN STD_LOGIC;
+			s_axis_tvalid : IN STD_LOGIC;
+			s_axis_tready : OUT STD_LOGIC;
+			s_axis_tdata : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+			s_axis_tlast : IN STD_LOGIC;
+			m_axis_aclk : IN STD_LOGIC;
+			m_axis_tvalid : OUT STD_LOGIC;
+			m_axis_tready : IN STD_LOGIC;
+			m_axis_tdata : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
+			m_axis_tlast : OUT STD_LOGIC;
+			prog_full : OUT STD_LOGIC
+		);
+	END COMPONENT;
+	
+	------------
+	--CCD logic
+	------------
+	signal d_m_axi_reset: std_logic;
+	signal c_s_axi_reset: std_logic;
 begin
 	-- DEBUG BEGIN
-	s_axi_reg_dbgreg <= 
-		x"cafe"
-		& ofifo_almost_full & ofifo_output_last & ofifo_output_valid & ofifo_output_ready
-		& 				"0" & core_output_last  & core_output_valid  & core_output_ready 
-		& 				"0" &  				"0" & ififo_output_valid & ififo_output_ready
-		& ififo_almost_empty& 				"0" & ififo_input_valid  & ififo_input_ready; 
+--	s_axi_reg_dbgreg <= 
+--		x"cafe"
+--		& ofifo_almost_full & ofifo_output_last & ofifo_output_valid & ofifo_output_ready
+--		& 				"0" & core_output_last  & core_output_valid  & core_output_ready 
+--		& 				"0" &  				"0" & ififo_output_valid & ififo_output_ready
+--		& ififo_almost_empty& 				"0" & ififo_input_valid  & ififo_input_ready; 
 	-- DEBUG END
 
 
@@ -426,6 +474,10 @@ begin
 						c_s_axi_readdata <= s_axi_reg_mmclku;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_MMCLKL_LOCALADDR then
 						c_s_axi_readdata <= s_axi_reg_mmclkl;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_LCCLKU_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_lcclku;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_LCCLKL_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_lcclkl;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_DBGREG_LOCALADDR then
 						c_s_axi_readdata <= s_axi_reg_dbgreg;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_THRESL_LOCALADDR then
@@ -712,27 +764,35 @@ begin
 	--LCPLC PIPELINE BELOW--
 	------------------------
 	------------------------
-	lcplc_clk <= d_m_axi_clk;
+	--lcplc_clk <= d_m_axi_clk;
 	--lcplc_rst is controlled by main process
-
-	input_sample_fifo: entity work.AXIS_FIFO
-		Generic map (
-			DATA_WIDTH => (2**LCPLC_DATA_BYTES_LOG)*8,
-			FIFO_DEPTH => 2**(AXI_LEN_WIDTH)*2, --leave enough room for two full transactions to fit
-			ALMOST_EMPTY_THRESHOLD => 2**(AXI_LEN_WIDTH) 
-		)
-		Port map ( 
-			clk	=> lcplc_clk, rst => lcplc_rst,
-			--input axi port
-			input_valid		=> ififo_input_valid,
-			input_ready		=> ififo_input_ready,
-			input_data		=> ififo_input_data,
-			--out axi port
-			output_ready	=> ififo_output_ready,
-			output_data		=> ififo_output_data,
-			output_valid	=> ififo_output_valid,
-			--flags
-			flag_almost_empty => ififo_almost_empty
+	lcplc_rstn <= not lcplc_rst;
+	------------------------
+	
+	
+	input_sample_fifo: axis_data_fifo_16b_512s
+		Port map (
+			s_axis_aresetn => lcplc_rstn,
+			s_axis_aclk => d_m_axi_clk,
+			s_axis_tvalid =>  ififo_input_valid,
+			s_axis_tready => ififo_input_ready,
+			s_axis_tdata => ififo_input_data,
+			m_axis_aclk =>  lcplc_clk,
+			m_axis_tvalid => ififo_output_valid,
+			m_axis_tready => ififo_output_ready,
+			m_axis_tdata => ififo_output_data,
+			prog_empty => ififo_almost_empty_pre
+		);
+		
+	d_m_axi_reset <= not d_m_axi_resetn;
+	ififo_almost_empty_ccd: entity work.flag_cross_clock_domain
+		port map (
+			clk_a => lcplc_clk,
+			rst_a => lcplc_rst,
+			flag_a => ififo_almost_empty_pre,
+			clk_b => d_m_axi_clk,
+			rst_b => d_m_axi_reset,
+			flag_b => ififo_almost_empty
 		);
 
 	flag_gen: entity work.FLAG_GENERATOR
@@ -798,42 +858,55 @@ begin
 	begin
 		if rising_edge(lcplc_clk) then
 			if lcplc_rst = '1' then
-				ofifo_seen_last <= '0';
+				ofifo_seen_last_pre <= '0';
 			else
-				if core_output_valid = '1' and ofifo_input_ready = '1' then
+				if core_output_valid = '1' and core_output_ready = '1' then
 					if core_output_last = '1' then
-						ofifo_seen_last <= '1';
+						ofifo_seen_last_pre <= '1';
 					end if;
 				elsif control_output_reset = '1' then
-					ofifo_seen_last <= '0';
+					ofifo_seen_last_pre <= '0';
 				end if;	
 			end if;
 		end if;
 	end process;
-
-	ofifo_input_valid <= core_output_valid;
-	core_output_ready <= ofifo_input_ready;
-	ofifo_input_last_data  <= core_output_last & core_output_data;
-	output_sample_fifo: entity work.AXIS_FIFO
-		Generic map (
-			DATA_WIDTH => (2**LCPLC_OUTPUT_BYTES_LOG)*8 + 1,
-			FIFO_DEPTH => 2**(AXI_LEN_WIDTH)*2, --leave enough room for two full transactions to fit
-			ALMOST_FULL_THRESHOLD => 2**(AXI_LEN_WIDTH) 
-		)
-		Port map ( 
-			clk	=> lcplc_clk, rst => lcplc_rst,
-			--input axi port
-			input_valid		=> ofifo_input_valid,
-			input_ready		=> ofifo_input_ready,
-			input_data		=> ofifo_input_last_data,
-			--out axi port
-			output_ready	=> ofifo_output_ready,
-			output_data		=> ofifo_output_last_data,
-			output_valid	=> ofifo_output_valid,
-			--flags
-			flag_almost_full=> ofifo_almost_full
+	
+	ofifo_seen_last_ccd: entity work.flag_cross_clock_domain
+		port map (
+			clk_a => lcplc_clk,
+			rst_a => lcplc_rst,
+			flag_a => ofifo_seen_last_pre,
+			clk_b => d_m_axi_clk,
+			rst_b => d_m_axi_reset,
+			flag_b => ofifo_seen_last
 		);
-
+	
+	output_sample_fifo: axis_data_fifo_32b_512s
+		Port map (
+			s_axis_aresetn => lcplc_rstn,
+			s_axis_aclk => lcplc_clk,
+			s_axis_tvalid => core_output_valid,
+			s_axis_tready => core_output_ready,
+			s_axis_tdata => core_output_data,
+			s_axis_tlast => core_output_last,
+			m_axis_aclk => d_m_axi_clk,
+			m_axis_tvalid => ofifo_output_valid,
+			m_axis_tready => ofifo_output_ready,
+			m_axis_tdata => ofifo_output_data,
+			m_axis_tlast => ofifo_output_last,
+			prog_full => ofifo_almost_full_pre
+		);
+		
+	ofifo_almost_full_ccd: entity work.flag_cross_clock_domain
+		port map (
+			clk_a => lcplc_clk,
+			rst_a => lcplc_rst,
+			flag_a => ofifo_almost_full_pre,
+			clk_b => d_m_axi_clk,
+			rst_b => d_m_axi_reset,
+			flag_b => ofifo_almost_full
+		);
+		
 	------------------------
 	------------------------
 	--LCPLC PIPELINE ABOVE--
@@ -1000,6 +1073,29 @@ begin
 			end if;
 		end if;
 	end process;
+	clk_lcplc_update: process(lcplc_clk)
+	begin
+		if rising_edge(lcplc_clk) then
+			if lcplc_rst = '1' then
+				s_axi_reg_lcclk_pre <= (others => '0');
+			else
+				s_axi_reg_lcclk_pre <= std_logic_vector(unsigned(s_axi_reg_lcclk_pre) + to_unsigned(1, s_axi_reg_lcclk_pre'length));
+			end if;
+		end if;
+	end process;
+	c_s_axi_reset <= not c_s_axi_resetn;
+	lcclk_cross: entity work.stdlv_cross_clock_domain
+		generic map (
+			SIGNAL_WIDTH => (2**CONTROLLER_DATA_BYTES_LOG)*2*8
+		)
+		port map (
+			clk_a => lcplc_clk,
+			rst_a => lcplc_rst,
+			signal_a => s_axi_reg_lcclk_pre,
+			clk_b => c_s_axi_clk,
+			rst_b => c_s_axi_reset,
+			signal_b => s_axi_reg_lcclk
+		);
 
 
 end Behavioral;

@@ -27,11 +27,25 @@ inline void XLCPLC_Reset(UINTPTR BaseAddress, u32 cycles) {
 	XLCPLC_Out32(BaseAddress + LCPLC_REG_CTRLRG_OFFSET, LCPLC_CONTROL_CODE_NULL);
 }
 
+inline long long XLCPLC_GetCtrlTime(UINTPTR BaseAddress) {
+	unsigned int time_low, time_high;
+	time_low	= XLCPLC_In32(BaseAddress + LCPLC_REG_CNCLKL_OFFSET);
+	time_high	= XLCPLC_In32(BaseAddress + LCPLC_REG_CNCLKU_OFFSET);
+	return ((long long) time_high) << 32 | ((long long) time_low);
+}
+
 inline long long XLCPLC_GetMemTime(UINTPTR BaseAddress) {
-	unsigned int mtime_low, mtime_high;
-	mtime_low	= XLCPLC_In32(BaseAddress + LCPLC_REG_MMCLKL_OFFSET);
-	mtime_high	= XLCPLC_In32(BaseAddress + LCPLC_REG_MMCLKU_OFFSET);
-	return ((long long) mtime_high) << 32 | ((long long) mtime_low);
+	unsigned int time_low, time_high;
+	time_low	= XLCPLC_In32(BaseAddress + LCPLC_REG_MMCLKL_OFFSET);
+	time_high	= XLCPLC_In32(BaseAddress + LCPLC_REG_MMCLKU_OFFSET);
+	return ((long long) time_high) << 32 | ((long long) time_low);
+}
+
+inline long long XLCPLC_GetLcplcTime(UINTPTR BaseAddress) {
+	unsigned int time_low, time_high;
+	time_low	= XLCPLC_In32(BaseAddress + LCPLC_REG_LCCLKL_OFFSET);
+	time_high	= XLCPLC_In32(BaseAddress + LCPLC_REG_LCCLKU_OFFSET);
+	return ((long long) time_high) << 32 | ((long long) time_low);
 }
 
 inline void XLCPLC_Start(UINTPTR BaseAddress) {
