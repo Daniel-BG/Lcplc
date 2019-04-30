@@ -42,7 +42,7 @@ public class Main {
 
 	public static class Compressor {
 		
-		private static final boolean FAST_COMPRESS = true;
+		private static final boolean FAST_COMPRESS = false;
 		
 		
 		private static final int CONST_ACC_QUANT = 32;
@@ -55,7 +55,7 @@ public class Main {
 		private static final int CONST_GAMMA = 0;
 		
 		
-		private static final int BLOCKS_TO_CODE = 200;
+		private static final int BLOCKS_TO_CODE = 3;
 		private static final int MAX_LINES_PER_BLOCK = 16;
 		private static final int MAX_SAMPLES_PER_BLOCK = 16;
 		private static final int SAMPLE_DEPTH = 16;

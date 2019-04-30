@@ -9,7 +9,7 @@
 #include "lcplc_controller.h"
 
 
-void inline XLCPLC_SetSize(UINTPTR BaseAddress, u32 BlockLines, u32 BlockSamples, u32 ImageBands, u32 ImageLines, u32 ImageSamples) {
+inline void XLCPLC_SetSize(UINTPTR BaseAddress, u32 BlockLines, u32 BlockSamples, u32 ImageBands, u32 ImageLines, u32 ImageSamples) {
 	XLCPLC_Out32(BaseAddress + LCPLC_REG_BCKLIN_OFFSET, BlockLines-1);
 	XLCPLC_Out32(BaseAddress + LCPLC_REG_BCKSMP_OFFSET, BlockSamples-1);
 	XLCPLC_Out32(BaseAddress + LCPLC_REG_BANDNO_OFFSET, ImageBands-1);
@@ -22,7 +22,7 @@ void inline XLCPLC_SetSize(UINTPTR BaseAddress, u32 BlockLines, u32 BlockSamples
 inline void XLCPLC_Reset(UINTPTR BaseAddress, u32 cycles) {
 	XLCPLC_Out32(BaseAddress + LCPLC_REG_CTRLRG_OFFSET, LCPLC_CONTROL_CODE_RESET);
 	//wait a few cycles
-	for(int i = 0; i < cycles; i++);
+	for(unsigned int i = 0; i < cycles; i++);
 	//end wait
 	XLCPLC_Out32(BaseAddress + LCPLC_REG_CTRLRG_OFFSET, LCPLC_CONTROL_CODE_NULL);
 }
