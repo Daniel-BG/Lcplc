@@ -1076,7 +1076,7 @@ begin
 	clk_lcplc_update: process(lcplc_clk)
 	begin
 		if rising_edge(lcplc_clk) then
-			if lcplc_rst = '0' then
+			if lcplc_rst = '1' then
 				s_axi_reg_lcclk_pre <= (others => '0');
 			else
 				s_axi_reg_lcclk_pre <= std_logic_vector(unsigned(s_axi_reg_lcclk_pre) + to_unsigned(1, s_axi_reg_lcclk_pre'length));
