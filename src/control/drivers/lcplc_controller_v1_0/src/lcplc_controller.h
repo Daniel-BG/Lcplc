@@ -35,6 +35,8 @@
 #define LCPLC_REG_CNCLKU_OFFSET 152  	//upper part of clock count for control bus
 #define LCPLC_REG_MMCLKL_OFFSET 156  	//lower part of clock count for memory bus
 #define LCPLC_REG_MMCLKU_OFFSET 160  	//upper part of clock count for memory bus
+#define LCPLC_REG_LCCLKL_OFFSET 164  	//lower part of clock count for lcplc core
+#define LCPLC_REG_LCCLKU_OFFSET 168  	//upper part of clock count for lcplc core
 #define LCPLC_REG_GENSIZ_OFFSET 192  	//lcplc input and output axis sizes
 #define LCPLC_REG_GENMAX_OFFSET 196  	//max size allowed for block and image
 #define LCPLC_REG_GENOTH_OFFSET 200 	//others
@@ -47,7 +49,11 @@
 #define LCPLC_CONTROL_CODE_START_1 	63
 
 #define LCPLC_STATUS_IDLE			0x1
+#define LCPLC_STATUS_RESET			0x10
 #define LCPLC_STATUS_WAIT_START_1 	0x100
+#define LCPLC_STATUS_START 			0x1000
+#define LCPLC_STATUS_ABRUPT_END		0x10000
+#define LCPLC_STATUS_END 			0x100000
 
 #define LCPLC_INPUT_BYTE_WIDTH 2
 
@@ -99,12 +105,110 @@
 
 /************************** Function Prototypes *****************************/
 
+/****************************************************************************/
+/**
+*
+* Set the size registers to the given values
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+* @param	BlockLines number of lines in each block
+* @param	BlockSamples number of samples in each block
+* @param	ImageBands number of bands in the image
+* @param	ImageLines number of lines in the image
+* @param	ImageSamples number of samples in the image
+*
+****************************************************************************/
 void XLCPLC_SetSize(UINTPTR BaseAddress, u32 BlockLines, u32 BlockSamples, u32 ImageBands, u32 ImageLines, u32 ImageSamples);
+
+/****************************************************************************/
+/**
+*
+* Resets the LCPLC core that this controller is driving
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+* @param	cycles number of cycles to hold reset state for
+*
+****************************************************************************/
 void XLCPLC_Reset(UINTPTR BaseAddress, u32 cycles);
+
+/****************************************************************************/
+/**
+*
+* Get the current number of cycles elapsed in the memory bus clock
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+*
+****************************************************************************/
 long long XLCPLC_GetMemTime(UINTPTR BaseAddress);
+
+/****************************************************************************/
+/**
+*
+* Get the current number of cycles elapsed in the control bus clock
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+*
+****************************************************************************/
+long long XLCPLC_GetCtrlTime(UINTPTR BaseAddress);
+
+/****************************************************************************/
+/**
+*
+* Get the current number of cycles elapsed in the lcplc core clock
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+*
+****************************************************************************/
+long long XLCPLC_GetLcplcTime(UINTPTR BaseAddress);
+
+/****************************************************************************/
+/**
+*
+* Perform the startup sequence in the LCPLC core. It will be activated 
+*	within this routine
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+*
+****************************************************************************/
 void XLCPLC_Start(UINTPTR BaseAddress);
+
+/****************************************************************************/
+/**
+*
+* Set the addresses from where to read the raw data, and where to leave the
+*	compresse result
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+* @param	SourceAddress is the address where the raw input data starts at
+* @param	TargetAddress is the address where the processed data will be output
+*
+****************************************************************************/
 void XLCPLC_SetAddresses(UINTPTR BaseAddress, u32 SourceAddress, u32 TargetAddress);
+
+/****************************************************************************/
+/**
+*
+* Check if the LCPLC core is idle
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+*
+* @return 	1 if the device is idle, 0 otherwise
+*
+****************************************************************************/
 int XLCPLC_IsIdle(UINTPTR BaseAddress);
+
+/****************************************************************************/
+/**
+*
+* Get the current status of the LCPLC core
+*
+* @param	BaseAddress is the base address of the LCPLC device.
+*
+* @return 	the current status of the core
+*
+* @note 	see constants starting with LCPLC_STATUS_ for a list of statuses
+*
+****************************************************************************/
 int XLCPLC_GetStatus(UINTPTR BaseAddress);
 
 

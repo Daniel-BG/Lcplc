@@ -151,6 +151,8 @@ architecture Behavioral of lcplc_controller is
 	constant C_S_AXI_REG_CNCLKU_LOCALADDR: integer := 152;  --upper part of clock count for control bus
 	constant C_S_AXI_REG_MMCLKL_LOCALADDR: integer := 156;  --lower part of clock count for memory bus
 	constant C_S_AXI_REG_MMCLKU_LOCALADDR: integer := 160;  --upper part of clock count for memory bus
+	constant C_S_AXI_REG_LCCLKL_LOCALADDR: integer := 164;  --lower part of clock count for memory bus
+	constant C_S_AXI_REG_LCCLKU_LOCALADDR: integer := 168;  --upper part of clock count for memory bus
 	--lcplc generics to know how it was configured
 	constant C_S_AXI_REG_GENSIZ_LOCALADDR: integer := 192;  --lcplc input and output axis sizes
 	constant C_S_AXI_REG_GENMAX_LOCALADDR: integer := 196;  --max size allowed for block and image
@@ -174,11 +176,13 @@ architecture Behavioral of lcplc_controller is
 		s_axi_reg_dbgreg,
 		s_axi_reg_inbyte_next, s_axi_reg_outbyt_next: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
 	--clock registers
-	signal s_axi_reg_cnclk, s_axi_reg_mmclk: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
+	signal s_axi_reg_cnclk, s_axi_reg_mmclk, s_axi_reg_lcclk, s_axi_reg_lcclk_pre: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
 	alias s_axi_reg_cnclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_cnclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
 	alias s_axi_reg_cnclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_cnclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
 	alias s_axi_reg_mmclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_mmclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
 	alias s_axi_reg_mmclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_mmclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
+	alias s_axi_reg_lcclku: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_lcclk((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto (2**CONTROLLER_DATA_BYTES_LOG)*8);
+	alias s_axi_reg_lcclkl: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0) is s_axi_reg_lcclk((2**CONTROLLER_DATA_BYTES_LOG)  *8 - 1 downto 0);
 	--lcplc config registers
 	signal s_axi_reg_qshift: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*8 - 1 downto 0);
 	signal s_axi_reg_thres: std_logic_vector((2**CONTROLLER_DATA_BYTES_LOG)*2*8 - 1 downto 0);
@@ -292,6 +296,7 @@ architecture Behavioral of lcplc_controller is
 	--CCD logic
 	------------
 	signal d_m_axi_reset: std_logic;
+	signal c_s_axi_reset: std_logic;
 begin
 	-- DEBUG BEGIN
 --	s_axi_reg_dbgreg <= 
@@ -469,6 +474,10 @@ begin
 						c_s_axi_readdata <= s_axi_reg_mmclku;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_MMCLKL_LOCALADDR then
 						c_s_axi_readdata <= s_axi_reg_mmclkl;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_LCCLKU_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_lcclku;
+					elsif local_c_s_axi_readaddr = C_S_AXI_REG_LCCLKL_LOCALADDR then
+						c_s_axi_readdata <= s_axi_reg_lcclkl;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_DBGREG_LOCALADDR then
 						c_s_axi_readdata <= s_axi_reg_dbgreg;
 					elsif local_c_s_axi_readaddr = C_S_AXI_REG_THRESL_LOCALADDR then
@@ -1064,6 +1073,29 @@ begin
 			end if;
 		end if;
 	end process;
+	clk_lcplc_update: process(lcplc_clk)
+	begin
+		if rising_edge(lcplc_clk) then
+			if lcplc_rst = '0' then
+				s_axi_reg_lcclk_pre <= (others => '0');
+			else
+				s_axi_reg_lcclk_pre <= std_logic_vector(unsigned(s_axi_reg_lcclk_pre) + to_unsigned(1, s_axi_reg_lcclk_pre'length));
+			end if;
+		end if;
+	end process;
+	c_s_axi_reset <= not c_s_axi_resetn;
+	lcclk_cross: entity work.stdlv_cross_clock_domain
+		generic map (
+			SIGNAL_WIDTH => (2**CONTROLLER_DATA_BYTES_LOG)*2*8
+		)
+		port map (
+			clk_a => lcplc_clk,
+			rst_a => lcplc_rst,
+			signal_a => s_axi_reg_lcclk_pre,
+			clk_b => c_s_axi_clk,
+			rst_b => c_s_axi_reset,
+			signal_b => s_axi_reg_lcclk
+		);
 
 
 end Behavioral;
