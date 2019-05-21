@@ -27,7 +27,7 @@ entity lcplc_controller is
 	Generic (
 		--controller axi generics
 		CONTROLLER_ADDR_WIDTH		: integer := 32; 
-		CONTROLLER_DATA_BYTES_LOG	: integer := 2;	--expected to be four
+		CONTROLLER_DATA_BYTES_LOG	: integer := 2;	--expected to be four bytes total
 		--lcplc axis generics -- propagated to DDR3
 		LCPLC_DATA_BYTES_LOG		: integer := 1;
 		LCPLC_OUTPUT_BYTES_LOG		: integer := 2; 

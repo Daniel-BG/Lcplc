@@ -30,8 +30,12 @@ module test_lcplc;
 	parameter ACCUMULATOR_WINDOW = 32;
 	parameter QUANTIZER_SHIFT_WIDTH = 4;
 	
+	//parameter QUANTIZER_SHIFT = 0;
+	//wire[63:0] THRESHOLD = 16'h0000_0000_0000_0000;
+	//parameter QUANTIZER_SHIFT = 2;
+	//wire[63:0] THRESHOLD = 16'h0000_0000_0005_5555;
 	parameter QUANTIZER_SHIFT = 0;
-	wire[63:0] THRESHOLD = 16'h0000_0000_0000_0000;
+	wire[63:0] THRESHOLD = 64'h0000_0000_0001_0000;
 	
 	parameter PERIOD = 10;
 	reg clk, rst;

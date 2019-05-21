@@ -37,7 +37,7 @@ entity NTHBAND_PREDICTOR is
 		xhat_valid		: in  std_logic;
 		xhat_ready		: out std_logic;
 		xhat_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xhat_last_b		: in  std_logic;
+		xhat_last_s		: in  std_logic;
 		xmean_valid		: in  std_logic;
 		xmean_ready		: out std_logic;
 		xmean_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -51,7 +51,7 @@ entity NTHBAND_PREDICTOR is
 		xtilde_ready	: in  std_logic;
 		xtilde_valid	: out std_logic;
 		xtilde_data 	: out std_logic_vector(DATA_WIDTH + 2 downto 0);
-		xtilde_last_b 	: out std_logic
+		xtilde_last_s 	: out std_logic
 	);
 end NTHBAND_PREDICTOR;
 
@@ -102,7 +102,7 @@ begin
 	-------------------
 	--INPUT  SPLITTER--
 	-------------------
-	xhat_last_data <= xhat_last_b & xhat_data;
+	xhat_last_data <= xhat_last_s & xhat_data;
 	xhat_splitter: entity work.AXIS_SPLITTER_4
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1 --one extra for flag
@@ -306,7 +306,7 @@ begin
 			output_data   => xtilde_data,
 			output_valid  => xtilde_valid,
 			output_ready  => xtilde_ready,
-			output_last   => xtilde_last_b
+			output_last   => xtilde_last_s
 		);
 
 end Behavioral;

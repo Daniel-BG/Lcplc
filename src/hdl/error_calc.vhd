@@ -122,9 +122,6 @@ architecture Behavioral of ERROR_CALC is
 	signal distortion_valid, distortion_ready: std_logic;
 	signal distortion_data: std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0);
 	
-	--distortion flag stuff
-	signal d_flag_thres: std_logic_vector((DATA_WIDTH + 3)*2 + MAX_SLICE_SIZE_LOG - 1 downto 0); 
-	
 	--error quantizer
 	signal error_quant_ready, error_quant_valid: std_logic;
 	signal error_quant_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);

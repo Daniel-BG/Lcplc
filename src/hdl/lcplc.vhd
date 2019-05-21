@@ -437,7 +437,7 @@ begin
 			xhat_valid		=> xhatout_delay_valid,
 			xhat_ready 		=> xhatout_delay_ready,
 			xhat_data  		=> xhatout_delay_data,
-			xhat_last_b		=> xhatout_delay_last,
+			xhat_last_s		=> xhatout_delay_last,
 			xmean_valid		=> xmean_1_valid,
 			xmean_ready		=> xmean_1_ready,
 			xmean_data		=> xmean_1_data,
@@ -451,7 +451,7 @@ begin
 			xtilde_ready => prediction_rest_ready,
 			xtilde_valid => prediction_rest_valid,
 			xtilde_data  => prediction_rest_data,
-			xtilde_last_b=> prediction_rest_last
+			xtilde_last_s=> prediction_rest_last
 		);
 		
 	--fifo for B flag that joins the nth band prediction
@@ -665,7 +665,7 @@ begin
 			xtilde_ready	=> xtilde_ready,
 			xtilde_valid	=> xtilde_valid,
 			xtilde_last_s	=> xtilde_last,
-			d_flag_data		=> d_flag_0_valid,
+			d_flag_data		=> d_flag_0_data_stdlv(0),
 			d_flag_ready	=> d_flag_0_ready,
 			d_flag_valid	=> d_flag_0_valid,
 			xhatout_ready	=> xhatout_ready,

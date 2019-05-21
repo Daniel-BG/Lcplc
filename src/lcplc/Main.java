@@ -5,11 +5,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Map.Entry;
 
-import com.jypec.img.HeaderConstants;
+import org.ejml.data.FMatrixRMaj;
+
+import com.jypec.distortion.ImageComparisons;
 import com.jypec.img.HyperspectralImage;
 import com.jypec.img.HyperspectralImageData;
+import com.jypec.img.HyperspectralImageIntegerData;
+import com.jypec.img.ImageDataType;
 import com.jypec.util.bits.Bit;
 import com.jypec.util.bits.BitInputStream;
 import com.jypec.util.bits.BitOutputStream;
@@ -20,7 +23,12 @@ public class Main {
 
 	//USE THIS SINCE ITS DATA TYPE 12: UNSIGNED TWO BYTE!!
 	static String input = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.dat";
+	//static String input = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.dat";
+	//static String input = "C:/Users/Daniel/Hiperspectral images/Beltsville_Radiance_w_IGM/0810_2022_rad.dat";
 	static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.hdr";
+	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.hdr";
+	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Beltsville_Radiance_w_IGM/0810_2022_rad.hdr";
+	
 	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data_2/";
 	static String sampleExt = ".smpl";
 
@@ -35,30 +43,75 @@ public class Main {
 		        	System.out.println("Problem deleting file: " + file.getPath());
 		}
 		
+		/*int[] blockSizes	= {4, 8, 16, 32};
+		int[] quantizations = {0, 1, 2, 4, 8};
+		double[] gammas		= {0, 0.1, 0.25, 0.5, 1, 3, 5};
+		
+		for (int bs: blockSizes) {
+			for (int q: quantizations) {
+				for (double g: gammas) {
+					System.out.println("BS,Q,G: " + bs + "," + q + "," + g);
+					Compressor c = new Compressor();
+					c.setGamma(g);
+					c.setSQDownscale(q);
+					c.setBlockSize(bs, bs);
+					c.test();
+					System.out.println();
+				}
+			}
+		}*/
+		
 		Compressor c = new Compressor();
+		c.setSQDownscale(0);
+		c.setGamma(3);
 		c.test();
+		System.out.println();
+	
 	}
 	
 
 	public static class Compressor {
 		
+		///////Constants
 		private static final boolean FAST_COMPRESS = false;
-		
-		
+		private static final boolean REPORT_BLOCK_STATUS = false;
+		private static final boolean COMPARE = false;
 		private static final int CONST_ACC_QUANT = 32;
-		//delta = down/up
-		private static final boolean CONST_Q_ONLYSHIFT = true;
-		private static final int CONST_UTQ_UPSCALE = 2;
-		private static final int CONST_UTQ_DOWNSCALE = 1;
-		private static final int CONST_SQ_DOWNSCALE = 0;
-		//set gamma to zero to avoid block skipping
-		private static final int CONST_GAMMA = 0;
+		private static final int BLOCKS_TO_CODE = 3; //Integer.MAX_VALUE; //code the full image
+		///////
+		
+		//variables
+		private int SQ_DOWNSCALE = 0;
+		private double GAMMA = 0;
+		private int MAX_LINES_PER_BLOCK = 32;
+		private int MAX_SAMPLES_PER_BLOCK = 32;
+		
+		//set by image data
+		private int SAMPLE_DEPTH = 16;
+		
+		public Compressor() {
+			//set default compression parameters
+			this.setBlockSize(16, 16);
+			this.setSQDownscale(0);
+			this.setGamma(0);
+		}
+		
+		public void setBlockSize(int lines, int samples) {
+			this.MAX_LINES_PER_BLOCK = lines;
+			this.MAX_SAMPLES_PER_BLOCK = samples;
+		}
+		
+		public void setSQDownscale(int SQDownscale) {
+			this.SQ_DOWNSCALE = SQDownscale;
+		}
+		
+		public void setGamma(double gamma) {
+			this.GAMMA = gamma;
+		}
 		
 		
-		private static final int BLOCKS_TO_CODE = 3;
-		private static final int MAX_LINES_PER_BLOCK = 16;
-		private static final int MAX_SAMPLES_PER_BLOCK = 16;
-		private static final int SAMPLE_DEPTH = 16;
+		
+		
 		
 		
 		
@@ -66,9 +119,9 @@ public class Main {
 			HyperspectralImage hi;
 			try {
 				hi = HyperspectralImageReader.read(input, inputHeader, true);
-				for (Entry<HeaderConstants, Object> e: hi.getHeader().entrySet()) {
+				/*for (Entry<HeaderConstants, Object> e: hi.getHeader().entrySet()) {
 					System.out.print(e.getKey().toString() + ": " + e.getValue().toString() + "\n");
-				};
+				};*/
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -80,6 +133,7 @@ public class Main {
 			int imgBands	= hid.getNumberOfBands();
 			int imgLines	= hid.getNumberOfLines();
 			int imgSamples	= hid.getNumberOfSamples();
+			this.SAMPLE_DEPTH = hid.getDataType().getBitDepth();
 			
 			ByteArrayOutputStream adbaos = new ByteArrayOutputStream();
 			BitOutputStream bos = new BitOutputStream(adbaos);
@@ -124,7 +178,7 @@ public class Main {
 						e.printStackTrace();
 						System.exit(0);
 					}
-					if (!FAST_COMPRESS)
+					if (REPORT_BLOCK_STATUS)
 						System.out.println("COMPR:  " + bos.getBitsOutput());
 					compressedBlocks++;
 					if (compressedBlocks >= BLOCKS_TO_CODE)
@@ -146,13 +200,17 @@ public class Main {
 			long eTime = System.nanoTime();
 			long time = eTime - sTime;
 			double secondTime = ((double) time) / 1000000000.0;
-			System.out.print("Total compress time is: " + secondTime + "\n");
+			System.out.println("Ctime: " + secondTime);
+			System.out.println("From: " + hid.getBitSize() + " downto " + bos.getBitsOutput());
+			double rate = (double) bos.getBitsOutput() / (double) hid.getBitSize();
+			System.out.println("Rate: " + rate);
 			sTime = System.nanoTime();
 			///////
 			
 			
 			ByteArrayInputStream adbais = new ByteArrayInputStream(adbaos.toByteArray());
 			BitInputStream bis = new BitInputStream(adbais);
+			int[][][] result = new int[imgBands][imgLines][imgSamples];
 			
 			int unCompressedBlocks = 0;
 			for (int l = 0; l < imgLines; l += MAX_LINES_PER_BLOCK) {
@@ -163,13 +221,19 @@ public class Main {
 					
 					//uncompress block
 					try {
-						this.uncompress(blockBands, blockLines, blockSamples, bis);
+						int[][][] partialResult = this.uncompress(blockBands, blockLines, blockSamples, bis);
+						for (int i = 0; i < blockBands; i++) {
+							for (int j = 0; j < blockLines; j++) {
+								for (int k = 0; k < blockSamples; k++) {
+									result[i][j+l][k+s] = partialResult[i][j][k]; 
+								}
+							}
+						}
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 						System.exit(0);
 					}
-					if (!FAST_COMPRESS)
+					if (REPORT_BLOCK_STATUS)
 						System.out.println("UNCOMPR:  " + bis.getBitsInput());
 					unCompressedBlocks++;
 					if (unCompressedBlocks >= BLOCKS_TO_CODE)
@@ -189,65 +253,79 @@ public class Main {
 			
 			
 			//output bytes
-			Sampler<Integer> outputSampler = new Sampler<Integer>("output");
-			
-			byte[] bytesoutput = adbaos.toByteArray();
-			for (int i = 0; i < bytesoutput.length; i+=4) {
-				if (i + 3 >= bytesoutput.length)
-					break;
-				int word = ((bytesoutput[i]   << 24) & 0xff000000) 
-						 | ((bytesoutput[i+1] << 16) & 0x00ff0000) 
-						 | ((bytesoutput[i+2] << 8 ) & 0x0000ff00) 
-						 | ((bytesoutput[i+3]      ) & 0x000000ff);
-				outputSampler.sample(word);
-			}
-			try {
-				outputSampler.export();
-			} catch (IOException e) {
-				e.printStackTrace();
-				System.exit(0);
-			}
-			
-			//output raw input and raw output (in read raster order)
-			try {
-				rawBinIn.flush();
-				byte[] rbb = rawBinBaos.toByteArray();
-				//change endianness
-				for (int i = 0; i < rbb.length; i += 4) {
-					byte[] tmp = new byte[4];
-					tmp[0] = rbb[i];
-					tmp[1] = rbb[i+1];
-					tmp[2] = rbb[i+2];
-					tmp[3] = rbb[i+3];
-					// swap
-					rbb[i] 	 = tmp[1];
-					rbb[i+1] = tmp[0];
-					rbb[i+2] = tmp[3];
-					rbb[i+3] = tmp[2];
-				}
-				FileOutputStream stream = new FileOutputStream(samplerBaseDir + "rawIn.bin");
-				stream.write(rbb);
-				stream.close();
+			if (!FAST_COMPRESS) {
+				Sampler<Integer> outputSampler = new Sampler<Integer>("output");
 				
-				stream = new FileOutputStream(samplerBaseDir + "rawOut.bin");
-				for (int i = 0; i <= bytesoutput.length - 4; i += 4) {
-					byte[] tmp = new byte[4];
-					tmp[0] = bytesoutput[i];
-					tmp[1] = bytesoutput[i+1];
-					tmp[2] = bytesoutput[i+2];
-					tmp[3] = bytesoutput[i+3];
-					// swap
-					bytesoutput[i] 	 = tmp[3];
-					bytesoutput[i+1] = tmp[2];
-					bytesoutput[i+2] = tmp[1];
-					bytesoutput[i+3] = tmp[0];
+				byte[] bytesoutput = adbaos.toByteArray();
+				for (int i = 0; i < bytesoutput.length; i+=4) {
+					if (i + 3 >= bytesoutput.length)
+						break;
+					int word = ((bytesoutput[i]   << 24) & 0xff000000) 
+							 | ((bytesoutput[i+1] << 16) & 0x00ff0000) 
+							 | ((bytesoutput[i+2] << 8 ) & 0x0000ff00) 
+							 | ((bytesoutput[i+3]      ) & 0x000000ff);
+					outputSampler.sample(word);
 				}
-				stream.write(bytesoutput);
-				stream.close();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				try {
+					outputSampler.export();
+				} catch (IOException e) {
+					e.printStackTrace();
+					System.exit(0);
+				}
+				
+				//output raw input and raw output (in read raster order)
+				try {
+					rawBinIn.flush();
+					byte[] rbb = rawBinBaos.toByteArray();
+					//change endianness
+					changeEndianness(rbb, 1, 0, 3, 2);
+					FileOutputStream stream = new FileOutputStream(samplerBaseDir + "rawIn.bin");
+					stream.write(rbb);
+					stream.close();
+					
+					changeEndianness(bytesoutput, 3, 2, 1, 0);
+					stream = new FileOutputStream(samplerBaseDir + "rawOut.bin");
+					stream.write(bytesoutput);
+					stream.close();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 			}
+			
+			//compare
+			if (COMPARE) {
+				//get both matrices
+				FMatrixRMaj fdm = hid.tofloatMatrix();
+				ImageDataType idt = hid.getDataType();
+				hid = null;
+				
+				HyperspectralImageData hidr = new HyperspectralImageIntegerData(idt, imgBands, imgLines, imgSamples);
+				for (int i = 0; i < imgBands; i++) {
+					for (int j = 0; j < imgLines; j++) {
+						for (int k = 0; k < imgSamples; k++) {
+							hidr.setValueAt(result[i][j][k], i, j, k);
+						}
+					}
+				}
+				FMatrixRMaj sdm = hidr.tofloatMatrix();
+				float dynRange = hidr.getDataType().getDynamicRange();
+				
+				//garbage collect if necessary
+				
+				hidr = null;
+				
+				//output metrics
+				System.out.println("PSNR: " + ImageComparisons.rawPSNR(fdm, sdm, dynRange));
+				//System.out.println("Normalized PSNR is: " + ImageComparisons.normalizedPSNR(fdm, sdm));
+				//System.out.println("powerSNR is: " + ImageComparisons.powerSNR(fdm, sdm));
+				System.out.println("SNR: " + ImageComparisons.SNR(fdm, sdm));
+				System.out.println("MSE: " + ImageComparisons.MSE(fdm, sdm));
+				//System.out.println("maxSE is: " + ImageComparisons.maxSE(fdm, sdm));
+				//System.out.println("MSR is: " + ImageComparisons.MSR(fdm, sdm));
+				//System.out.println("SSIM is: " + ImageComparisons.SSIM(fdm, sdm, dynRange));
+			}
+			
 			
 			try {
 				bos.close();
@@ -295,14 +373,6 @@ public class Main {
 			
 			Sampler<Integer> dFlagSampler		= new Sampler<Integer>("dflag");
 			
-			
-			//Sampler<Long>	 samplerHelper1		= new Sampler<Long>("helper1");
-			//Sampler<Long>	 samplerHelper2		= new Sampler<Long>("helper2");
-			//Sampler<Long>	 samplerHelper3		= new Sampler<Long>("helper3");		
-			
-			
-			
-			
 			Sampler<Integer> errorSampler		= new Sampler<Integer>("error");
 			
 	
@@ -313,11 +383,7 @@ public class Main {
 			ExpGolombCoDec expGolombZero = new ExpGolombCoDec(0);
 			GolombCoDec golombCoDec = new GolombCoDec(0);
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
-			Quantizer quantizer;
-			if (CONST_Q_ONLYSHIFT)
-				quantizer = new ShifterQuantizer(CONST_SQ_DOWNSCALE);
-			else
-				quantizer = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE); 
+			Quantizer quantizer = new ShifterQuantizer(SQ_DOWNSCALE);
 			
 			
 			expGolombZero.startSampling("egz_input", "egz_code", "egz_quant");
@@ -334,14 +400,6 @@ public class Main {
 					int prediction;
 					int kj = 0;
 					if (l == 0 && s == 0) {
-						/*expGolombZero.encode(block[0][l][s], bos);
-						//mimic hw by injecting here the first sample
-						mappedError = block[0][l][s]; //Mapper.mapError(block[0][l][s]); 
-						prediction = 0;
-						
-						decodedBlock[0][l][s] = block[0][l][s];
-						acc.add(0);*/
-						
 						int quant = quantizer.quantize(block[0][l][s]);
 						int dequant = quantizer.dequantize(quant);
 						
@@ -403,8 +461,10 @@ public class Main {
 			
 			//calculate distortion threshold
 			long sampleCnt = lines*samples;
-			double delta = (double) CONST_UTQ_DOWNSCALE / (double) CONST_UTQ_UPSCALE;
-			double thres = (double) CONST_GAMMA * delta * delta * sampleCnt * sampleCnt / 3.0;
+			double delta = (double) (1 << this.SQ_DOWNSCALE);
+			double thres = GAMMA * delta * delta * (double) sampleCnt * (double) sampleCnt / 3.0;
+			if (REPORT_BLOCK_STATUS)
+				System.out.println("THRESH: " + thres);
 			
 			dFlagSampler.sample(1); //first sample should be 1 to save xhatraw samples instead of empty values
 			
@@ -583,11 +643,7 @@ public class Main {
 			ExpGolombCoDec expGolombZero = new ExpGolombCoDec(0);
 			GolombCoDec golombCoDec = new GolombCoDec(0);
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
-			Quantizer quantizer;
-			if (CONST_Q_ONLYSHIFT)
-				quantizer = new ShifterQuantizer(CONST_SQ_DOWNSCALE);
-			else
-				quantizer = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE); 
+			Quantizer quantizer = new ShifterQuantizer(SQ_DOWNSCALE);
 			
 			//compress first band
 			int[][] band = block[0];
@@ -634,8 +690,10 @@ public class Main {
 			
 			//calculate distortion threshold
 			long sampleCnt = lines*samples;
-			double delta = (double) CONST_UTQ_DOWNSCALE / (double) CONST_UTQ_UPSCALE;
-			double thres = (double) CONST_GAMMA * delta * delta * sampleCnt * sampleCnt / 3.0;
+			double delta = (double) (1 << this.SQ_DOWNSCALE);
+			double thres = (double) GAMMA * delta * delta * sampleCnt * sampleCnt / 3.0;
+			if (REPORT_BLOCK_STATUS)
+				System.out.println("THRESH: " + thres);
 			
 			//compress rest of bands
 			for (int b = 1; b < bands; b++) {
@@ -714,6 +772,8 @@ public class Main {
 					}
 				} else {
 					//skip block
+					if (REPORT_BLOCK_STATUS)
+						System.out.println("Slice skipped: " + b);
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
 							decodedBlock[b][l][s] = Utils.clamp(savedPrediction[l][s], 0, (1 << SAMPLE_DEPTH) - 1);
@@ -739,32 +799,12 @@ public class Main {
 				}
 				alphaD >>= 1;
 			}
-			
-			/*long difference = Long.MAX_VALUE;
-			int alphaRange = 1 << depth;
-			for (int i = 0; i < alphaRange; i++) {
-				long candidate = (alphaD*i)>>(depth-1);
-				long localDiff = Math.abs(alphaN-candidate);
-				if (localDiff < difference) {
-					difference = localDiff;
-					result = i;
-				}
-			}*/
-			//System.out.println("Diff is: " + difference);
+
 			return result;
 		}
 		
 		
 		public int findkj(Accumulator acc) {
-			/*int Rj = (int) acc.getRunningSum();		//running count of last (at most) 32 mapped errors
-			int J  =       acc.getRunningCount();	//number of samples to average out for golomb param calculation			
-			int kj;									//will be the golomb parameter to code current mapped error
-			for (kj = 0; (J<<kj) <= Rj; kj++);		//calculate kj
-			
-			return kj;*/
-			
-
-			
 			int Rj = (int) acc.getRunningSum();	//running count of last (at most) 32 mapped errors
 			int J  =       acc.getRunningCount();	//number of samples to average out for golomb param calculation			
 			int kj = Utils.countBitsOf(J);
@@ -774,6 +814,22 @@ public class Main {
 		}
 		
 		
+		public void changeEndianness(byte[] arr, int s0, int s1, int s2, int s3) {
+			//change endianness
+			for (int i = 0; i+3 < arr.length; i += 4) {
+				byte[] tmp = new byte[4];
+				tmp[0] = arr[i];
+				tmp[1] = arr[i+1];
+				tmp[2] = arr[i+2];
+				tmp[3] = arr[i+3];
+				// swap
+				arr[i] 	 = tmp[s0];
+				arr[i+1] = tmp[s1];
+				arr[i+2] = tmp[s2];
+				arr[i+3] = tmp[s3];
+			}
+		}
+		
 		
 		
 		public int[][][] uncompress(int bands, int lines, int samples, BitInputStream bis) throws IOException {
@@ -782,11 +838,7 @@ public class Main {
 			ExpGolombCoDec expGolombZero = new ExpGolombCoDec(0);
 			GolombCoDec golombCoDec = new GolombCoDec(0);
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
-			Quantizer quantizer;
-			if (CONST_Q_ONLYSHIFT)
-				quantizer = new ShifterQuantizer(CONST_SQ_DOWNSCALE);
-			else
-				quantizer = new IntegerUniformThresholdQuantizer(CONST_UTQ_DOWNSCALE, CONST_UTQ_UPSCALE); 
+			Quantizer quantizer = new ShifterQuantizer(SQ_DOWNSCALE);
 			
 			//decompress first band
 			int[][] decodedBand = decodedBlock[0];
