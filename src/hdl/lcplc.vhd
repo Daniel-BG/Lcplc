@@ -209,6 +209,24 @@ architecture Behavioral of LCPLC is
 	alias  merr_delay_last_s: std_logic is merr_delay_last_ibs_data(PREDICTION_WIDTH + 0);
 	signal kj_delay_data: std_logic_vector(WORD_WIDTH_LOG - 1 downto 0);
 	signal kj_delay_ready, kj_delay_valid: std_logic;
+	
+--pragma synthesis_off
+	--in_module checkers
+	COMPONENT inline_axis_checker 
+		GENERIC (
+			DATA_WIDTH: integer;
+			SKIP: integer;
+			FILE_NAME: string
+		);
+		PORT (
+			clk: in std_logic;
+			rst: in std_logic;
+			valid: in std_logic;
+			ready: in std_logic;
+			data: in std_logic_vector
+		);
+	END COMPONENT;
+--pragma synthesis_on
 
 begin
 
@@ -813,6 +831,23 @@ begin
 			output_ready=> output_ready,
 			output_last => output_last
 		);
+		
+		
+		
+	--checkers for data validity
+--pragma synthesis_off
+	check_merr: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> PREDICTION_WIDTH,
+			FILE_NAME	=> "C:/Users/Daniel/Repositorios/Lcplc/test_data/merr.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => merr_valid, data => merr_data, ready => merr_ready
+		);
+--pragma synthesis_on
+	
 
 
 end Behavioral;
