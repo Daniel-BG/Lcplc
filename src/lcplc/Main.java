@@ -19,6 +19,8 @@ import com.jypec.util.bits.BitOutputStream;
 import com.jypec.util.bits.BitStreamConstants;
 import com.jypec.util.io.HyperspectralImageReader;
 
+import test.TestQuantizer;
+
 public class Main {
 
 	//USE THIS SINCE ITS DATA TYPE 12: UNSIGNED TWO BYTE!!
@@ -34,6 +36,21 @@ public class Main {
 
 
 	public static void main(String[] args) {
+		/*for (int i = 0; i < 16; i++) {
+			testQuantization(i, 16);
+		}*/
+		
+		testCompressor();
+		
+		/*Quantizer quantizer = new ShifterQuantizer(2);
+		
+
+		int qval = quantizer.quantize(218);
+		int dqval = quantizer.dequantize(qval);*/
+	}
+	
+	
+	public static void testCompressor() {
 		//clear directory
 		File dir = new File(samplerBaseDir);
 		
@@ -41,6 +58,8 @@ public class Main {
 		    if (!file.isDirectory()) 
 		        if (!file.delete())
 		        	System.out.println("Problem deleting file: " + file.getPath());
+		        else
+		        	System.out.println("Deleted file: " + file.getPath());
 		}
 		
 		/*int[] blockSizes	= {4, 8, 16, 32};
@@ -62,11 +81,32 @@ public class Main {
 		}*/
 		
 		Compressor c = new Compressor();
-		c.setSQDownscale(0);
+		c.setSQDownscale(2);
 		c.setGamma(3);
 		c.test();
 		System.out.println();
+	}
 	
+	
+	public static void testQuantization(int downscale, int depth) {
+		System.out.println("Testing quantization for dq: " + downscale);
+		
+		Quantizer quantizer = new ShifterQuantizer(downscale);
+		
+		for (int i = 0; i < (1 << depth); i++) {
+			//option 1
+			int qval = quantizer.quantize(i);
+			int dqval = quantizer.dequantize(qval);
+			
+			//option 2, just remove bytes
+			int rawqdq = downscale == 0 ? i : (i + (1 << (downscale - 1))) & (~((1 << downscale) - 1));
+			
+			if (dqval != rawqdq) {
+				System.out.println("Fails @ " + i + "(" + dqval + "," + rawqdq + ")");
+			}
+			
+			//System.out.println(i + "-> (" + dqval + "," + rawqdq + ")");
+		}
 	}
 	
 
@@ -74,7 +114,7 @@ public class Main {
 		
 		///////Constants
 		private static final boolean FAST_COMPRESS = false;
-		private static final boolean REPORT_BLOCK_STATUS = false;
+		private static final boolean REPORT_BLOCK_STATUS = true;
 		private static final boolean COMPARE = false;
 		private static final int CONST_ACC_QUANT = 32;
 		private static final int BLOCKS_TO_CODE = 3; //Integer.MAX_VALUE; //code the full image
@@ -364,6 +404,9 @@ public class Main {
 			Sampler<Integer> xtildeSampler		= new Sampler<Integer>("xtilde");
 			Sampler<Integer> xtilde_last_s      = new Sampler<Integer>("xtilde_last_s");
 			
+			Sampler<Integer> quantSampler		= new Sampler<Integer>("quant");
+			Sampler<Integer> dequantSampler		= new Sampler<Integer>("unquant");
+			
 			Sampler<Integer> mappedErrorSampler = new Sampler<Integer>("merr");
 			Sampler<Integer> kjSampler			= new Sampler<Integer>("kj");
 			
@@ -399,9 +442,10 @@ public class Main {
 					int mappedError;
 					int prediction;
 					int kj = 0;
+					int quant, dequant;
 					if (l == 0 && s == 0) {
-						int quant = quantizer.quantize(block[0][l][s]);
-						int dequant = quantizer.dequantize(quant);
+						quant = quantizer.quantize(block[0][l][s]);
+						dequant = quantizer.dequantize(quant);
 						
 						mappedError = Mapper.mapError(quant); //Mapper.mapError(block[0][l][s]);
 						
@@ -412,7 +456,7 @@ public class Main {
 						prediction = 0;
 						
 						decodedBlock[0][l][s] = dequant;
-						acc.add(dequant);
+						acc.add(Math.abs(dequant));
 						
 					//For every other sample, code following
 					//the predictive scheme
@@ -421,16 +465,16 @@ public class Main {
 						
 						
 						error = block[0][l][s] - (int) prediction;
-						int qErr  = quantizer.quantize(error);
-						error 	  = quantizer.dequantize(qErr);
-						decodedBlock[0][l][s] = (int) prediction + error;
+						quant  = quantizer.quantize(error);
+						dequant= quantizer.dequantize(quant);
+						decodedBlock[0][l][s] = (int) prediction + dequant;
 
 						kj = findkj(acc);
 						
 						//code mapped error
-						mappedError = Mapper.mapError(qErr);
+						mappedError = Mapper.mapError(quant);
 						golombCoDec.encode(kj, mappedError, bos);	//encode the error
-						acc.add(Math.abs(error));		//update Rj after coding
+						acc.add(Math.abs(dequant));		//update Rj after coding
 					}
 					
 					xFirstBand.sample(block[0][l][s]);
@@ -447,6 +491,8 @@ public class Main {
 					xtildeSampler.sample(prediction);
 					xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
 					
+					quantSampler.sample(quant);
+					dequantSampler.sample(dequant);
 					mappedErrorSampler.sample(mappedError);
 					if (s != samples-1 || l != lines-1) kjSampler.sample(findkj(acc));
 					
@@ -523,17 +569,17 @@ public class Main {
 						//quantize error and replace it with the
 						//unquantized version since this is the one
 						//the decoder will have
-						int qErr  = quantizer.quantize((int) error);
-						error 	  = quantizer.dequantize(qErr);
-						long mappedError = Mapper.mapError(qErr);
+						int quant  = quantizer.quantize((int) error);
+						int dequant = quantizer.dequantize(quant);
+						long mappedError = Mapper.mapError(quant);
 						savedMappedError[l][s] = (int) mappedError;
 						
-						savedxhat[l][s] = (int) prediction + (int) error;
+						savedxhat[l][s] = (int) prediction + (int) dequant;
 						
 						if (l != 0 || s != 0) {
 							savedGolombParam[l][s] = findkj(acc);
 						}
-						acc.add(Math.abs(error));		//update Rj after coding
+						acc.add(Math.abs(dequant));		//update Rj after coding
 						
 						xTildeOtherBands.sample((int) prediction);
 						xTilde_o_last_s.sample(l == lines-1 && s == samples-1 ? 1 : 0);
@@ -546,6 +592,9 @@ public class Main {
 						
 						xtildeSampler.sample((int) prediction);
 						xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+						
+						quantSampler.sample(quant);
+						dequantSampler.sample(dequant);
 						
 						mappedErrorSampler.sample((int)mappedError);
 						if (s != samples-1 || l != lines-1) kjSampler.sample(findkj(acc));
@@ -618,6 +667,9 @@ public class Main {
 			
 			xtildeSampler.export();
 			xtilde_last_s.export();
+			
+			quantSampler.export();
+			dequantSampler.export();
 			
 			mappedErrorSampler.export();
 			kjSampler.export();
@@ -754,7 +806,8 @@ public class Main {
 				}
 				
 				//write flag and alpha and mu
-				bos.writeBit(Bit.fromBoolean(distortionAcc > thres));
+				Bit bit = Bit.fromBoolean(distortionAcc > thres);
+				bos.writeBit(bit);
 				bos.writeBits((int) simpleAlphaScaled, 10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 				bos.writeBits((int) muScaled, 16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 				

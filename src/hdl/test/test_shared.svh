@@ -1,4 +1,4 @@
-`define GOLDEN_ROOT_DIR "C:/Users/Daniel/Repositorios/Lcplc/test_data/"
+`define GOLDEN_ROOT_DIR "C:/Users/Daniel/Repositorios/Lcplc/test_data_2/"
 `define GOLDEN_EXT ".smpl"
 
 `define GOLDEN_X_FIRSTB			{`GOLDEN_ROOT_DIR, "x_firstband",			`GOLDEN_EXT}

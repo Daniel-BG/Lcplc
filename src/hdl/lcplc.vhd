@@ -83,7 +83,7 @@ architecture Behavioral of LCPLC is
 	signal x_1_red_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal x_1_red_last_s, x_1_red_last_b: std_logic;
 	signal x_1_red_last_b_stdlv: std_logic_vector(0 downto 0);
-
+	
 	--prediction first band
 	signal prediction_first_ready, prediction_first_valid, prediction_first_last: std_logic;
 	signal prediction_first_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
@@ -226,6 +226,8 @@ architecture Behavioral of LCPLC is
 			data: in std_logic_vector
 		);
 	END COMPONENT;
+
+	constant test_dir: string := "C:/Users/Daniel/Repositorios/Lcplc/test_data_2/";
 --pragma synthesis_on
 
 begin
@@ -288,7 +290,7 @@ begin
 	x_1_red_data <= x_1_red_flags_data(DATA_WIDTH - 1 downto 0);
 	x_1_red_last_s <= x_1_red_flags_data(x_1_red_flags_data'high - 2);
 	x_1_red_last_b <= x_1_red_flags_data(x_1_red_flags_data'high - 1);
-		
+
 	--first band predictor
 	first_band_predictor: entity work.FIRSTBAND_PREDICTOR
 		Generic map (
@@ -310,7 +312,6 @@ begin
 	prediction_first_data <= std_logic_vector(resize(unsigned(prediction_first_data_raw), prediction_first_data'length));
 	
 
-		
 	--splitter for rest of bands
 	x_1_red_last_b_stdlv <= x_1_red_last_b & "";
 	splitter_others_1: entity work.AXIS_SPLITTER_3
@@ -836,18 +837,95 @@ begin
 		
 	--checkers for data validity
 --pragma synthesis_off
-	check_merr: inline_axis_checker
+	--coder inputs
+	coder_check_merr: inline_axis_checker
 		generic map (
 			DATA_WIDTH	=> PREDICTION_WIDTH,
-			FILE_NAME	=> "C:/Users/Daniel/Repositorios/Lcplc/test_data/merr.smpl",
+			FILE_NAME	=> test_dir & "merr.smpl",
 			SKIP 		=> 0
 		)
 		port map (
 			clk => clk, rst => rst, 
-			valid => merr_valid, data => merr_data, ready => merr_ready
+			valid => merr_delay_valid, data => merr_delay_data, ready => merr_delay_ready
 		);
+	coder_check_kj: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> WORD_WIDTH_LOG,
+			FILE_NAME	=> test_dir & "kj.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => kj_delay_valid, data => kj_delay_data, ready => kj_delay_ready
+		);
+	coder_check_d_flag: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> 1,
+			FILE_NAME	=> test_dir & "dflag.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => d_flag_1_valid, data => d_flag_1_data_stdlv, ready => d_flag_1_ready
+		);
+	coder_check_alpha: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> ALPHA_WIDTH,
+			FILE_NAME	=> test_dir & "alpha.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => alpha_1_valid, data => alpha_1_data, ready => alpha_1_ready
+		);
+	coder_check_xmean: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> DATA_WIDTH,
+			FILE_NAME	=> test_dir & "xmean.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => xmean_2_valid, data => xmean_2_data, ready => xmean_2_ready
+		);
+	-------------------
+
+	--error_calc inputs
+	err_calc_check_xtilde: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> PREDICTION_WIDTH,
+			FILE_NAME	=> test_dir & "xtilde.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => prediction_valid, data => prediction_data, ready => prediction_ready
+		);
+	err_calc_check_x: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> DATA_WIDTH,
+			FILE_NAME	=> test_dir & "x.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => x_delay_delay_valid, data => x_delay_delay_data, ready => x_delay_delay_ready
+		);
+	------------------
+
+
+	--other checks
+	check_xhatout: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> DATA_WIDTH,
+			FILE_NAME	=> test_dir & "xhat.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => xhatout_valid, data => xhatout_data, ready => xhatout_ready
+		);
+	---------------
 --pragma synthesis_on
 	
-
-
 end Behavioral;

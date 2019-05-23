@@ -74,9 +74,9 @@ architecture Behavioral of FIRSTBAND_PREDICTOR is
 	signal olatch_ready, olatch_valid, olatch_last: std_logic;
 begin
 
-	---------------------------------------
-	--FIRST STAGE-> GENERATE NEIGHBORHOOD--
-	---------------------------------------
+	----------------------------------------
+	--FIRST STAGE -> GENERATE NEIGHBORHOOD--
+	----------------------------------------
 	input_seq: process(clk)
 	begin
 		if rising_edge(clk) then

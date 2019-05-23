@@ -56,10 +56,10 @@ module inline_axis_checker (
 			if (ref_valid == 1) begin
 				//data should match ref_data
 				if (data != ref_data) begin
-					$info("Displaying info"); 
-					$display("Seen: 0x%h Expected: 0x%h", data, ref_data);
+					$info("Seen: 0x%h Expected: 0x%h", data, ref_data);
 				end else begin
 					//data matches expected value
+					//$info("Displaying info 0x%h", data); 
 				end
 			end else begin
 				//error, we don't have data we are asking for
@@ -69,7 +69,7 @@ module inline_axis_checker (
 	end
 	
 	initial begin
-		$display("Checker up!!");
+		$info("Checker up!!"); 
 	end
 	
 endmodule

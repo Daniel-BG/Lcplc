@@ -88,7 +88,6 @@ architecture Behavioral of CODER is
 	
 
 	--diverter signals
-	signal diverter_input_data: std_logic_vector(MAPPED_ERROR_WIDTH + 2 downto 0);
 	signal diverter_0_valid, diverter_1_valid, diverter_0_ready, diverter_1_ready: std_logic;
 	signal diverter_0_data_full, diverter_1_data_full: std_logic_vector(MAPPED_ERROR_WIDTH + 2 downto 0);
 	signal diverter_0_data, diverter_1_data: std_logic_vector(MAPPED_ERROR_WIDTH - 1 downto 0);
@@ -159,6 +158,27 @@ architecture Behavioral of CODER is
 	signal packer_length: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 
 	signal debug_state: std_logic_vector(11 downto 0);
+
+--pragma synthesis_off
+	--in_module checkers
+	COMPONENT inline_axis_checker 
+		GENERIC (
+			DATA_WIDTH: integer;
+			SKIP: integer;
+			FILE_NAME: string
+		);
+		PORT (
+			clk: in std_logic;
+			rst: in std_logic;
+			valid: in std_logic;
+			ready: in std_logic;
+			data: in std_logic_vector
+		);
+	END COMPONENT;
+
+	constant test_dir: string := "C:/Users/Daniel/Repositorios/Lcplc/test_data_2/";
+--pragma synthesis_on
+
 begin
 
 	ehat_splitter_input_data <= ehat_last_i & ehat_last_b & ehat_last_s & ehat_data;
@@ -621,6 +641,29 @@ begin
 			output_last 		=> output_last	
 		);
 		
+	--checkers for data validity
+--pragma synthesis_off
+	check_golomb_input: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> MAPPED_ERROR_WIDTH,
+			FILE_NAME	=> test_dir & "gc_input.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => coder_filter_valid, data => coder_filter_data(MAPPED_ERROR_WIDTH - 1 downto 0), ready => coder_filter_ready
+		);
 
+	check_golomb_param: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> KJ_WIDTH,
+			FILE_NAME	=> test_dir & "gc_param.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => coder_filter_valid, data => coder_filter_data(coder_filter_data'high downto coder_filter_data'high - KJ_WIDTH + 1), ready => coder_filter_ready
+		);
+--pragma synthesis_on
 
 end Behavioral;
