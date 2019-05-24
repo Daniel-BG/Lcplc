@@ -51,8 +51,12 @@ architecture Behavioral of TWO_D_PREDICTOR is
 
 	--fifo
 	signal fifo_rst_force, fifo_rst: std_logic;
-	signal fifo_in_valid, fifo_out_ready: std_logic;
+	signal fifo_in_valid, fifo_out_ready, fifo_out_valid: std_logic;
 	signal fifo_in_data, fifo_out_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+
+	--fifo intermediate
+	signal fifo_imm_ready, fifo_imm_valid: std_logic;
+	signal fifo_imm_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--others
 	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
@@ -77,7 +81,7 @@ begin
 
 	upleft_addition <= std_logic_vector(unsigned('0' & fifo_out_data) + unsigned('0' & xhat_data));
 
-	comb: process(state_curr, xhat_valid, olatch_ready, xhat_last_s, xhat_last_r, xhat_data, fifo_out_data, upleft_addition)
+	comb: process(state_curr, xhat_valid, olatch_ready, xhat_last_s, xhat_last_r, xhat_data, fifo_out_data, fifo_out_valid, upleft_addition)
 	begin
 		state_next <= state_curr;
 
@@ -88,7 +92,7 @@ begin
 		xhat_ready		<= '0';
 		olatch_valid	<= '0';
 		olatch_last 	<= '0';
-		olatch_data 	<= (others => '0');
+		olatch_data 	<= (others => '-');
 
 		if state_curr = RESET then
 			state_next <= FIRST_SAMPLE;
@@ -114,7 +118,7 @@ begin
 				end if;
 			end if;
 		elsif state_curr = FIRST_ROW then
-			if xhat_valid = '1' and olatch_ready = '1' then
+			if xhat_valid = '1' and olatch_ready = '1' and fifo_out_valid = '1' then
 				xhat_ready		<= '1';
 				fifo_in_valid 	<= '1';
 
@@ -135,7 +139,7 @@ begin
 				end if;
 			end if;
 		elsif state_curr = REST_OF_SLICE then
-			if xhat_valid = '1' and olatch_ready = '1' then
+			if xhat_valid = '1' and olatch_ready = '1' and fifo_out_valid = '1' then
 				xhat_ready <= '1';
 				fifo_in_valid <= '1';
 				fifo_out_ready <= '1';
@@ -171,8 +175,22 @@ begin
 			input_valid => fifo_in_valid,
 			input_ready => open, --assume always ready
 			input_data  => fifo_in_data,
+			output_ready=> fifo_imm_ready,
+			output_valid=> fifo_imm_valid, --assume always valid
+			output_data => fifo_imm_data
+		);
+
+	fifo_mem_to_ff: entity work.AXIS_LATCHED_CONNECTION 
+		Generic map(
+			DATA_WIDTH => DATA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => fifo_imm_ready,
+			input_valid => fifo_imm_valid,
+			input_data  => fifo_imm_data,
 			output_ready=> fifo_out_ready,
-			output_valid=> open, --assume always valid
+			output_valid=> fifo_out_valid,
 			output_data => fifo_out_data
 		);
 
