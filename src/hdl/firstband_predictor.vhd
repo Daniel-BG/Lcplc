@@ -4,7 +4,7 @@
 -- 
 -- Create Date: 21.02.2019 09:22:48
 -- Design Name: 
--- Module Name: FIRSTBAND_PREDICTOR - Behavioral
+-- Module Name: FIRSTBAND_PREDICTOR_V2 - Behavioral
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
@@ -22,11 +22,14 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.functions.all;
+use work.data_types.all;
 
 entity FIRSTBAND_PREDICTOR is
 	Generic (
 		DATA_WIDTH: positive := 16;
-		MAX_SLICE_SIZE_LOG: positive := 8
+		MAX_SLICE_SIZE_LOG: positive := 8;
+		QUANTIZER_SHIFT_WIDTH: positive := 4
 	);
 	Port (
 		clk, rst		: in  std_logic;
@@ -40,197 +43,297 @@ entity FIRSTBAND_PREDICTOR is
 		xtilde_ready: in  std_logic;
 		xtilde_valid: out std_logic;
 		xtilde_data : out std_logic_vector(DATA_WIDTH - 1 downto 0);
-		xtilde_last : out std_logic --last slice
+		xtilde_last : out std_logic; --last slice
+		--configurable shift for quantizers
+		cfg_quant_shift	: in  std_logic_vector(QUANTIZER_SHIFT_WIDTH - 1 downto 0)
 	);
 end FIRSTBAND_PREDICTOR;
 
 architecture Behavioral of FIRSTBAND_PREDICTOR is
-	--first stage: control signals and pass x_data, x_data_prev, x_data_up, x_last_r, x_last_s to next stage
-	type first_stage_state_t is (FIRST_ROW, OTHER_ROWS);
-	signal first_stage_state_curr, first_stage_state_next: first_stage_state_t; 
+	--input qol signals
+	signal x_last_r_s: std_logic_vector(1 downto 0);
 
-	signal fifo_rst, fifo_rst_force: std_logic;
-	signal fifo_in_valid, fifo_out_ready: std_logic;
-	signal fifo_in_data, fifo_out_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	--input splitter signals
+	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready: std_logic;
+	signal x_0_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal x_1_last_r_s: std_logic_vector(1 downto 0);
 
-	signal data_prev_latch: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal data_prev_latch_enable: std_logic;
-	signal data_up_latch: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal data_up_latch_enable: std_logic;
-	signal data_latch: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal data_latch_last_s, data_latch_last_r, data_latch_first_row, data_latch_first_col, data_latch_first_row_next: std_logic;
-	signal data_latch_enable: std_logic;
+	--error sub signals
+	signal raw_err_data: std_logic_vector(DATA_WIDTH downto 0);
+	signal raw_err_valid, raw_err_ready: std_logic;
 
-	signal first_latch_in_ready, first_latch_in_valid: std_logic;
-	signal first_latch_out_ready, first_latch_out_valid: std_logic;
-	signal first_latch_occupied: std_logic;
-	signal first_latch_last_r, first_latch_last_s: std_logic;
-	signal first_latch_data_c, first_latch_data_l, first_latch_data_u: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	--error qdq signals
+	signal qdq_err_ready, qdq_err_valid: std_logic;
+	signal qdq_err_data: std_logic_vector(DATA_WIDTH downto 0);
 
-	--second stage
-	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
-	
-	signal olatch_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal olatch_ready, olatch_valid, olatch_last: std_logic;
+	--raw decoded adder
+	signal raw_decoded_data: std_logic_vector(DATA_WIDTH downto 0);
+	signal raw_decoded_valid, raw_decoded_ready: std_logic;
+	signal raw_decoded_last_r_s: std_logic_vector(1 downto 0);
+
+	--clamped decoded value
+	signal decoded_data: std_logic_vector(DATA_WIDTH downto 0);
+	signal decoded_valid, decoded_ready: std_logic;
+	signal decoded_last_r_s: std_logic_vector(1 downto 0);
+
+	--prediction
+	signal prediction_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal prediction_ready, prediction_valid: std_logic;
+	signal prediction_last_s: std_logic;
+
+	--merged prediction
+	signal mer_prediction_valid, mer_prediction_ready: std_logic;
+	signal mer_prediction_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal mer_prediction_last: std_logic;
+	signal mer_prediction_last_stdlv: std_logic_vector(0 downto 0);
+
+	--filter out last prediction
+	signal filt_pred_valid, filt_pred_ready: std_logic;
+	signal filt_pred_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+
+	--final syncer
+	signal synced_pred_valid, synced_pred_ready: std_logic;
+	signal synced_pred_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal synced_pred_last_r_s: std_logic_vector(1 downto 0);
+
+	--prediction splitter
+	signal pred_0_valid, pred_1_valid, pred_2_valid: std_logic;
+	signal pred_0_ready, pred_1_ready, pred_2_ready: std_logic;
+	signal pred_0_data, pred_1_data, pred_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal pred_0_user, pred_1_user, pred_2_user: std_logic_vector(1 downto 0);
+
+
 begin
+	--static assignments
+	x_last_r_s <= x_last_r & x_last_s;
 
-	----------------------------------------
-	--FIRST STAGE -> GENERATE NEIGHBORHOOD--
-	----------------------------------------
-	input_seq: process(clk)
-	begin
-		if rising_edge(clk) then
-			if rst = '1' then
-				first_stage_state_curr <= FIRST_ROW;
-				data_latch_last_r <= '1'; --important to go to first col!!
-			else
-				first_stage_state_curr <= first_stage_state_next;
-				if data_prev_latch_enable = '1' then
-					data_prev_latch <= data_latch;
-				end if;
-				if data_latch_enable = '1' then
-					data_latch 				<= x_data;
-					data_latch_last_s 		<= x_last_s;
-					data_latch_last_r 		<= x_last_r;
-					data_latch_first_row 	<= data_latch_first_row_next;
-					data_latch_first_col    <= data_latch_last_r;
-				end if;
-				if data_up_latch_enable = '1' then
-					data_up_latch <= fifo_out_data;
-				end if;
-			end if;
-		end if;
-	end process;
-
-	input_comb: process(first_stage_state_curr, first_latch_in_ready, x_valid, x_last_s, x_last_r)
-	begin
-		fifo_in_valid				<= '0';
-		fifo_out_ready 				<= '0';
-		x_ready						<= '0';
-		first_latch_in_valid		<= '0';
-
-		data_prev_latch_enable 		<= '0';
-		data_latch_enable 			<= '0';
-		data_up_latch_enable   		<= '0';
-		data_latch_first_row_next 	<= '0';
-
-		fifo_rst_force 				<= '0';
-		
-		first_stage_state_next      <= first_stage_state_curr;
-
-		if first_stage_state_curr = FIRST_ROW then
-			x_ready <= first_latch_in_ready;
-			first_latch_in_valid <= x_valid;
-			if first_latch_in_ready = '1' and x_valid = '1' then
-				fifo_in_valid <= '1';
-
-				data_prev_latch_enable		<= '1';
-				data_latch_enable 			<= '1';
-				data_latch_first_row_next 	<= '1';
-
-				if x_last_s = '1' then
-					fifo_rst_force <= '1';
-				elsif x_last_r = '1' then
-					first_stage_state_next <= OTHER_ROWS;
-				end if;
-			end if;
-		elsif first_stage_state_curr = OTHER_ROWS then
-			x_ready <= first_latch_in_ready;
-			first_latch_in_valid <= x_valid;
-			if first_latch_in_ready = '1' and x_valid = '1' then
-				fifo_in_valid	<= '1';
-				fifo_out_ready	<= '1';
-
-				data_prev_latch_enable		<= '1';
-				data_latch_enable 			<= '1';
-				data_up_latch_enable    	<= '1';
-				data_latch_first_row_next 	<= '0';
-
-				if x_last_s = '1' then
-					fifo_rst_force <= '1';
-					first_stage_state_next <= FIRST_ROW;
-				end if;
-			end if;
-		end if;
-
-	end process;
-
-	fifo_rst <= rst or fifo_rst_force;
-	fifo_in_data <= x_data;
-	shift_reg_prev_line: entity work.AXIS_FIFO
+	--input x splitter. data goes through the pipeline while 
+	--control signals go towards the output control
+	input_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 2 --leave 2 extra to avoid jamming the queue up
+			USER_WIDTH => 2
 		)
 		Port map (
-			clk => clk, rst => fifo_rst,
-			input_valid => fifo_in_valid,
-			input_ready => open, --assume always ready
-			input_data  => fifo_in_data,
-			output_ready=> fifo_out_ready,
-			output_valid=> open, --assume always valid
-			output_data => fifo_out_data
+			clk => clk, rst => rst,
+			input_valid => x_valid,
+			input_ready => x_ready,
+			input_data  => x_data,
+			input_user  => x_last_r_s,
+			output_0_valid => x_0_valid,
+			output_0_data  => x_0_data,
+			output_0_ready => x_0_ready,
+			output_1_valid => x_1_valid,
+			output_1_ready => x_1_ready,
+			output_1_user  => x_1_last_r_s
 		);
 
-	---------------------
-	--FIRST LATCH LOGIC--
-	---------------------
-	first_latch_seq: process(clk)
-	begin
-		if rising_edge(clk) then
-			if rst = '1' then
-				first_latch_occupied <= '0';
-			else
-				if first_latch_in_ready = '1' and first_latch_in_valid = '1' then
-					first_latch_occupied <= '1';
-				elsif first_latch_out_valid = '1' and first_latch_out_ready = '1' then
-					first_latch_occupied <= '0';
-				end if;
-			end if;
-		end if;
-	end process;
-	first_latch_in_ready  <= first_latch_out_ready or not first_latch_occupied;
-	first_latch_out_valid <= first_latch_occupied;
-
-	---------------------------------------
-	--SECOND STAGE-> CALCULATE PREDICTION--
-	---------------------------------------
-	first_latch_out_ready <= olatch_ready;
-	olatch_valid <= first_latch_out_valid;
-
-	upleft_addition <= std_logic_vector(unsigned("0" & data_up_latch) + unsigned("0" & data_prev_latch));
-	prediction_gen: process(data_latch_first_col, data_latch_first_row, data_up_latch, data_prev_latch, upleft_addition)
-	begin
-		if data_latch_first_col = '1' and data_latch_first_row = '1' then
-			olatch_data <= (others => '0');
-			--prediction <= (prediction'high downto current_sample'high+1 => '0') & current_sample;
-		elsif data_latch_first_col = '1' then
-			olatch_data <= data_up_latch;
-		elsif data_latch_first_row = '1' then
-			olatch_data <= data_prev_latch;
-		else
-			olatch_data <= upleft_addition(upleft_addition'high downto 1);
-		end if;
-	end process;
-
-	olatch_last <= data_latch_last_s;
-	
-	--output
-	output_latch: entity work.AXIS_LATCHED_CONNECTION 
+	--substract prediction from raw input value
+	error_sub: entity work.AXIS_ARITHMETIC_OP
 		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH,
+			DATA_WIDTH_1 => DATA_WIDTH,
+			OUTPUT_DATA_WIDTH => DATA_WIDTH + 1,
+			IS_ADD => false,
+			SIGN_EXTEND_0 => false,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP	  => true
+		)
+		Port map(
+			clk => clk, rst => rst,
+			input_0_data  => x_0_data,
+			input_0_valid => x_0_valid,
+			input_0_ready => x_0_ready,
+			input_1_data  => pred_0_data,
+			input_1_valid => pred_0_valid,
+			input_1_ready => pred_0_ready,
+			output_data   => raw_err_data,
+			output_valid  => raw_err_valid,
+			output_ready  => raw_err_ready
+		);
+
+	--quantize and dequantize
+	error_qdq: entity work.BINARY_QDQ
+		Generic map (
+			SHIFT_WIDTH => QUANTIZER_SHIFT_WIDTH,
+			DATA_WIDTH	=> DATA_WIDTH + 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready	=> raw_err_ready,
+			input_valid	=> raw_err_valid,
+			input_data	=> raw_err_data,
+			output_ready=> qdq_err_ready,
+			output_valid=> qdq_err_valid,
+			output_data => qdq_err_data,
+			--configuration ports
+			input_shift	=> cfg_quant_shift
+		);
+
+	--simulate decoded values for the predictor
+	decode_adder: entity work.AXIS_ARITHMETIC_OP
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH + 1,
+			DATA_WIDTH_1 => DATA_WIDTH,
+			OUTPUT_DATA_WIDTH => DATA_WIDTH + 1,
+			IS_ADD => true,
+			SIGN_EXTEND_0 => true,
+			SIGN_EXTEND_1 => false,
+			SIGNED_OP	  => true,
+			LAST_POLICY   => PASS_ONE,
+			USER_WIDTH    => 2,
+			USER_POLICY   => PASS_ONE
+		)
+		Port map(
+			clk => clk, rst => rst,
+			input_0_data  => qdq_err_data,
+			input_0_valid => qdq_err_valid,
+			input_0_ready => qdq_err_ready,
+			input_1_data  => pred_1_data,
+			input_1_valid => pred_1_valid,
+			input_1_ready => pred_1_ready,
+			input_1_user  => pred_1_user,
+			output_data   => raw_decoded_data,
+			output_valid  => raw_decoded_valid,
+			output_ready  => raw_decoded_ready,
+			output_user   => raw_decoded_last_r_s
+		);
+
+	decode_clamp: entity work.AXIS_INTERVAL_CLAMPER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH + 1,
+			IS_SIGNED => true,
+			LOWER_LIMIT => 0,
+			UPPER_LIMIT => 2**DATA_WIDTH - 1,
+			USER_WIDTH => 2
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_data	=> raw_decoded_data,
+			input_valid	=> raw_decoded_valid,
+			input_ready	=> raw_decoded_ready,
+			input_user	=> raw_decoded_last_r_s,
+			output_data	=> decoded_data,
+			output_valid=> decoded_valid,
+			output_ready=> decoded_ready,
+			output_user => decoded_last_r_s
+		);
+
+	predictor: entity work.TWO_D_PREDICTOR
+		generic map (
 			DATA_WIDTH => DATA_WIDTH
+		)
+		port map (
+			clk => clk, rst => rst,
+			xhat_data 		=> decoded_data(DATA_WIDTH - 1 downto 0),
+			xhat_ready 	=> decoded_ready,
+			xhat_valid 	=> decoded_valid,
+			xhat_last_r 	=> decoded_last_r_s(1),
+			xhat_last_s 	=> decoded_last_r_s(0),
+			xtilde_data 	=> prediction_data,
+			xtilde_ready 	=> prediction_ready,
+			xtilde_valid 	=> prediction_valid,
+			xtilde_last_s 	=> prediction_last_s
+		);
+
+
+	first_prediction_merger: entity work.AXIS_MERGER_2
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			START_ON_PORT => 1
 		)
 		Port map ( 
 			clk => clk, rst => rst,
-			input_data	=> olatch_data,
-			input_ready => olatch_ready,
-			input_valid => olatch_valid,
-			input_last  => olatch_last,
-			output_data	=> xtilde_data,
-			output_ready=> xtilde_ready,
-			output_valid=> xtilde_valid,
-			output_last => xtilde_last
+			--to input axi port
+			input_0_valid	=> prediction_valid,
+			input_0_ready	=> prediction_ready,
+			input_0_data	=> prediction_data,
+			input_0_last	=> prediction_last_s,
+			input_0_merge	=> prediction_last_s,
+			input_1_valid	=> '1',
+			input_1_data	=> (DATA_WIDTH - 1 downto 0 => '0'),
+			input_1_last	=> '0',
+			input_1_merge	=> '1',
+			--to output axi ports
+			output_valid	=> mer_prediction_valid,
+			output_ready	=> mer_prediction_ready,
+			output_data		=> mer_prediction_data,
+			output_last		=> mer_prediction_last
+		);
+	mer_prediction_last_stdlv <= "1" when mer_prediction_last = '1' else "0";
+
+	
+	last_prediction_filter: entity work.AXIS_FILTER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			ELIMINATE_ON_UP => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid		=> mer_prediction_valid,
+			input_ready		=> mer_prediction_ready,
+			input_data		=> mer_prediction_data,
+			flag_valid		=> mer_prediction_valid,
+			flag_ready		=> open,
+			flag_data		=> mer_prediction_last_stdlv,
+			--to output axi ports
+			output_valid	=> filt_pred_valid,
+			output_ready	=> filt_pred_ready,
+			output_data		=> filt_pred_data
 		);
 
+	flag_sync: entity work.AXIS_SYNCHRONIZER_2
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH,
+			DATA_WIDTH_1 => 2,
+			LATCH => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			--to input axi port
+			input_0_valid => filt_pred_valid,
+			input_0_ready => filt_pred_ready,
+			input_0_data  => filt_pred_data,
+			input_1_valid => x_1_valid,
+			input_1_ready => x_1_ready,
+			input_1_data  => x_1_last_r_s,
+			--to output axi ports
+			output_valid  => synced_pred_valid,
+			output_ready  => synced_pred_ready,
+			output_data_0 => synced_pred_data,
+			output_data_1 => synced_pred_last_r_s
+		);
+
+	prediction_split: entity work.AXIS_SPLITTER_3
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			USER_WIDTH => 2
+		)
+		Port map (
+			clk => clk, rst => rst,
+			--to input axi port
+			input_valid		=> synced_pred_valid,
+			input_data		=> synced_pred_data,
+			input_ready		=> synced_pred_ready,
+			input_user		=> synced_pred_last_r_s,
+			--to output axi ports
+			output_0_valid	=> pred_0_valid,
+			output_0_data	=> pred_0_data,
+			output_0_ready	=> pred_0_ready,
+			output_0_user	=> pred_0_user,
+			output_1_valid	=> pred_1_valid,
+			output_1_data	=> pred_1_data,
+			output_1_ready	=> pred_1_ready,
+			output_1_user	=> pred_1_user,
+			output_2_valid	=> pred_2_valid,
+			output_2_data	=> pred_2_data,
+			output_2_ready	=> pred_2_ready,
+			output_2_user	=> pred_2_user
+		);
+
+	pred_2_ready <= xtilde_ready;
+	xtilde_valid <= pred_2_valid;
+	xtilde_data  <= pred_2_data;
+	xtilde_last  <= pred_2_user(0);
 
 end Behavioral;

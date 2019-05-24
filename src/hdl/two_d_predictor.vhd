@@ -28,7 +28,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity TWO_D_PREDICTOR is
 	generic (
 		DATA_WIDTH: integer := 16;
-		MAX_SLICE_SIZE_OG: positive := 8
+		MAX_SLICE_SIZE_LOG: positive := 8
 	);
 	port (
 		clk, rst		: in std_logic;
@@ -46,13 +46,21 @@ entity TWO_D_PREDICTOR is
 end TWO_D_PREDICTOR;
 
 architecture Behavioral of TWO_D_PREDICTOR is
-	type two_d_predictor_state_t is (FIRST_ROW, RESET_FIFO);
+	type two_d_predictor_state_t is (RESET, FIRST_SAMPLE, FIRST_ROW, REST_OF_SLICE);
 	signal state_curr, state_next: two_d_predictor_state_t;
 
 	--fifo
 	signal fifo_rst_force, fifo_rst: std_logic;
 	signal fifo_in_valid, fifo_out_ready: std_logic;
 	signal fifo_in_data, fifo_out_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	
+	--others
+	signal upleft_addition: std_logic_vector(DATA_WIDTH downto 0);
+	
+	--output latch
+	signal olatch_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal olatch_ready, olatch_valid: std_logic;
+	signal olatch_last: std_logic;
 
 begin
 
@@ -60,7 +68,7 @@ begin
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then
-				state_curr <= IDLE;
+				state_curr <= RESET;
 			else
 				state_curr <= state_next;
 			end if;
@@ -69,7 +77,7 @@ begin
 
 	upleft_addition <= std_logic_vector(unsigned('0' & fifo_out_data) + unsigned('0' & xhat_data));
 
-	comb: process(state_curr, xhat_valid, olatch_ready)
+	comb: process(state_curr, xhat_valid, olatch_ready, xhat_last_s, xhat_last_r, xhat_data, fifo_out_data, upleft_addition)
 	begin
 		state_next <= state_curr;
 
@@ -82,8 +90,9 @@ begin
 		olatch_last 	<= '0';
 		olatch_data 	<= (others => '0');
 
-
-		if state_curr = FIRST_SAMPLE then
+		if state_curr = RESET then
+			state_next <= FIRST_SAMPLE;
+		elsif state_curr = FIRST_SAMPLE then
 			if xhat_valid = '1' and olatch_ready = '1' then
 				xhat_ready		<= '1';
 				fifo_in_valid 	<= '1';
@@ -139,11 +148,10 @@ begin
 					state_next <= FIRST_SAMPLE;
 				--unended column
 				elsif xhat_last_r = '1' then
-					state_next <= FIRST_COLUMN;
 					olatch_data <= fifo_out_data;
 				--otherwise this is just a normal (square) slice, go on
 				else
-					olatch_data <= upleft_addition;
+					olatch_data <= upleft_addition(DATA_WIDTH downto 1);
 				end if;
 			end if;
 		end if;

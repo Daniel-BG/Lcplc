@@ -73,7 +73,7 @@ begin
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			NUMBER_OF_PORTS => NUMBER_OF_PORTS,
-			START_ON_PORT => 0
+			START_ON_PORT => START_ON_PORT
 		)
 		Port map ( 
 			clk => clk, rst => rst,

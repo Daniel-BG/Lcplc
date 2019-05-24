@@ -295,7 +295,8 @@ begin
 	first_band_predictor: entity work.FIRSTBAND_PREDICTOR
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG
+			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG,
+			QUANTIZER_SHIFT_WIDTH => QUANTIZER_SHIFT_WIDTH
 		)
 		Port map (
 			clk => clk, rst => rst,
@@ -307,7 +308,8 @@ begin
 			xtilde_ready => prediction_first_ready,
 			xtilde_valid => prediction_first_valid,
 			xtilde_data  => prediction_first_data_raw,
-			xtilde_last  => prediction_first_last
+			xtilde_last  => prediction_first_last,
+			cfg_quant_shift => cfg_quant_shift
 		);
 	prediction_first_data <= std_logic_vector(resize(unsigned(prediction_first_data_raw), prediction_first_data'length));
 	
