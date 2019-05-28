@@ -185,7 +185,7 @@ begin
 			DATA_WIDTH => DATA_WIDTH
 		)
 		Port map (
-			clk => clk, rst => rst,
+			clk => clk, rst => fifo_rst,
 			input_ready => fifo_imm_ready,
 			input_valid => fifo_imm_valid,
 			input_data  => fifo_imm_data,

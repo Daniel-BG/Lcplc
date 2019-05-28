@@ -226,8 +226,8 @@ begin
 		port map (
 			clk => clk, rst => rst,
 			xhat_data 		=> decoded_data(DATA_WIDTH - 1 downto 0),
-			xhat_ready 	=> decoded_ready,
-			xhat_valid 	=> decoded_valid,
+			xhat_ready 		=> decoded_ready,
+			xhat_valid 		=> decoded_valid,
 			xhat_last_r 	=> decoded_last_r_s(1),
 			xhat_last_s 	=> decoded_last_r_s(0),
 			xtilde_data 	=> prediction_data,

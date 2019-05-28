@@ -25,17 +25,17 @@
 module test_lcplc;
 	parameter DATA_WIDTH = 16;
 	parameter WORD_WIDTH_LOG = 5;
-	parameter MAX_SLICE_SIZE_LOG = 8;
+	parameter MAX_SLICE_SIZE_LOG = 10;
 	parameter ALPHA_WIDTH = 10;
 	parameter ACCUMULATOR_WINDOW = 32;
 	parameter QUANTIZER_SHIFT_WIDTH = 4;
 	
-	//parameter QUANTIZER_SHIFT = 0;
-	//wire[63:0] THRESHOLD = 16'h0000_0000_0000_0000;
+	parameter QUANTIZER_SHIFT = 0;
+	wire[63:0] THRESHOLD = 16'h0000_0000_0000_0000;
 	//parameter QUANTIZER_SHIFT = 2;
 	//wire[63:0] THRESHOLD = 16'h0000_0000_0005_5555;
-	parameter QUANTIZER_SHIFT = 2;
-	wire[63:0] THRESHOLD = 64'h0000_0000_0010_0000;
+	//parameter QUANTIZER_SHIFT = 2;
+	//wire[63:0] THRESHOLD = 64'h0000_0000_0010_0000;
 	
 	parameter PERIOD = 10;
 	reg clk, rst;
@@ -107,28 +107,28 @@ module test_lcplc;
 			.output_data(x_data),
 			.output_ready(x_ready)
 		);
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_R)) GEN_x_last_r
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_X_LAST_R)) GEN_x_last_r
 		(
 			.clk(clk), .rst(rst), .enable(gen_x_enable),
 			.output_valid(),
 			.output_data(x_last_r),
 			.output_ready(x_ready)
 		);
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_S)) GEN_x_last_s
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_X_LAST_S)) GEN_x_last_s
 		(
 			.clk(clk), .rst(rst), .enable(gen_x_enable),
 			.output_valid(),
 			.output_data(x_last_s),
 			.output_ready(x_ready)
 		);
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_B)) GEN_x_last_b
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_X_LAST_B)) GEN_x_last_b
 		(
 			.clk(clk), .rst(rst), .enable(gen_x_enable),
 			.output_valid(),
 			.output_data(x_last_b),
 			.output_ready(x_ready)
 		);
-	helper_axis_reader #(.DATA_WIDTH(DATA_WIDTH), .FILE_NAME(`GOLDEN_X_LAST_I)) GEN_x_last_i
+	helper_axis_reader #(.DATA_WIDTH(1), .FILE_NAME(`GOLDEN_X_LAST_I)) GEN_x_last_i
 		(
 			.clk(clk), .rst(rst), .enable(gen_x_enable),
 			.output_valid(),

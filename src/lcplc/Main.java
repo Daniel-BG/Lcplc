@@ -81,8 +81,9 @@ public class Main {
 		}*/
 		
 		Compressor c = new Compressor();
-		c.setSQDownscale(2);
-		c.setGamma(3);
+		c.setBlockSize(32, 32);
+		c.setSQDownscale(0);
+		c.setGamma(0);
 		c.test();
 		System.out.println();
 	}
@@ -117,7 +118,8 @@ public class Main {
 		private static final boolean REPORT_BLOCK_STATUS = true;
 		private static final boolean COMPARE = false;
 		private static final int CONST_ACC_QUANT = 32;
-		private static final int BLOCKS_TO_CODE = 3; //Integer.MAX_VALUE; //code the full image
+		private static final int BLOCKS_TO_CODE = 2; //Integer.MAX_VALUE; //code the full image
+		private static final int BLOCKS_TO_SKIP = 0;
 		///////
 		
 		//variables
@@ -187,8 +189,14 @@ public class Main {
 			///////
 			
 			int compressedBlocks = 0;
+			int skippedBlocks = 0;
 			for (int l = 0; l < imgLines; l += MAX_LINES_PER_BLOCK) {
 				for (int s = 0; s < imgSamples; s += MAX_SAMPLES_PER_BLOCK) {
+					if (skippedBlocks < BLOCKS_TO_SKIP) {
+						skippedBlocks++;
+						compressedBlocks++;
+						continue;
+					}
 					int blockBands = imgBands;
 					int blockLines = Math.min(MAX_LINES_PER_BLOCK, imgLines - l);
 					int blockSamples = Math.min(MAX_SAMPLES_PER_BLOCK, imgSamples - s);
@@ -253,8 +261,14 @@ public class Main {
 			int[][][] result = new int[imgBands][imgLines][imgSamples];
 			
 			int unCompressedBlocks = 0;
+			skippedBlocks = 0;
 			for (int l = 0; l < imgLines; l += MAX_LINES_PER_BLOCK) {
 				for (int s = 0; s < imgSamples; s += MAX_SAMPLES_PER_BLOCK) {
+					if (skippedBlocks < BLOCKS_TO_SKIP) {
+						unCompressedBlocks++;
+						skippedBlocks++;
+						continue;
+					}
 					int blockBands = imgBands;
 					int blockLines = Math.min(MAX_LINES_PER_BLOCK, imgLines - l);
 					int blockSamples = Math.min(MAX_SAMPLES_PER_BLOCK, imgSamples - s);
