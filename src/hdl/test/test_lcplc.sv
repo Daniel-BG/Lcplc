@@ -25,7 +25,7 @@
 module test_lcplc;
 	parameter DATA_WIDTH = 16;
 	parameter WORD_WIDTH_LOG = 5;
-	parameter MAX_SLICE_SIZE_LOG = 10;
+	parameter MAX_SLICE_SIZE_LOG = 12;
 	parameter ALPHA_WIDTH = 10;
 	parameter ACCUMULATOR_WINDOW = 32;
 	parameter QUANTIZER_SHIFT_WIDTH = 4;

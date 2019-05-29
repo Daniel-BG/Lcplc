@@ -664,6 +664,28 @@ begin
 			clk => clk, rst => rst, 
 			valid => coder_filter_valid, data => coder_filter_data(coder_filter_data'high downto coder_filter_data'high - KJ_WIDTH + 1), ready => coder_filter_ready
 		);
+		
+	check_golomb_quant: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> CODING_LENGTH_MAX_LOG,
+			FILE_NAME	=> test_dir & "gc_quant.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => golomb_valid, data => golomb_length, ready => golomb_ready
+		);
+		
+	check_golomb_code: inline_axis_checker
+		generic map (
+			DATA_WIDTH	=> CODING_LENGTH_MAX,
+			FILE_NAME	=> test_dir & "gc_code.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => golomb_valid, data => golomb_code, ready => golomb_ready
+		);
 --pragma synthesis_on
 
 end Behavioral;

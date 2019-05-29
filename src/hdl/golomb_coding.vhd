@@ -213,7 +213,7 @@ begin
 			if output_ready = '1' then
 				--only update quotient if we send data ofc
 				quotient_buff_next <= quotient_temp;
-				if quotient_buff(DATA_WIDTH - 1 downto SLACK_LOG) = (DATA_WIDTH - 1 downto SLACK_LOG => '0') then
+				if quotient_temp(DATA_WIDTH - 1 downto SLACK_LOG) = (DATA_WIDTH - 1 downto SLACK_LOG => '0') then
 					state_next <= QUOTMEM_LAST;
 				end if;
 			end if;

@@ -31,8 +31,8 @@ entity lcplc_controller is
 		--lcplc axis generics -- propagated to DDR3
 		LCPLC_DATA_BYTES_LOG		: integer := 1;
 		LCPLC_OUTPUT_BYTES_LOG		: integer := 2; 
-		LCPLC_MAX_BLOCK_SAMPLE_LOG	: integer := 4;
-		LCPLC_MAX_BLOCK_LINE_LOG	: integer := 4;
+		LCPLC_MAX_BLOCK_SAMPLE_LOG	: integer := 5;
+		LCPLC_MAX_BLOCK_LINE_LOG	: integer := 5;
 		LCPLC_MAX_IMAGE_SAMPLE_LOG	: integer := 12;
 		LCPLC_MAX_IMAGE_LINE_LOG	: integer := 12;
 		LCPLC_MAX_IMAGE_BAND_LOG	: integer := 12;

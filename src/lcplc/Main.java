@@ -62,7 +62,7 @@ public class Main {
 		        	System.out.println("Deleted file: " + file.getPath());
 		}
 		
-		/*int[] blockSizes	= {4, 8, 16, 32};
+		/*int[] blockSizes	= {64}; //{4, 8, 16, 32};
 		int[] quantizations = {0, 1, 2, 4, 8};
 		double[] gammas		= {0, 0.1, 0.25, 0.5, 1, 3, 5};
 		
@@ -81,7 +81,7 @@ public class Main {
 		}*/
 		
 		Compressor c = new Compressor();
-		c.setBlockSize(32, 32);
+		c.setBlockSize(64, 64);
 		c.setSQDownscale(0);
 		c.setGamma(0);
 		c.test();
@@ -116,7 +116,7 @@ public class Main {
 		///////Constants
 		private static final boolean FAST_COMPRESS = false;
 		private static final boolean REPORT_BLOCK_STATUS = true;
-		private static final boolean COMPARE = false;
+		private static final boolean COMPARE = true;
 		private static final int CONST_ACC_QUANT = 32;
 		private static final int BLOCKS_TO_CODE = 2; //Integer.MAX_VALUE; //code the full image
 		private static final int BLOCKS_TO_SKIP = 0;
