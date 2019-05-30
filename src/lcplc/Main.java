@@ -19,8 +19,6 @@ import com.jypec.util.bits.BitOutputStream;
 import com.jypec.util.bits.BitStreamConstants;
 import com.jypec.util.io.HyperspectralImageReader;
 
-import test.TestQuantizer;
-
 public class Main {
 
 	//USE THIS SINCE ITS DATA TYPE 12: UNSIGNED TWO BYTE!!
@@ -81,7 +79,7 @@ public class Main {
 		}*/
 		
 		Compressor c = new Compressor();
-		c.setBlockSize(64, 64);
+		c.setBlockSize(16, 16);
 		c.setSQDownscale(0);
 		c.setGamma(0);
 		c.test();
@@ -217,11 +215,7 @@ public class Main {
 					}
 					//compress block
 					try {
-						if (FAST_COMPRESS) {
-							this.fastCompress(block, blockBands, blockLines, blockSamples, compressedBlocks == BLOCKS_TO_CODE - 1,  bos);
-						} else {
-							this.compress(block, blockBands, blockLines, blockSamples, compressedBlocks == BLOCKS_TO_CODE - 1,  bos);
-						}
+						this.compress(block, blockBands, blockLines, blockSamples, compressedBlocks == BLOCKS_TO_CODE - 1,  bos);
 					} catch (IOException e) {
 						e.printStackTrace();
 						System.exit(0);
@@ -442,9 +436,25 @@ public class Main {
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
 			Quantizer quantizer = new ShifterQuantizer(SQ_DOWNSCALE);
 			
+			long sampleCnt = lines*samples;
 			
-			expGolombZero.startSampling("egz_input", "egz_code", "egz_quant");
-			golombCoDec.startSampling("gc_input", "gc_param", "gc_code", "gc_quant");
+			if (!FAST_COMPRESS) {
+				expGolombZero.startSampling("egz_input", "egz_code", "egz_quant");
+				golombCoDec.startSampling("gc_input", "gc_param", "gc_code", "gc_quant");
+			}
+			
+			//write header for first band
+			int fbacc = 0;
+			for (int l = 0; l < lines; l++) {
+				for (int s = 0; s < samples; s++) {	
+					fbacc += block[0][l][s];
+				}
+			}
+			long lastbandAcc = fbacc;
+			bos.writeBit(Bit.fromBoolean(true));
+			bos.writeBits((int) 0, 10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+			bos.writeBits((int) (lastbandAcc / sampleCnt), 16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+			/////////////////////////////
 			
 			//compress first band
 			int[][] band = block[0];
@@ -457,6 +467,7 @@ public class Main {
 					int prediction;
 					int kj = 0;
 					int quant, dequant;
+					
 					if (l == 0 && s == 0) {
 						quant = quantizer.quantize(block[0][l][s]);
 						dequant = quantizer.dequantize(quant);
@@ -491,59 +502,64 @@ public class Main {
 						acc.add(Math.abs(dequant));		//update Rj after coding
 					}
 					
-					xFirstBand.sample(block[0][l][s]);
-					xTildeFirstBand.sample(prediction);
-					xFirstBand_last_r.sample(s == samples-1 ? 1 : 0);
-					xFirstBand_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
-					
-					xSampler.sample(block[0][l][s]);
-					xSampler_last_r.sample(s == samples-1 ? 1 : 0);
-					xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
-					xSampler_last_b.sample(s == samples-1 && l == lines-1 && 0 == bands-1 ? 1 : 0);
-					xSampler_last_i.sample(s == samples-1 && l == lines-1 && 0 == bands-1 && flushBlock ? 1 : 0);
-					
-					xtildeSampler.sample(prediction);
-					xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
-					
-					quantSampler.sample(quant);
-					dequantSampler.sample(dequant);
-					mappedErrorSampler.sample(mappedError);
-					if (s != samples-1 || l != lines-1) kjSampler.sample(findkj(acc));
-					
-					xhatrawSampler.sample(decodedBlock[0][l][s]);
-					xhatraw_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
-					xhatraw_last_b.sample(s == samples-1 && l == lines-1 && 0 == bands-1 ? 1 : 0);
-					
-					
-					errorSampler.sample(error);
+					if (!FAST_COMPRESS) {
+						xFirstBand.sample(block[0][l][s]);
+						xTildeFirstBand.sample(prediction);
+						xFirstBand_last_r.sample(s == samples-1 ? 1 : 0);
+						xFirstBand_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+						
+						xSampler.sample(block[0][l][s]);
+						xSampler_last_r.sample(s == samples-1 ? 1 : 0);
+						xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+						xSampler_last_b.sample(s == samples-1 && l == lines-1 && 0 == bands-1 ? 1 : 0);
+						xSampler_last_i.sample(s == samples-1 && l == lines-1 && 0 == bands-1 && flushBlock ? 1 : 0);
+						
+						xtildeSampler.sample(prediction);
+						xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+						
+						quantSampler.sample(quant);
+						dequantSampler.sample(dequant);
+						mappedErrorSampler.sample(mappedError);
+						if (s != samples-1 || l != lines-1) kjSampler.sample(findkj(acc));
+						
+						xhatrawSampler.sample(decodedBlock[0][l][s]);
+						xhatraw_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+						xhatraw_last_b.sample(s == samples-1 && l == lines-1 && 0 == bands-1 ? 1 : 0);
+						
+						
+						errorSampler.sample(error);
+					}
 				}
 			}
 			
 			//calculate distortion threshold
-			long sampleCnt = lines*samples;
 			double delta = (double) (1 << this.SQ_DOWNSCALE);
 			double thres = GAMMA * delta * delta * (double) sampleCnt * (double) sampleCnt / 3.0;
 			if (REPORT_BLOCK_STATUS)
 				System.out.println("THRESH: " + thres);
 			
-			dFlagSampler.sample(1); //first sample should be 1 to save xhatraw samples instead of empty values
+			if (!FAST_COMPRESS)
+				dFlagSampler.sample(1); //first sample should be 1 to save xhatraw samples instead of empty values
 			
 			//compress rest of bands
 			for (int b = 1; b < bands; b++) {
 				band = block[b];
 				//generate means. we'll see where these means have to be from
 				long currAcc = Utils.sumArray(band, lines, samples);
-				long prevAcc = Utils.sumArray(decodedBlock[b-1], lines, samples);
+				long prevAcc = lastbandAcc; 
+				//long prevAcc = Utils.sumArray(decodedBlock[b-1], lines, samples);
 				//sample the decoded block
-				for (int l = 0; l < lines; l++) {
-					for (int s = 0; s < samples; s++) {
-						xOtherBands.sample(block[b][l][s]);
-						xhatSampler.sample(decodedBlock[b-1][l][s]);
-						xhat_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+				if (!FAST_COMPRESS) {
+					for (int l = 0; l < lines; l++) {
+						for (int s = 0; s < samples; s++) {
+							xOtherBands.sample(block[b][l][s]);
+							xhatSampler.sample(decodedBlock[b-1][l][s]);
+							xhat_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+						}
 					}
+					xmeanSampler.sample(currAcc/sampleCnt);
+					xhatmeanSampler.sample(prevAcc/sampleCnt);
 				}
-				xmeanSampler.sample(currAcc/sampleCnt);
-				xhatmeanSampler.sample(prevAcc/sampleCnt);
 				
 				//generate alpha value. Could try to generate it using the original band as well to see performance
 				long simpleAlphaNacc = 0;
@@ -558,7 +574,8 @@ public class Main {
 				//allocate 10 bits for alpha (when using it we need to divide by 512
 				//to stay in the [0, 2) range
 				int simpleAlphaScaled = findAlpha(simpleAlphaNacc, simpleAlphaDacc, 10);
-				alphaSampler.sample(simpleAlphaScaled);
+				if (!FAST_COMPRESS)
+					alphaSampler.sample(simpleAlphaScaled);
 				long alphaScaleVal = 9; //512;
 				//mu is 16 bits wide, and should stay that way since we are averaging 16-bit values
 				long muScaled = currAcc / sampleCnt;
@@ -595,32 +612,31 @@ public class Main {
 						}
 						acc.add(Math.abs(dequant));		//update Rj after coding
 						
-						xTildeOtherBands.sample((int) prediction);
-						xTilde_o_last_s.sample(l == lines-1 && s == samples-1 ? 1 : 0);
-						
-						xSampler.sample(block[b][l][s]);
-						xSampler_last_r.sample(s == samples-1 ? 1 : 0);
-						xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
-						xSampler_last_b.sample(s == samples-1 && l == lines-1 && b == bands-1 ? 1 : 0);
-						xSampler_last_i.sample(s == samples-1 && l == lines-1 && b == bands-1 && flushBlock ? 1 : 0);
-						
-						xtildeSampler.sample((int) prediction);
-						xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
-						
-						quantSampler.sample(quant);
-						dequantSampler.sample(dequant);
-						
-						mappedErrorSampler.sample((int)mappedError);
-						if (s != samples-1 || l != lines-1) kjSampler.sample(findkj(acc));
-						
-						xhatrawSampler.sample(savedxhat[l][s]);
-						xhatraw_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
-						xhatraw_last_b.sample(s == samples-1 && l == lines-1 && b == bands-1 ? 1 : 0);
-
-						
-						
-						
-						errorSampler.sample(error);
+						if (!FAST_COMPRESS) {
+							xTildeOtherBands.sample((int) prediction);
+							xTilde_o_last_s.sample(l == lines-1 && s == samples-1 ? 1 : 0);
+							
+							xSampler.sample(block[b][l][s]);
+							xSampler_last_r.sample(s == samples-1 ? 1 : 0);
+							xSampler_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+							xSampler_last_b.sample(s == samples-1 && l == lines-1 && b == bands-1 ? 1 : 0);
+							xSampler_last_i.sample(s == samples-1 && l == lines-1 && b == bands-1 && flushBlock ? 1 : 0);
+							
+							xtildeSampler.sample((int) prediction);
+							xtilde_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+							
+							quantSampler.sample(quant);
+							dequantSampler.sample(dequant);
+							
+							mappedErrorSampler.sample((int)mappedError);
+							if (s != samples-1 || l != lines-1) kjSampler.sample(findkj(acc));
+							
+							xhatrawSampler.sample(savedxhat[l][s]);
+							xhatraw_last_s.sample(s == samples-1 && l == lines-1 ? 1 : 0);
+							xhatraw_last_b.sample(s == samples-1 && l == lines-1 && b == bands-1 ? 1 : 0);
+							
+							errorSampler.sample(error);
+						}
 					}
 				}
 				
@@ -630,7 +646,8 @@ public class Main {
 				bos.writeBits((int) muScaled, 16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 				
 				if (distortionAcc > thres) {
-					dFlagSampler.sample(1);
+					if (!FAST_COMPRESS)
+						dFlagSampler.sample(1);
 					//code block as normal
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
@@ -643,7 +660,8 @@ public class Main {
 						}
 					}
 				} else {
-					dFlagSampler.sample(0);
+					if (!FAST_COMPRESS)
+						dFlagSampler.sample(0);
 					//skip block
 					for (int l = 0; l < lines; l++) {
 						for (int s = 0; s < samples; s++) {
@@ -651,204 +669,59 @@ public class Main {
 						}
 					}
 				}
-
 				
+				lastbandAcc = currAcc;
 				//System.out.println("Distortion is: " + distortionAcc + " (block was skipped: " + (distortionAcc <= thres) + ")");
 			}
 			
 			//samplers for testing in verilog/vhdl
-			xFirstBand.export();
-			xTildeFirstBand.export(); 
-			xFirstBand_last_r.export();
-			xFirstBand_last_s.export();
-			
-			xOtherBands.export();
-			xhatSampler.export();
-			xhat_last_s.export();
-			
-			alphaSampler.export();
-			xmeanSampler.export();
-			xhatmeanSampler.export();
-			
-			xTildeOtherBands.export();
-			xTilde_o_last_s.export();
-			
-			xSampler.export();
-			xSampler_last_r.export();
-			xSampler_last_s.export();
-			xSampler_last_b.export();
-			xSampler_last_i.export();
-			
-			xtildeSampler.export();
-			xtilde_last_s.export();
-			
-			quantSampler.export();
-			dequantSampler.export();
-			
-			mappedErrorSampler.export();
-			kjSampler.export();
-
-			xhatrawSampler.export();
-			xhatraw_last_s.export();
-			xhatraw_last_b.export();
-			
-			dFlagSampler.export();
-			
-			
-			
-			errorSampler.export();
-			
-			expGolombZero.endSampling();
-			golombCoDec.endSampling();
-		}
-		
-		
-		public void fastCompress(int[][][] block, int bands, int lines, int samples, boolean flushBlock, BitOutputStream bos) throws IOException {
-			int[][][] decodedBlock = new int[bands][lines][samples];
-			
-			ExpGolombCoDec expGolombZero = new ExpGolombCoDec(0);
-			GolombCoDec golombCoDec = new GolombCoDec(0);
-			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
-			Quantizer quantizer = new ShifterQuantizer(SQ_DOWNSCALE);
-			
-			//compress first band
-			int[][] band = block[0];
-			for (int l = 0; l < lines; l++) {
-				for (int s = 0; s < samples; s++) {	
-					//First sample is just coded raw since we have not initialized
-					//the counters/accumulators/predictors yet
-					int error = 0;
-					int mappedError;
-					int prediction;
-					int kj = 0;
-					if (l == 0 && s == 0) {
-						int quant = quantizer.quantize(block[0][l][s]);
-						int dequant = quantizer.dequantize(quant);
-						mappedError = Mapper.mapError(quant); //Mapper.mapError(block[0][l][s]);
-						expGolombZero.encode(mappedError, bos);
-						//mimic hw by injecting here the first sample
-						 
-						prediction = 0;
-						
-						decodedBlock[0][l][s] = dequant;
-						acc.add(dequant);
-						
-					//For every other sample, code following
-					//the predictive scheme
-					} else {
-						prediction = Predictor.basic2DPrediction(decodedBlock[0], l, s);
-						
-						
-						error = block[0][l][s] - (int) prediction;
-						int qErr  = quantizer.quantize(error);
-						error 	  = quantizer.dequantize(qErr);
-						decodedBlock[0][l][s] = (int) prediction + error;
-
-						kj = findkj(acc);
-						
-						//code mapped error
-						mappedError = Mapper.mapError(qErr);
-						golombCoDec.encode(kj, mappedError, bos);	//encode the error
-						acc.add(Math.abs(error));		//update Rj after coding
-					}
-				}
-			}
-			
-			//calculate distortion threshold
-			long sampleCnt = lines*samples;
-			double delta = (double) (1 << this.SQ_DOWNSCALE);
-			double thres = (double) GAMMA * delta * delta * sampleCnt * sampleCnt / 3.0;
-			if (REPORT_BLOCK_STATUS)
-				System.out.println("THRESH: " + thres);
-			
-			//compress rest of bands
-			for (int b = 1; b < bands; b++) {
-				band = block[b];
-				//generate means. we'll see where these means have to be from
-				long currAcc = Utils.sumArray(band, lines, samples);
-				long prevAcc = Utils.sumArray(decodedBlock[b-1], lines, samples);
+			if (!FAST_COMPRESS) {
+				xFirstBand.export();
+				xTildeFirstBand.export(); 
+				xFirstBand_last_r.export();
+				xFirstBand_last_s.export();
 				
-				//generate alpha value. Could try to generate it using the original band as well to see performance
-				long simpleAlphaNacc = 0;
-				long simpleAlphaDacc = 0;
-				for (int l = 0; l < lines; l++) {
-					for (int s = 0; s < samples; s++) {
-						simpleAlphaNacc += (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*(band[l][s] 			  - currAcc/sampleCnt);
-						simpleAlphaDacc += (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*(decodedBlock[b-1][l][s] - prevAcc/sampleCnt);
-					}
-				}
+				xOtherBands.export();
+				xhatSampler.export();
+				xhat_last_s.export();
 				
-				//allocate 10 bits for alpha (when using it we need to divide by 512
-				//to stay in the [0, 2) range
-				int simpleAlphaScaled = findAlpha(simpleAlphaNacc, simpleAlphaDacc, 10);
-				long alphaScaleVal = 9; //512;
-				//mu is 16 bits wide, and should stay that way since we are averaging 16-bit values
-				long muScaled = currAcc / sampleCnt;
-
-				//save encoding data in these variables and only add
-				//it if we don't skip the block
-				int[][] savedMappedError = new int[lines][samples];
-				int[][] savedGolombParam = new int[lines][samples];
-				int[][] savedPrediction  = new int[lines][samples];
-				//initialize values for block compression
-				long distortionAcc = 0;
-				acc.reset(); 
-				int[][] savedxhat = new int[lines][samples];
-				for (int l = 0; l < lines; l++) {
-					for (int s = 0; s < samples; s++) {
-						long prediction = muScaled + (((decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*simpleAlphaScaled)>>alphaScaleVal);
-						savedPrediction[l][s] = (int) prediction;
-						
-						int error = band[l][s] - (int) prediction;
-						distortionAcc += error*error;
-						
-						//quantize error and replace it with the
-						//unquantized version since this is the one
-						//the decoder will have
-						int qErr  = quantizer.quantize((int) error);
-						error 	  = quantizer.dequantize(qErr);
-						long mappedError = Mapper.mapError(qErr);
-						savedMappedError[l][s] = (int) mappedError;
-						
-						savedxhat[l][s] = (int) prediction + (int) error;
-						
-						if (l != 0 || s != 0) {
-							savedGolombParam[l][s] = findkj(acc);
-						}
-						acc.add(Math.abs(error));		//update Rj after coding
-					}
-				}
+				alphaSampler.export();
+				xmeanSampler.export();
+				xhatmeanSampler.export();
 				
-				//write flag and alpha and mu
-				Bit bit = Bit.fromBoolean(distortionAcc > thres);
-				bos.writeBit(bit);
-				bos.writeBits((int) simpleAlphaScaled, 10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
-				bos.writeBits((int) muScaled, 16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+				xTildeOtherBands.export();
+				xTilde_o_last_s.export();
 				
-				if (distortionAcc > thres) {
-					//code block as normal
-					for (int l = 0; l < lines; l++) {
-						for (int s = 0; s < samples; s++) {
-							decodedBlock[b][l][s] = Utils.clamp(savedxhat[l][s], 0, (1 << SAMPLE_DEPTH) - 1);
-							if (l == 0 && s == 0) {
-								expGolombZero.encode(savedMappedError[l][s], bos);
-							} else {
-								golombCoDec.encode(savedGolombParam[l][s], savedMappedError[l][s], bos);	//encode the error
-							}
-						}
-					}
-				} else {
-					//skip block
-					if (REPORT_BLOCK_STATUS)
-						System.out.println("Slice skipped: " + b);
-					for (int l = 0; l < lines; l++) {
-						for (int s = 0; s < samples; s++) {
-							decodedBlock[b][l][s] = Utils.clamp(savedPrediction[l][s], 0, (1 << SAMPLE_DEPTH) - 1);
-						}
-					}
-				}
+				xSampler.export();
+				xSampler_last_r.export();
+				xSampler_last_s.export();
+				xSampler_last_b.export();
+				xSampler_last_i.export();
+				
+				xtildeSampler.export();
+				xtilde_last_s.export();
+				
+				quantSampler.export();
+				dequantSampler.export();
+				
+				mappedErrorSampler.export();
+				kjSampler.export();
+	
+				xhatrawSampler.export();
+				xhatraw_last_s.export();
+				xhatraw_last_b.export();
+				
+				dFlagSampler.export();
+				
+				
+				
+				errorSampler.export();
+				
+				expGolombZero.endSampling();
+				golombCoDec.endSampling();
 			}
 		}
+			
 		
 		public int findAlpha(long alphaN, long alphaD, long depth) {
 			//resize alphas to make sure division of small numbers still yields an acceptable result
@@ -907,6 +780,13 @@ public class Main {
 			Accumulator acc = new Accumulator(CONST_ACC_QUANT);
 			Quantizer quantizer = new ShifterQuantizer(SQ_DOWNSCALE);
 			
+			long sampleCnt = lines*samples;
+			
+			bis.readBit();
+			bis.readBits(10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+			long lastbandAcc = bis.readBits(16, BitStreamConstants.ORDERING_LEFTMOST_FIRST)*sampleCnt;
+			/////////////////////////////
+			
 			//decompress first band
 			int[][] decodedBand = decodedBlock[0];
 			for (int l = 0; l < lines; l++) {
@@ -944,16 +824,16 @@ public class Main {
 						prevAcc += decodedBlock[b-1][l][s];
 					}
 				}
+				prevAcc = lastbandAcc;
 
 				//is this block skipped or not?
 				boolean coded = bis.readBoolean();
 				
 				//generate alpha value. Could try to generate it using the original band as well to see performance
-				long sampleCnt = lines*samples;
-				
 				long simpleAlphaScaled = bis.readBits(10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 				long alphaScaleVal = 9; //512;
 				long muScaled = bis.readBits(16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+				lastbandAcc = muScaled*sampleCnt;
 
 				acc.reset(); 
 				for (int l = 0; l < lines; l++) {
