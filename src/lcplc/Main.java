@@ -80,8 +80,8 @@ public class Main {
 		
 		Compressor c = new Compressor();
 		c.setBlockSize(16, 16);
-		c.setSQDownscale(0);
-		c.setGamma(0);
+		c.setSQDownscale(2);
+		c.setGamma(3);
 		c.test();
 		System.out.println();
 	}
@@ -114,9 +114,10 @@ public class Main {
 		///////Constants
 		private static final boolean FAST_COMPRESS = false;
 		private static final boolean REPORT_BLOCK_STATUS = true;
+		private static final boolean USE_PRECALCULATED_MEAN = true;
 		private static final boolean COMPARE = true;
 		private static final int CONST_ACC_QUANT = 32;
-		private static final int BLOCKS_TO_CODE = 2; //Integer.MAX_VALUE; //code the full image
+		private static final int BLOCKS_TO_CODE = 3;// Integer.MAX_VALUE; //code the full image
 		private static final int BLOCKS_TO_SKIP = 0;
 		///////
 		
@@ -451,8 +452,8 @@ public class Main {
 				}
 			}
 			long lastbandAcc = fbacc;
-			bos.writeBit(Bit.fromBoolean(true));
-			bos.writeBits((int) 0, 10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+			//bos.writeBit(Bit.fromBoolean(true));
+			//bos.writeBits((int) 0, 10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 			bos.writeBits((int) (lastbandAcc / sampleCnt), 16, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 			/////////////////////////////
 			
@@ -546,8 +547,12 @@ public class Main {
 				band = block[b];
 				//generate means. we'll see where these means have to be from
 				long currAcc = Utils.sumArray(band, lines, samples);
-				long prevAcc = lastbandAcc; 
-				//long prevAcc = Utils.sumArray(decodedBlock[b-1], lines, samples);
+				long prevAcc;
+				if (USE_PRECALCULATED_MEAN)
+					prevAcc = lastbandAcc;
+				else
+					prevAcc = Utils.sumArray(decodedBlock[b-1], lines, samples);
+				
 				//sample the decoded block
 				if (!FAST_COMPRESS) {
 					for (int l = 0; l < lines; l++) {
@@ -782,8 +787,8 @@ public class Main {
 			
 			long sampleCnt = lines*samples;
 			
-			bis.readBit();
-			bis.readBits(10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
+			//bis.readBit();
+			//bis.readBits(10, BitStreamConstants.ORDERING_LEFTMOST_FIRST);
 			long lastbandAcc = bis.readBits(16, BitStreamConstants.ORDERING_LEFTMOST_FIRST)*sampleCnt;
 			/////////////////////////////
 			
@@ -824,7 +829,8 @@ public class Main {
 						prevAcc += decodedBlock[b-1][l][s];
 					}
 				}
-				prevAcc = lastbandAcc;
+				if (USE_PRECALCULATED_MEAN)
+					prevAcc = lastbandAcc;
 
 				//is this block skipped or not?
 				boolean coded = bis.readBoolean();
