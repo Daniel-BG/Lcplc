@@ -132,16 +132,10 @@ architecture Behavioral of CODER is
 	signal golomb_code_buf_next, golomb_code_buf: std_logic_vector(CODING_LENGTH_MAX - 1 downto 0);
 	signal golomb_length_buf_next, golomb_length_buf: std_logic_vector(CODING_LENGTH_MAX_LOG - 1 downto 0);
 	
-	--alpha xmean syncer
-	signal sync_xmean_alpha_valid, sync_xmean_alpha_ready: std_logic;
-	signal sync_xmean_alpha_xmean: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal sync_xmean_alpha_alpha: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
-	signal sync_xmean_alpha_data: std_logic_vector(DATA_WIDTH + ALPHA_WIDTH - 1 downto 0);
-	
 	--------------
 	--CONTROLLER--
 	--------------
-	type coder_ctrl_state_t is (DISCARD_FLAG, OUTPUT_FLAG, OUTPUT_XMEAN_ALPHA, OUTPUT_XMEAN_ALPHA_LAST, OUTPUT_EXP_GOL, OUTPUT_GOL, OUTPUT_GOL_PRIMED, OUTPUT_GOL_LAST, END_SLICE_XALPHA);
+	type coder_ctrl_state_t is (DISCARD_FLAG, OUTPUT_FLAG, OUTPUT_XMEAN, OUTPUT_ALPHA, OUTPUT_XMEAN_ALPHA_LAST, OUTPUT_EXP_GOL, OUTPUT_GOL, OUTPUT_GOL_PRIMED, OUTPUT_GOL_LAST, END_SLICE_XMEAN, END_SLICE_ALPHA);
 	signal state_curr, state_next: coder_ctrl_state_t;
 	
 	--control signals
@@ -395,34 +389,6 @@ begin
 			output_ready	  => golomb_ready
 		);
 
-	--merger of mean and alpha
-	sync_xmean_alpha: entity work.AXIS_SYNCHRONIZER_2 
-		Generic map(
-			DATA_WIDTH_0 => DATA_WIDTH,
-			DATA_WIDTH_1 => ALPHA_WIDTH,
-			LATCH => true,
-			LAST_POLICY => PASS_ZERO
-		)
-		Port map (
-			clk => clk, rst => rst,
-			--to input axi port
-			input_0_valid => xmean_valid,
-			input_0_ready => xmean_ready,
-			input_0_data  => xmean_data,
-			input_0_last  => '0',
-			input_1_valid => alpha_valid,
-			input_1_ready => alpha_ready, 
-			input_1_data  => alpha_data,
-			input_1_last  => '0',
-			--to output axi ports
-			output_valid  => sync_xmean_alpha_valid,
-			output_ready  => sync_xmean_alpha_ready,
-			output_data_0 => sync_xmean_alpha_xmean,
-			output_data_1 => sync_xmean_alpha_alpha,
-			output_last	  => open
-		);
-	sync_xmean_alpha_data <= sync_xmean_alpha_alpha & sync_xmean_alpha_xmean;
-
 	---------------
 	--  CONTROL  --
 	---------------
@@ -474,7 +440,7 @@ begin
 	comb: process (state_curr, control_valid, control_end_block, control_end_image, 
 		packer_ready, control_end_image_buff, control_end_block_buff,
 		eg_valid, eg_code, eg_length, golomb_valid, golomb_code, golomb_length, golomb_last,
-		d_flag_2_valid, d_flag_2_data, sync_xmean_alpha_valid, sync_xmean_alpha_data,
+		d_flag_2_valid, d_flag_2_data, xmean_valid, alpha_valid,
 		golomb_last_buf, golomb_code_buf, golomb_length_buf)
 	begin
 		state_next    <= state_curr;
@@ -487,7 +453,8 @@ begin
 		--internal components
 		eg_ready      <= '0';
 		d_flag_2_ready<= '0';
-		sync_xmean_alpha_ready <= '0';
+		alpha_ready   <= '0';
+		xmean_ready   <= '0';
 		golomb_ready  <= '0';
 		--packer
 		packer_valid  <= '0';
@@ -497,11 +464,31 @@ begin
 		
 		debug_state <= x"000";
 
-		--FIRST BLOCK DOES NOT OUTPUT FLAG NOR ALPHA/XMEAN
+		--FIRST BLOCK DOES NOT OUTPUT FLAG NOR ALPHA, BUT DOES OUTPUT XMEAN
 		if state_curr = DISCARD_FLAG then
 			debug_state <= x"001";
 			d_flag_2_ready <= '1';
 			if d_flag_2_valid = '1' then
+				state_next <= OUTPUT_XMEAN;
+			end if;
+		--OUTPUT ALPHA
+		elsif state_curr = OUTPUT_ALPHA then
+			debug_state <= x"123";
+			alpha_ready <= packer_ready;
+			packer_valid<= alpha_valid;
+			packer_code <= (CODING_LENGTH_MAX - 1 downto ALPHA_WIDTH => '0') & alpha_data;
+			packer_length <= std_logic_vector(to_unsigned(ALPHA_WIDTH, packer_length'length)); 
+			if packer_ready = '1' and alpha_valid = '1' then
+				state_next <= OUTPUT_XMEAN;
+			end if;
+		--OUTPUT XMEAN
+		elsif state_curr = OUTPUT_XMEAN then
+			debug_state <= x"003";
+			xmean_ready <= packer_ready;
+			packer_valid<= xmean_valid;
+			packer_code <= (CODING_LENGTH_MAX - 1 downto DATA_WIDTH => '0') & xmean_data;
+			packer_length <= std_logic_vector(to_unsigned(DATA_WIDTH, packer_length'length)); 
+			if xmean_valid = '1' and packer_ready = '1' then
 				state_next <= OUTPUT_EXP_GOL;
 			end if;
 		--OUTPUT FLAG AND SAVE IT FOR LATER
@@ -513,20 +500,10 @@ begin
 			packer_length<= std_logic_vector(to_unsigned(1, packer_length'length));
 			if d_flag_2_valid = '1' and packer_ready = '1' then
 				if d_flag_2_data(0) = '1' then
-					state_next <= OUTPUT_XMEAN_ALPHA;
+					state_next <= OUTPUT_ALPHA;
 				else
 					state_next <= OUTPUT_XMEAN_ALPHA_LAST;
 				end if;
-			end if;
-		--OUTPUT ALPHA AND XMEAN THEN GO TO GOLOMB CODING
-		elsif state_curr = OUTPUT_XMEAN_ALPHA then
-			debug_state <= x"004";
-			sync_xmean_alpha_ready <= packer_ready;
-			packer_valid <= sync_xmean_alpha_valid;
-			packer_code  <= (CODING_LENGTH_MAX - 1 downto sync_xmean_alpha_data'high + 1 => '0') & sync_xmean_alpha_data;
-			packer_length<= std_logic_vector(to_unsigned(DATA_WIDTH + ALPHA_WIDTH, packer_length'length));
-			if sync_xmean_alpha_valid = '1' and packer_ready = '1' then
-				state_next <= OUTPUT_EXP_GOL;
 			end if;
 		--ALPHA AND XMEAN END THE SLICE. 
 		--FIRST READ CONTROL TO KNOW IF IT ENDS THE BLOCK OR NOT
@@ -536,7 +513,7 @@ begin
 			if control_valid = '1' then
 				control_end_image_buff_next <= control_end_image;
 				control_end_block_buff_next <= control_end_block;
-				state_next <= END_SLICE_XALPHA;
+				state_next <= END_SLICE_ALPHA;
 			end if;
 		--OUTPUT EXP GOLOMB CODER RESULT
 		elsif state_curr = OUTPUT_EXP_GOL then
@@ -606,14 +583,21 @@ begin
 			end if;
 		--READ CONTROL DATA AND EITHER GO INTO 
 		--DISCARD OR OUTPUT FLAG MODE NEXT
-		elsif state_curr = END_SLICE_XALPHA then
-			debug_state <= x"100";
-			sync_xmean_alpha_ready <= packer_ready;
-			packer_valid <= sync_xmean_alpha_valid;
-			packer_code  <= (CODING_LENGTH_MAX - 1 downto sync_xmean_alpha_data'high + 1 => '0') & sync_xmean_alpha_data;
-			packer_length<= std_logic_vector(to_unsigned(DATA_WIDTH + ALPHA_WIDTH, packer_length'length));
-			packer_last  <= control_end_image_buff;
-			if sync_xmean_alpha_valid = '1' and packer_ready = '1' then
+		elsif state_curr = END_SLICE_ALPHA then
+			debug_state <= x"321";
+			alpha_ready <= packer_ready;
+			packer_valid<= alpha_valid;
+			packer_code <= (CODING_LENGTH_MAX - 1 downto ALPHA_WIDTH => '0') & alpha_data;
+			packer_length <= std_logic_vector(to_unsigned(ALPHA_WIDTH, packer_length'length)); 
+			if packer_ready = '1' and alpha_valid = '1' then
+				state_next <= END_SLICE_XMEAN;
+			end if;
+		elsif state_curr = END_SLICE_XMEAN then
+			debug_state <= x"231";
+			packer_valid<= xmean_valid;
+			packer_code <= (CODING_LENGTH_MAX - 1 downto DATA_WIDTH => '0') & xmean_data;
+			packer_length <= std_logic_vector(to_unsigned(DATA_WIDTH, packer_length'length)); 
+			if xmean_valid = '1' and packer_ready = '1' then
 				if control_end_block_buff = '1' then
 					state_next <= DISCARD_FLAG;
 				else

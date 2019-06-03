@@ -214,6 +214,17 @@ architecture Behavioral of LCPLC is
 	signal xtilde_0_data, xtilde_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal xhat_0_valid, xhat_0_ready, xhat_0_last_s, xhat_1_valid, xhat_1_ready, xhat_1_last_s: std_logic;
 	signal xhat_0_data, xhat_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xhat_1_last_data, xtilde_1_last_data: std_logic_vector(DATA_WIDTH downto 0);
+
+	--fifo before the nth band coder
+	signal xhat_1_buf_ready, xhat_1_buf_valid: std_logic;
+	signal xhat_1_buf_last_data: std_logic_vector(DATA_WIDTH downto 0);
+	alias  xhat_1_buf_last_s: std_logic is xhat_1_buf_last_data(DATA_WIDTH);
+	alias  xhat_1_buf_data: std_logic_vector(DATA_WIDTH - 1 downto 0) is xhat_1_buf_last_data(DATA_WIDTH - 1 downto 0);
+	signal xtilde_1_buf_ready, xtilde_1_buf_valid: std_logic;
+	signal xtilde_1_buf_last_data: std_logic_vector(DATA_WIDTH downto 0);
+	alias  xtilde_1_buf_last_s: std_logic is xtilde_1_buf_last_data(DATA_WIDTH);
+	alias  xtilde_1_buf_data: std_logic_vector(DATA_WIDTH - 1 downto 0) is xtilde_1_buf_last_data(DATA_WIDTH - 1 downto 0);
 
 	--xhat/xtilde selection
 	signal xhatout_valid, xhatout_ready, xhatout_last_s: std_logic;
@@ -975,6 +986,37 @@ begin
 		);
 
 	--batch selector for nth band module input
+	--need two fifos here 
+	xhat_1_last_data <= xhat_1_last_s & xhat_1_data;
+	delay_xhat_1: entity work.AXIS_FIFO
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH + 1,
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+		)
+		Port map ( 
+			clk	=> clk, rst => rst,
+			input_valid => xhat_1_valid,
+			input_ready => xhat_1_ready,
+			input_data	=> xhat_1_last_data,
+			output_ready=> xhat_1_buf_ready,
+			output_data => xhat_1_buf_last_data,
+			output_valid=> xhat_1_buf_valid
+		);
+	xtilde_1_last_data <= xtilde_1_last_s & xtilde_1_data;
+	delay_xtilde_1: entity work.AXIS_FIFO
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH + 1,
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+		)
+		Port map ( 
+			clk	=> clk, rst => rst,
+			input_valid => xtilde_1_valid,
+			input_ready => xtilde_1_ready,
+			input_data	=> xtilde_1_last_data,
+			output_ready=> xtilde_1_buf_ready,
+			output_data => xtilde_1_buf_last_data,
+			output_valid=> xtilde_1_buf_valid
+		);
 	xhat_tilde_batch_sel: entity work.AXIS_BATCH_SELECTOR
 		generic map (
 			DATA_WIDTH => DATA_WIDTH,
@@ -982,14 +1024,14 @@ begin
 		)
 		port map (
 			clk => clk, rst => rst,
-			input_0_data	=> xhat_1_data,
-			input_0_ready	=> xhat_1_ready,
-			input_0_valid	=> xhat_1_valid,
-			input_0_last	=> xhat_1_last_s,
-			input_1_data	=> xtilde_1_data,
-			input_1_ready	=> xtilde_1_ready,
-			input_1_valid	=> xtilde_1_valid,
-			input_1_last	=> xtilde_1_last_s,
+			input_0_data	=> xtilde_1_buf_data,
+			input_0_ready	=> xtilde_1_buf_ready,
+			input_0_valid	=> xtilde_1_buf_valid,
+			input_0_last	=> xtilde_1_buf_last_s,
+			input_1_data	=> xhat_1_buf_data,
+			input_1_ready	=> xhat_1_buf_ready,
+			input_1_valid	=> xhat_1_buf_valid,
+			input_1_last	=> xhat_1_buf_last_s,
 			flag_data		=> d_flag_nonlast_1_data_stdlv,
 			flag_ready		=> d_flag_nonlast_1_ready,
 			flag_valid		=> d_flag_nonlast_1_valid,

@@ -103,6 +103,7 @@ begin
 		flag_ready <= '0';
 		flag_buf_next <= flag_buf;
 		output_data <= (others => '0');
+		output_valid <= '0';
 		joint_inputs_ready <= '0';
 		state_next <= state_curr;
 	
@@ -114,6 +115,7 @@ begin
 			end if;
 		elsif state_curr = SENDING then
 			joint_inputs_ready <= output_ready;
+			output_valid <= joint_inputs_valid;
 			if flag_buf = '0' then
 				output_data <= joint_inputs_false;
 			else
@@ -127,7 +129,7 @@ begin
 		end if;
 	end process;
 		
-	output_valid <= joint_inputs_valid;
+	
 	output_last  <= joint_inputs_last;
 	
 end Behavioral;
