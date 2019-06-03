@@ -251,6 +251,10 @@ architecture Behavioral of LCPLC is
 	signal d_flag_nonlast_valid, d_flag_nonlast_ready, d_flag_nonlast_0_valid, d_flag_nonlast_0_ready, d_flag_nonlast_1_valid, d_flag_nonlast_1_ready: std_logic;
 	signal d_flag_nonlast_data_stdlv, d_flag_nonlast_0_data_stdlv, d_flag_nonlast_1_data_stdlv: std_logic_vector(0 downto 0);
 	
+	--buffers before coder
+	signal xmean_2_buf_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xmean_2_buf_ready, xmean_2_buf_valid: std_logic;
+
 	--final delays
 	signal merr_delay_ready, merr_delay_valid: std_logic;
 	signal merr_delay_last_ibs_data: std_logic_vector(PREDICTION_WIDTH + 2 downto 0);
@@ -631,12 +635,12 @@ begin
 			xhat_ready		=> xhat_0_ready,
 			xhat_data		=> xhat_0_data,
 			xhat_last_s		=> xhat_0_last_s,
-			xmean_valid		=> xmean_nonlast_0_valid,
-			xmean_ready		=> xmean_nonlast_0_ready,
-			xmean_data		=> xmean_nonlast_0_data,
-			xhatmean_valid	=> xmean_nonfirst_0_valid, 
-			xhatmean_ready	=> xmean_nonfirst_0_ready,
-			xhatmean_data	=> xmean_nonfirst_0_data,
+			xmean_valid		=> xmean_nonfirst_0_valid, 
+			xmean_ready		=> xmean_nonfirst_0_ready,
+			xmean_data		=> xmean_nonfirst_0_data,
+			xhatmean_valid	=> xmean_nonlast_0_valid,
+			xhatmean_ready	=> xmean_nonlast_0_ready,
+			xhatmean_data	=> xmean_nonlast_0_data,
 			alpha_ready     => alpha_xhat_ready,
 			alpha_valid		=> alpha_xhat_valid,
 			alpha_data		=> alpha_xhat_data
@@ -657,12 +661,12 @@ begin
 			xhat_ready		=> xtilde_0_ready,
 			xhat_data		=> xtilde_0_data,
 			xhat_last_s		=> xtilde_0_last_s,
-			xmean_valid		=> xmean_nonlast_1_valid,
-			xmean_ready		=> xmean_nonlast_1_ready,
-			xmean_data		=> xmean_nonlast_1_data,
-			xhatmean_valid	=> xmean_nonfirst_1_valid, 
-			xhatmean_ready	=> xmean_nonfirst_1_ready,
-			xhatmean_data	=> xmean_nonfirst_1_data,
+			xmean_valid		=> xmean_nonfirst_1_valid, 
+			xmean_ready		=> xmean_nonfirst_1_ready,
+			xmean_data		=> xmean_nonfirst_1_data,
+			xhatmean_valid	=> xmean_nonlast_1_valid,
+			xhatmean_ready	=> xmean_nonlast_1_ready,
+			xhatmean_data	=> xmean_nonlast_1_data,
 			alpha_ready     => alpha_xtilde_ready,
 			alpha_valid		=> alpha_xtilde_valid,
 			alpha_data		=> alpha_xtilde_data
@@ -675,12 +679,12 @@ begin
 		)
 		port map (
 			clk => clk, rst => rst,
-			input_0_data	=> alpha_xhat_data,
-			input_0_ready	=> alpha_xhat_ready,
-			input_0_valid	=> alpha_xhat_valid,
-			input_1_data	=> alpha_xtilde_data,
-			input_1_ready	=> alpha_xtilde_ready,
-			input_1_valid	=> alpha_xtilde_valid,
+			input_0_data	=> alpha_xtilde_data,
+			input_0_ready	=> alpha_xtilde_ready,
+			input_0_valid	=> alpha_xtilde_valid,
+			input_1_data	=> alpha_xhat_data,
+			input_1_ready	=> alpha_xhat_ready,
+			input_1_valid	=> alpha_xhat_valid,
 			flag_data		=> d_flag_nonlast_0_data_stdlv,
 			flag_ready		=> d_flag_nonlast_0_ready,
 			flag_valid		=> d_flag_nonlast_0_valid,
@@ -721,12 +725,12 @@ begin
 			xhat_ready 		=> xhatout_ready,
 			xhat_data  		=> xhatout_data,
 			xhat_last_s		=> xhatout_last_s,
-			xmean_valid		=> xmean_nonlast_2_valid,
-			xmean_ready		=> xmean_nonlast_2_ready,
-			xmean_data		=> xmean_nonlast_2_data,
-			xhatmean_valid	=> xmean_nonfirst_2_valid,
-			xhatmean_ready	=> xmean_nonfirst_2_ready,
-			xhatmean_data	=> xmean_nonfirst_2_data,
+			xmean_valid		=> xmean_nonfirst_2_valid,
+			xmean_ready		=> xmean_nonfirst_2_ready,
+			xmean_data		=> xmean_nonfirst_2_data,
+			xhatmean_valid	=> xmean_nonlast_2_valid,
+			xhatmean_ready	=> xmean_nonlast_2_ready,
+			xhatmean_data	=> xmean_nonlast_2_data,
 			alpha_valid     => alpha_0_valid, 
 			alpha_ready		=> alpha_0_ready,
 			alpha_data		=> alpha_0_data,
@@ -1147,6 +1151,20 @@ begin
 		);
 		
 	--coder
+	delay_xmean: entity work.AXIS_LATCHED_CONNECTION 
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => xmean_2_ready,
+			input_valid => xmean_2_valid,
+			input_data  => xmean_2_data,
+			output_ready=> xmean_2_buf_ready,
+			output_valid=> xmean_2_buf_valid,
+			output_data => xmean_2_buf_data
+		);
+
 	coder: entity work.CODER 
 		Generic map (
 			MAPPED_ERROR_WIDTH => PREDICTION_WIDTH,
@@ -1173,9 +1191,9 @@ begin
 			alpha_data	=> alpha_1_data,
 			alpha_ready => alpha_1_ready,
 			alpha_valid	=> alpha_1_valid,
-			xmean_data	=> xmean_2_data,
-			xmean_ready => xmean_2_ready,
-			xmean_valid => xmean_2_valid,
+			xmean_data	=> xmean_2_buf_data,
+			xmean_ready => xmean_2_buf_ready,
+			xmean_valid => xmean_2_buf_valid,
 			--outputs
 			output_data	=> output_data,
 			output_valid=> output_valid,
@@ -1275,6 +1293,49 @@ begin
 			valid => prediction_first_valid, data => prediction_first_data_raw, ready => prediction_first_ready
 		);
 	------------------
+
+	--nth band checks
+	nthband_pred_check_xhat: inline_axis_checker
+		generic map (
+			DATA_WIDTH 	=> DATA_WIDTH,
+			FILE_NAME	=> test_dir & "xhat.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst,
+			valid => xhatout_valid, ready => xhatout_ready, data => xhatout_data
+		);
+	nthband_pred_check_xmean_nonlast: inline_axis_checker
+		generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			FILE_NAME  => test_dir & "xhatmean.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst,
+			valid => xmean_nonlast_2_valid, ready => xmean_nonlast_2_ready, data => xmean_nonlast_2_data
+		);
+	nthband_pred_check_xmean_nonfirst: inline_axis_checker
+		generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			FILE_NAME  => test_dir & "xmean.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst,
+			valid => xmean_nonfirst_2_valid, ready => xmean_nonfirst_2_ready, data => xmean_nonfirst_2_data
+		);
+	nthband_pred_check_alpha: inline_axis_checker
+		generic map (
+			DATA_WIDTH => ALPHA_WIDTH,
+			FILE_NAME  => test_dir & "alpha.smpl",
+			SKIP 		=> 0
+		)
+		port map (
+			clk => clk, rst => rst,
+			valid => alpha_0_valid, ready => alpha_0_ready, data => alpha_0_data
+		);
+	-----------------
 
 	--other checks
 	check_xhatout: inline_axis_checker

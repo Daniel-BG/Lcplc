@@ -29,7 +29,7 @@ public class Main {
 	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.hdr";
 	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Beltsville_Radiance_w_IGM/0810_2022_rad.hdr";
 	
-	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data_2/";
+	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data/";
 	static String sampleExt = ".smpl";
 
 
@@ -571,8 +571,14 @@ public class Main {
 				long simpleAlphaDacc = 0;
 				for (int l = 0; l < lines; l++) {
 					for (int s = 0; s < samples; s++) {
-						simpleAlphaNacc += (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*(band[l][s] 			  - currAcc/sampleCnt);
-						simpleAlphaDacc += (decodedBlock[b-1][l][s] - prevAcc/sampleCnt)*(decodedBlock[b-1][l][s] - prevAcc/sampleCnt);
+						int dBSample = decodedBlock[b-1][l][s];
+						int cBSample = band[l][s];
+						long dBSub = (dBSample - prevAcc/sampleCnt);
+						long cBSub = (cBSample - currAcc/sampleCnt);
+						long simpleAlphaNaccAdd = dBSub*cBSub;
+						long simpleAlphaDaccAdd = dBSub*dBSub;
+						simpleAlphaNacc += simpleAlphaNaccAdd;
+						simpleAlphaDacc += simpleAlphaDaccAdd;
 					}
 				}
 				
