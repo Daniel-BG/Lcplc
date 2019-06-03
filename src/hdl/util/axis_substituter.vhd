@@ -36,7 +36,8 @@ entity AXIS_SUBSTITUTER is
 		input_last:		in  std_logic;
 		output_ready:	in 	std_logic;
 		output_valid:	out	std_logic;
-		output_data:	out	std_logic_vector(DATA_WIDTH - 1 downto 0)
+		output_data:	out	std_logic_vector(DATA_WIDTH - 1 downto 0);
+		output_last:	out std_logic
 	);
 end AXIS_SUBSTITUTER;
 
@@ -78,8 +79,10 @@ begin
 	begin
 		state_next <= state_curr;
 		counter_enable <= '0';
+		output_last <= '0';
 		
 		if state_curr = INVALID then
+			output_last <= '0';
 			output_data <= input_sub;
 			--check for transaction (only on input, output is disconnected)
 			if input_valid = '1' and output_ready = '1' then
@@ -92,6 +95,7 @@ begin
 			end if;
 		elsif state_curr = VALID then
 			output_data <= input_data;
+			output_last <= input_last;
 			--check for transaction (only on input, output is disconnected)
 			if input_valid = '1' and output_ready = '1' then
 				if input_last = '1' then

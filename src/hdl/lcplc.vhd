@@ -66,12 +66,54 @@ architecture Behavioral of LCPLC is
 	constant PREDICTION_WIDTH: integer := DATA_WIDTH + 3;
 
 	--input separator signals
-	signal x_flags_data, x_0_flags_data, x_1_flags_data, x_2_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
-	signal x_0_last_b, x_0_last_s, x_1_last_i, x_1_last_b, x_1_last_s, x_1_last_r, x_2_last_b, x_2_last_s: std_logic;
-	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready, x_2_valid, x_2_ready: std_logic;
-	signal x_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal x_flags_data, x_0_flags_data, x_1_flags_data, x_2_flags_data, x_3_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
+	signal x_0_last_b, x_0_last_s, x_1_last_i, x_1_last_b, x_1_last_s, x_1_last_r, x_3_last_s: std_logic;
+	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready, x_2_valid, x_2_ready, x_3_valid, x_3_ready: std_logic;
+	signal x_1_data, x_3_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal x_1_flags_bs_data: std_logic_vector(DATA_WIDTH + 2 downto 0);
+	signal x_2_last_bs: std_logic_vector(1 downto 0);
+	signal x_2_valid_and_last_s: std_logic;
+
+	--input bs split
+	signal x_2_0_valid, x_2_0_ready, x_2_1_valid, x_2_1_ready, x_2_2_valid, x_2_2_ready, x_2_3_valid, x_2_3_ready: std_logic;
+	signal x_2_0_last_b_stdlv, x_2_1_last_b_stdlv, x_2_2_last_b_stdlv, x_2_3_last_b_stdlv: std_logic_vector(0 downto 0);
+	alias x_2_0_last_b: std_logic is x_2_0_last_b_stdlv(0);
+	alias x_2_1_last_b: std_logic is x_2_1_last_b_stdlv(0);
+	alias x_2_2_last_b: std_logic is x_2_2_last_b_stdlv(0);
+	alias x_2_3_last_b: std_logic is x_2_3_last_b_stdlv(0);
+
+	--mean calc
+	signal xmean_pre_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xmean_pre_valid, xmean_pre_ready: std_logic;
+
+	--mean calc
+	signal xmean_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xmean_valid, xmean_ready: std_logic;
+	signal xmean_last_stdlv: std_logic_vector(0 downto 0);
+	signal xmean_last: std_logic;
+
+	--mean splitter (1 coder, 1 to remove first, 1 to remove last)
+	signal xmean_0_valid, xmean_0_ready, xmean_1_valid, xmean_1_ready, xmean_2_valid, xmean_2_ready: std_logic;
+	signal xmean_0_data, xmean_1_data, xmean_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xmean_0_last, xmean_1_last: std_logic; 
+	signal xmean_1_last_stdlv: std_logic_vector(0 downto 0);
+
+	--xmean filtered
+	signal xmean_nonfirst_valid, xmean_nonfirst_ready: std_logic;
+	signal xmean_nonfirst_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xmean_nonlast_valid, xmean_nonlast_ready: std_logic;
+	signal xmean_nonlast_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+
+	--xmean filtered splitters
+	signal xmean_nonfirst_0_valid, xmean_nonfirst_0_ready, xmean_nonfirst_1_valid, xmean_nonfirst_1_ready, xmean_nonfirst_2_valid, xmean_nonfirst_2_ready: std_logic;
+	signal xmean_nonfirst_0_data, xmean_nonfirst_1_data, xmean_nonfirst_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xmean_nonlast_0_valid, xmean_nonlast_0_ready, xmean_nonlast_1_valid, xmean_nonlast_1_ready,  xmean_nonlast_2_valid, xmean_nonlast_2_ready: std_logic;
+	signal xmean_nonlast_0_data, xmean_nonlast_1_data, xmean_nonlast_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
+	--fifo before first band predictor
+	signal x_0_red_pre_valid, x_0_red_pre_ready: std_logic;
+	signal x_0_red_pre_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
+
 	--diverter for first band/rest
 	signal x_0_red_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
 	signal x_0_red_ready, x_0_red_valid: std_logic;
@@ -90,22 +132,18 @@ architecture Behavioral of LCPLC is
 	signal prediction_first_data_raw: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--splitter for reduced stuff
-	signal x_others_0_valid, x_others_0_ready, x_others_0_last_s, x_others_1_valid, x_others_1_ready: std_logic;
-	signal x_others_0_data, x_others_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal x_others_1_valid, x_others_1_ready: std_logic;
+	signal x_others_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal x_others_2_valid, x_others_2_ready: std_logic;
 	signal x_others_2_last_b_stdlv: std_logic_vector(0 downto 0);
-	
-	--mean calc
-	signal xmean_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal xmean_valid, xmean_ready: std_logic;
-	
-	--mean split (alpha and nth pred)
-	signal xmean_0_valid, xmean_0_ready, xmean_1_valid, xmean_1_ready, xmean_2_valid, xmean_2_ready: std_logic;
-	signal xmean_0_data, xmean_1_data, xmean_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--fifo delay for x values
 	signal x_delay_ready, x_delay_valid: std_logic;
 	signal x_delay_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+
+	--splitter after fifo for both alpha modules
+	signal x_delay_0_valid, x_delay_0_ready, x_delay_1_valid, x_delay_1_ready: std_logic;
+	signal x_delay_0_data,  x_delay_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--fifo delay for nth band prediction
 	signal x_delay_delay_ready, x_delay_delay_valid: std_logic;
@@ -114,6 +152,10 @@ architecture Behavioral of LCPLC is
 	alias  x_delay_delay_last_s: std_logic is x_delay_delay_flags_data(DATA_WIDTH);
 	alias  x_delay_delay_last_b: std_logic is x_delay_delay_flags_data(DATA_WIDTH + 1);
 	alias  x_delay_delay_last_i: std_logic is x_delay_delay_flags_data(DATA_WIDTH + 2);
+
+	--precalculated alphas
+	signal alpha_xhat_data, alpha_xtilde_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+	signal alpha_xhat_ready, alpha_xhat_valid, alpha_xtilde_ready, alpha_xtilde_valid: std_logic;
 
 	--alpha result
 	signal alpha_ready, alpha_valid: std_logic;
@@ -154,22 +196,32 @@ architecture Behavioral of LCPLC is
 	signal kj_ready			: std_logic;
 	signal kj_valid			: std_logic;
 	signal kj_data			: std_logic_vector(WORD_WIDTH_LOG - 1 downto 0);
-	signal xtilde_valid		: std_logic;
-	signal xtilde_ready		: std_logic;
-	signal xtilde_last		: std_logic;
-	signal xtilde_data		: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal xhat_valid		: std_logic;
-	signal xhat_ready		: std_logic;
-	signal xhat_last_s		: std_logic;
-	signal xhat_last_b		: std_logic;
-	signal xhat_data		: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xtilde_pre_valid, xtilde_valid		: std_logic;
+	signal xtilde_pre_ready, xtilde_ready		: std_logic;
+	signal xtilde_pre_last_s,xtilde_last_s		: std_logic;
+	signal xtilde_pre_data,  xtilde_data		: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xhat_pre_valid,   xhat_valid			: std_logic;
+	signal xhat_pre_ready,   xhat_ready			: std_logic;
+	signal xhat_pre_last_s,  xhat_last_s		: std_logic;
+	signal xhat_pre_last_b,  xhat_last_b		: std_logic;
+	signal xhat_pre_data, 	 xhat_data			: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal d_flag_valid		: std_logic;
 	signal d_flag_ready		: std_logic;
 	signal d_flag_data 		: std_logic;
+
+	--xhat and xtilde splitters
+	signal xtilde_0_valid, xtilde_0_ready, xtilde_0_last_s, xtilde_1_valid, xtilde_1_ready, xtilde_1_last_s: std_logic;
+	signal xtilde_0_data, xtilde_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xhat_0_valid, xhat_0_ready, xhat_0_last_s, xhat_1_valid, xhat_1_ready, xhat_1_last_s: std_logic;
+	signal xhat_0_data, xhat_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+
+	--xhat/xtilde selection
+	signal xhatout_valid, xhatout_ready, xhatout_last_s: std_logic;
+	signal xhatout_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	
 	--d flag substituter
 	signal d_flag_data_stdlv: std_logic_vector(0 downto 0);
-	signal d_flag_sub_ready, d_flag_sub_valid: std_logic;
+	signal d_flag_sub_ready, d_flag_sub_valid, d_flag_sub_last: std_logic;
 	signal d_flag_sub_data_stdlv: std_logic_vector(0 downto 0);
 	
 	--d flag last adder
@@ -179,26 +231,14 @@ architecture Behavioral of LCPLC is
 	signal d_flag_presub_flag, d_flag_presub_last_stdlv: std_logic_vector(0 downto 0); 
 	
 	--d flag splitter
-	signal d_flag_0_data_stdlv, d_flag_1_data_stdlv: std_logic_vector(0 downto 0);
-	signal d_flag_0_valid, d_flag_0_ready, d_flag_1_valid, d_flag_1_ready: std_logic;
-	
-	--xhat precalc
-	signal xhatout_data, xhatoutmean_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal xhatout_ready, xhatout_valid, xhatout_last, xhatoutmean_ready, xhatoutmean_valid: std_logic;
-	
-	--xhat splitter
-	signal xhatout_0_valid, xhatout_0_ready, xhatout_0_last, xhatout_1_valid, xhatout_1_ready, xhatout_1_last: std_logic;
-	signal xhatout_0_data, xhatout_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal xhatout_1_last_data: std_logic_vector(DATA_WIDTH downto 0);
-	
-	--xhat delay fifo
-	signal xhatout_delay_ready, xhatout_delay_valid, xhatout_delay_last: std_logic;
-	signal xhatout_delay_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal xhatout_delay_last_data: std_logic_vector(DATA_WIDTH downto 0);
-	
-	--xhatout mean splitter
-	signal xhatoutmean_0_valid, xhatoutmean_0_ready, xhatoutmean_1_valid,xhatoutmean_1_ready: std_logic;
-	signal xhatoutmean_0_data, xhatoutmean_1_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal d_flag_0_data_stdlv, d_flag_1_data_stdlv, d_flag_2_data_stdlv: std_logic_vector(0 downto 0);
+	signal d_flag_0_valid, d_flag_0_ready, d_flag_1_valid, d_flag_1_ready, d_flag_2_valid, d_flag_2_ready: std_logic;
+	signal d_flag_2_last_b: std_logic;
+	signal d_flag_2_last_b_stdlv: std_logic_vector(0 downto 0);
+
+	--dflag nonlast stuff
+	signal d_flag_nonlast_valid, d_flag_nonlast_ready, d_flag_nonlast_0_valid, d_flag_nonlast_0_ready, d_flag_nonlast_1_valid, d_flag_nonlast_1_ready: std_logic;
+	signal d_flag_nonlast_data_stdlv, d_flag_nonlast_0_data_stdlv, d_flag_nonlast_1_data_stdlv: std_logic_vector(0 downto 0);
 	
 	--final delays
 	signal merr_delay_ready, merr_delay_valid: std_logic;
@@ -234,7 +274,7 @@ begin
 
 	--input to first band predictor and second band predictor
 	x_flags_data <= x_last_i & x_last_b & x_last_s & x_last_r & x_data;
-	input_splitter: entity work.AXIS_SPLITTER_3
+	input_splitter: entity work.AXIS_SPLITTER_4
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH + 4
 		)
@@ -252,7 +292,10 @@ begin
 			output_1_data   => x_1_flags_data,
 			output_2_valid  => x_2_valid,
 			output_2_ready  => x_2_ready,
-			output_2_data   => x_2_flags_data
+			output_2_data   => x_2_flags_data,
+			output_3_valid	=> x_3_valid,
+			output_3_ready	=> x_3_ready,
+			output_3_data	=> x_3_flags_data
 		);
 	x_0_last_b <= x_0_flags_data(x_0_flags_data'high-1);
 	x_0_last_s <= x_0_flags_data(x_0_flags_data'high-2);
@@ -261,9 +304,183 @@ begin
 	x_1_last_b <= x_1_flags_data(x_1_flags_data'high-1);
 	x_1_last_s <= x_1_flags_data(x_1_flags_data'high-2);
 	x_1_last_r <= x_1_flags_data(x_1_flags_data'high-3);
-	x_2_last_b <= x_2_flags_data(x_2_flags_data'high-1);
-	x_2_last_s <= x_2_flags_data(x_2_flags_data'high-2);
-		
+	x_2_last_bs<= x_2_flags_data(x_2_flags_data'high-1 downto x_2_flags_data'high-2);
+	x_3_data   <= x_3_flags_data(DATA_WIDTH - 1 downto 0);
+	x_3_last_s <= x_3_flags_data(x_3_flags_data'high-2);
+
+	--splitter for bs flags
+	x_2_valid_and_last_s <= x_2_valid and x_2_last_bs(0);
+	input_bs_splitter: entity work.AXIS_SPLITTER_4
+		Generic map (
+			DATA_WIDTH => 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid 	=> x_2_valid_and_last_s,
+			input_ready 	=> x_2_ready,
+			input_data  	=> x_2_last_bs(1 downto 1),
+			output_0_valid	=> x_2_0_valid,
+			output_0_ready	=> x_2_0_ready,
+			output_0_data 	=> x_2_0_last_b_stdlv,
+			output_1_valid	=> x_2_1_valid,
+			output_1_ready	=> x_2_1_ready,
+			output_1_data	=> x_2_1_last_b_stdlv,
+			output_2_valid  => x_2_2_valid,
+			output_2_ready	=> x_2_2_ready,
+			output_2_data	=> x_2_2_last_b_stdlv,
+			output_3_valid	=> x_2_3_valid,
+			output_3_ready	=> x_2_3_ready,
+			output_3_data	=> x_2_3_last_b_stdlv
+		);
+
+	--average calculator
+	input_averager: entity work.AXIS_AVERAGER 
+	Generic map (
+			DATA_WIDTH 		=> DATA_WIDTH,
+			MAX_COUNT_LOG	=> MAX_SLICE_SIZE_LOG,
+			IS_SIGNED		=> false
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_data	=> x_3_data,
+			input_valid	=> x_3_valid,
+			input_ready	=> x_3_ready,
+			input_last	=> x_3_last_s,
+			output_data	=> xmean_pre_data,
+			output_valid=> xmean_pre_valid,
+			output_ready=> xmean_pre_ready
+		);
+
+	--sync average with 'b' flag to know ending
+	xmean_last_b_syncer: entity work.AXIS_SYNCHRONIZER_2
+		Generic map (
+			DATA_WIDTH_0 => DATA_WIDTH,
+			DATA_WIDTH_1 => 1,
+			LATCH => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_0_valid => xmean_pre_valid,
+			input_0_ready => xmean_pre_ready,
+			input_0_data  => xmean_pre_data,
+			input_1_valid => x_2_0_valid,
+			input_1_ready => x_2_0_ready,
+			input_1_data => x_2_0_last_b_stdlv,
+			output_valid => xmean_valid,
+			output_ready => xmean_ready,
+			output_data_0=> xmean_data,
+			output_data_1=> xmean_last_stdlv 
+		); 
+	xmean_last <= '1' when xmean_last_stdlv = "1" else '0';
+
+	--need now to split the means
+	average_splitter: entity work.AXIS_SPLITTER_3
+		Generic map (
+			DATA_WIDTH	 => DATA_WIDTH
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			--to input axi port
+			input_valid => xmean_valid,
+			input_ready	=> xmean_ready,
+			input_data	=> xmean_data,
+			input_last 	=> xmean_last,
+			output_0_valid	=> xmean_0_valid,
+			output_0_ready	=> xmean_0_ready,
+			output_0_data	=> xmean_0_data,
+			output_0_last	=> xmean_0_last,
+			output_1_valid  => xmean_1_valid,
+			output_1_ready  => xmean_1_ready,
+			output_1_data   => xmean_1_data,
+			output_1_last	=> xmean_1_last,
+			output_2_valid  => xmean_2_valid,
+			output_2_ready  => xmean_2_ready,
+			output_2_data   => xmean_2_data
+		);
+	xmean_1_last_stdlv <= "1" when xmean_1_last = '1' else "0";
+
+	--one mean stream removes the first, the other removes the last
+	filter_first_out: entity work.AXIS_DIVERTER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			input_valid		=> xmean_0_valid,
+			input_ready		=> xmean_0_ready,
+			input_data		=> xmean_0_data,
+			input_last_zero	=> '1',
+			input_last_one	=> xmean_0_last,
+			output_0_valid	=> open,
+			output_0_ready	=> '1',
+			output_0_data	=> open,
+			output_1_valid	=> xmean_nonfirst_valid,
+			output_1_ready	=> xmean_nonfirst_ready,
+			output_1_data	=> xmean_nonfirst_data
+		);
+
+	filter_last_out: entity work.AXIS_FILTER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			ELIMINATE_ON_UP => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid		=> xmean_1_valid,
+			input_ready		=> xmean_1_ready,
+			input_data		=> xmean_1_data,
+			flag_valid		=> xmean_1_valid,
+			flag_ready		=> open,
+			flag_data		=> xmean_1_last_stdlv,
+			--to output axi ports
+			output_valid	=> xmean_nonlast_valid,
+			output_ready	=> xmean_nonlast_ready,
+			output_data		=> xmean_nonlast_data
+		);
+
+	--split xmeans (nonfirst & nonlast)
+	xmean_nonfirst_split: entity work.AXIS_SPLITTER_3
+		Generic map (
+			DATA_WIDTH	 => DATA_WIDTH
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			--to input axi port
+			input_valid => xmean_nonfirst_valid,
+			input_ready	=> xmean_nonfirst_ready,
+			input_data	=> xmean_nonfirst_data,
+			output_0_valid	=> xmean_nonfirst_0_valid,
+			output_0_ready	=> xmean_nonfirst_0_ready,
+			output_0_data	=> xmean_nonfirst_0_data,
+			output_1_valid  => xmean_nonfirst_1_valid,
+			output_1_ready  => xmean_nonfirst_1_ready,
+			output_1_data   => xmean_nonfirst_1_data,
+			output_2_valid  => xmean_nonfirst_2_valid,
+			output_2_ready  => xmean_nonfirst_2_ready,
+			output_2_data   => xmean_nonfirst_2_data
+		);
+	xmean_nonlast_split: entity work.AXIS_SPLITTER_3
+		Generic map (
+			DATA_WIDTH	 => DATA_WIDTH
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			--to input axi port
+			input_valid => xmean_nonlast_valid,
+			input_ready	=> xmean_nonlast_ready,
+			input_data	=> xmean_nonlast_data,
+			output_0_valid	=> xmean_nonlast_0_valid,
+			output_0_ready	=> xmean_nonlast_0_ready,
+			output_0_data	=> xmean_nonlast_0_data,
+			output_1_valid  => xmean_nonlast_1_valid,
+			output_1_ready  => xmean_nonlast_1_ready,
+			output_1_data   => xmean_nonlast_1_data,
+			output_2_valid  => xmean_nonlast_2_valid,
+			output_2_ready  => xmean_nonlast_2_ready,
+			output_2_data   => xmean_nonlast_2_data
+		);
+
+			
 	diverter_firstband_others: entity work.AXIS_DIVERTER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 4
@@ -277,12 +494,27 @@ begin
 			input_last_zero	=> x_0_last_s,
 			input_last_one	=> x_0_last_b,
 			--to output axi ports
-			output_0_valid	=> x_0_red_valid,
-			output_0_ready	=> x_0_red_ready,
-			output_0_data	=> x_0_red_flags_data,
+			output_0_valid	=> x_0_red_pre_valid,
+			output_0_ready	=> x_0_red_pre_ready,
+			output_0_data	=> x_0_red_pre_flags_data,
 			output_1_valid	=> x_1_red_valid,
 			output_1_ready	=> x_1_red_ready,
 			output_1_data	=> x_1_red_flags_data
+		);
+	fifo_firstband: entity work.AXIS_FIFO
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH + 4,
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			input_valid		=> x_0_red_pre_valid,
+			input_ready		=> x_0_red_pre_ready,
+			input_data		=> x_0_red_pre_flags_data,
+			--out axi port
+			output_ready	=> x_0_red_ready,
+			output_data		=> x_0_red_flags_data,
+			output_valid	=> x_0_red_valid
 		);
 	x_0_red_data <= x_0_red_flags_data(DATA_WIDTH - 1 downto 0);
 	x_0_red_last_r <= x_0_red_flags_data(x_0_red_flags_data'high - 3);
@@ -316,7 +548,7 @@ begin
 
 	--splitter for rest of bands
 	x_1_red_last_b_stdlv <= x_1_red_last_b & "";
-	splitter_others_1: entity work.AXIS_SPLITTER_3
+	splitter_others_1: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH	 => DATA_WIDTH,
 			USER_WIDTH   => 1
@@ -327,59 +559,13 @@ begin
 			input_valid => x_1_red_valid,
 			input_ready	=> x_1_red_ready,
 			input_data	=> x_1_red_data,
-			input_last  => x_1_red_last_s,
 			input_user  => x_1_red_last_b_stdlv,
-			output_0_valid	=> x_others_0_valid,
-			output_0_ready	=> x_others_0_ready,
-			output_0_data	=> x_others_0_data,
-			output_0_last   => x_others_0_last_s,
-			output_1_valid	=> x_others_1_valid,
-			output_1_ready	=> x_others_1_ready,
-			output_1_data	=> x_others_1_data,
-			output_1_last   => open,
-			output_2_valid  => x_others_2_valid,
-			output_2_ready  => x_others_2_ready,
-			output_2_user   => x_others_2_last_b_stdlv
-		);
-	
-	--raw mean 
-	raw_mean_calc: entity work.AXIS_AVERAGER 
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			MAX_COUNT_LOG => MAX_SLICE_SIZE_LOG,
-			IS_SIGNED => false
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_data		=> x_others_0_data,
-			input_valid		=> x_others_0_valid,
-			input_ready		=> x_others_0_ready,
-			input_last      => x_others_0_last_s,
-			output_data		=> xmean_data,
-			output_valid	=> xmean_valid,
-			output_ready	=> xmean_ready
-		);
-		
-	--xmean splitter (alpha and nth prediciton)
-	splitter_xmean: entity work.AXIS_SPLITTER_3
-		Generic map (
-			DATA_WIDTH	 => DATA_WIDTH
-		)
-		Port map ( 
-			clk => clk, rst => rst,
-			--to input axi port
-			input_valid => xmean_valid,
-			input_ready	=> xmean_ready,
-			input_data	=> xmean_data,
-			output_0_valid	=> xmean_0_valid,
-			output_0_ready	=> xmean_0_ready,
-			output_0_data	=> xmean_0_data,
-			output_1_valid	=> xmean_1_valid,
-			output_1_ready	=> xmean_1_ready,
-			output_1_data	=> xmean_1_data,
-			output_2_valid  => xmean_2_valid,
-			output_2_ready  => xmean_2_ready,
-			output_2_data   => xmean_2_data
+			output_0_valid	=> x_others_1_valid,
+			output_0_ready	=> x_others_1_ready,
+			output_0_data	=> x_others_1_data,
+			output_1_valid  => x_others_2_valid,
+			output_1_ready  => x_others_2_ready,
+			output_1_user   => x_others_2_last_b_stdlv
 		);
 		
 	--buffer for samples for alpha
@@ -399,9 +585,27 @@ begin
 			output_data => x_delay_data,
 			output_valid=> x_delay_valid
 		);
+
+	alpha_x_buffer_split: entity work.AXIS_SPLITTER_2
+		Generic map (
+			DATA_WIDTH	 => DATA_WIDTH
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			--to input axi port
+			input_valid => x_delay_valid,
+			input_ready	=> x_delay_ready,
+			input_data	=> x_delay_data,
+			output_0_valid	=> x_delay_0_valid,
+			output_0_ready	=> x_delay_0_ready,
+			output_0_data	=> x_delay_0_data,
+			output_1_valid	=> x_delay_1_valid,
+			output_1_ready	=> x_delay_1_ready,
+			output_1_data	=> x_delay_1_data
+		);
 	
 	--alpha calculation
-	alpha_calc: entity work.ALPHA_CALC 
+	alpha_calc_xhat: entity work.ALPHA_CALC 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
 			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG,
@@ -409,24 +613,71 @@ begin
 		)
 		Port map (
 			clk => clk, rst	=> rst,
-			x_valid			=> x_delay_valid,
-			x_ready			=> x_delay_ready,
-			x_data			=> x_delay_data,
-			xhat_valid		=> xhatout_0_valid,
-			xhat_ready		=> xhatout_0_ready,
-			xhat_data		=> xhatout_0_data,
-			xhat_last_s		=> xhatout_0_last,
-			xmean_valid		=> xmean_0_valid,
-			xmean_ready		=> xmean_0_ready,
-			xmean_data		=> xmean_0_data,
-			xhatmean_valid	=> xhatoutmean_0_valid, 
-			xhatmean_ready	=> xhatoutmean_0_ready,
-			xhatmean_data	=> xhatoutmean_0_data,
-			alpha_ready     => alpha_ready,
-			alpha_valid		=> alpha_valid,
-			alpha_data		=> alpha_data
+			x_valid			=> x_delay_0_valid,
+			x_ready			=> x_delay_0_ready,
+			x_data			=> x_delay_0_data,
+			xhat_valid		=> xhat_0_valid,
+			xhat_ready		=> xhat_0_ready,
+			xhat_data		=> xhat_0_data,
+			xhat_last_s		=> xhat_0_last_s,
+			xmean_valid		=> xmean_nonlast_0_valid,
+			xmean_ready		=> xmean_nonlast_0_ready,
+			xmean_data		=> xmean_nonlast_0_data,
+			xhatmean_valid	=> xmean_nonfirst_0_valid, 
+			xhatmean_ready	=> xmean_nonfirst_0_ready,
+			xhatmean_data	=> xmean_nonfirst_0_data,
+			alpha_ready     => alpha_xhat_ready,
+			alpha_valid		=> alpha_xhat_valid,
+			alpha_data		=> alpha_xhat_data
 		);
-		
+
+	alpha_calc_xtilde: entity work.ALPHA_CALC
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG,
+			ALPHA_WIDTH => ALPHA_WIDTH
+		)
+		Port map (
+			clk => clk, rst	=> rst,
+			x_valid			=> x_delay_1_valid,
+			x_ready			=> x_delay_1_ready,
+			x_data			=> x_delay_1_data,
+			xhat_valid		=> xtilde_0_valid,
+			xhat_ready		=> xtilde_0_ready,
+			xhat_data		=> xtilde_0_data,
+			xhat_last_s		=> xtilde_0_last_s,
+			xmean_valid		=> xmean_nonlast_1_valid,
+			xmean_ready		=> xmean_nonlast_1_ready,
+			xmean_data		=> xmean_nonlast_1_data,
+			xhatmean_valid	=> xmean_nonfirst_1_valid, 
+			xhatmean_ready	=> xmean_nonfirst_1_ready,
+			xhatmean_data	=> xmean_nonfirst_1_data,
+			alpha_ready     => alpha_xtilde_ready,
+			alpha_valid		=> alpha_xtilde_valid,
+			alpha_data		=> alpha_xtilde_data
+		);
+
+	--alpha selector
+	alpha_selector: entity work.AXIS_SELECTOR
+		generic map (
+			DATA_WIDTH => ALPHA_WIDTH
+		)
+		port map (
+			clk => clk, rst => rst,
+			input_0_data	=> alpha_xhat_data,
+			input_0_ready	=> alpha_xhat_ready,
+			input_0_valid	=> alpha_xhat_valid,
+			input_1_data	=> alpha_xtilde_data,
+			input_1_ready	=> alpha_xtilde_ready,
+			input_1_valid	=> alpha_xtilde_valid,
+			flag_data		=> d_flag_nonlast_0_data_stdlv,
+			flag_ready		=> d_flag_nonlast_0_ready,
+			flag_valid		=> d_flag_nonlast_0_valid,
+			output_data		=> alpha_data,
+			output_valid	=> alpha_valid,
+			output_ready	=> alpha_ready
+		);
+
 	--alpha_splitter
 	alpha_split: entity work.AXIS_SPLITTER_2
 		Generic map (
@@ -455,16 +706,16 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			xhat_valid		=> xhatout_delay_valid,
-			xhat_ready 		=> xhatout_delay_ready,
-			xhat_data  		=> xhatout_delay_data,
-			xhat_last_s		=> xhatout_delay_last,
-			xmean_valid		=> xmean_1_valid,
-			xmean_ready		=> xmean_1_ready,
-			xmean_data		=> xmean_1_data,
-			xhatmean_valid	=> xhatoutmean_1_valid,
-			xhatmean_ready	=> xhatoutmean_1_ready,
-			xhatmean_data	=> xhatoutmean_1_data,
+			xhat_valid		=> xhatout_valid,
+			xhat_ready 		=> xhatout_ready,
+			xhat_data  		=> xhatout_data,
+			xhat_last_s		=> xhatout_last_s,
+			xmean_valid		=> xmean_nonlast_2_valid,
+			xmean_ready		=> xmean_nonlast_2_ready,
+			xmean_data		=> xmean_nonlast_2_data,
+			xhatmean_valid	=> xmean_nonfirst_2_valid,
+			xhatmean_ready	=> xmean_nonfirst_2_ready,
+			xhatmean_data	=> xmean_nonfirst_2_data,
 			alpha_valid     => alpha_0_valid, 
 			alpha_ready		=> alpha_0_ready,
 			alpha_data		=> alpha_0_data,
@@ -587,29 +838,170 @@ begin
 			kj_ready		=> kj_ready,
 			kj_valid		=> kj_valid,
 			kj_data			=> kj_data,
-			xtilde_out_valid=> xtilde_valid,
-			xtilde_out_ready=> xtilde_ready,
-			xtilde_out_data => xtilde_data,
-			xtilde_out_last_s=> xtilde_last,
-			xhatout_valid   => xhat_valid,
-			xhatout_ready	=> xhat_ready,
-			xhatout_data	=> xhat_data,
-			xhatout_last_s  => xhat_last_s,
-			xhatout_last_b  => xhat_last_b,
+			xtilde_out_valid=> xtilde_pre_valid,
+			xtilde_out_ready=> xtilde_pre_ready,
+			xtilde_out_data => xtilde_pre_data,
+			xtilde_out_last_s=> xtilde_pre_last_s,
+			xhatout_valid   => xhat_pre_valid,
+			xhatout_ready	=> xhat_pre_ready,
+			xhatout_data	=> xhat_pre_data,
+			xhatout_last_s  => xhat_pre_last_s,
+			xhatout_last_b  => xhat_pre_last_b,
 			d_flag_valid	=> d_flag_valid,
 			d_flag_ready	=> d_flag_ready,
 			d_flag_data 	=> d_flag_data,
 			cfg_quant_shift => cfg_quant_shift,
 			cfg_threshold   => cfg_threshold
 		);
+
+	--filter signals for last band
+	xtilde_filter: entity work.AXIS_BATCH_FILTER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			ELIMINATE_ON_UP => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid		=> xtilde_pre_valid,
+			input_ready		=> xtilde_pre_ready,
+			input_data		=> xtilde_pre_data,
+			input_last		=> xtilde_pre_last_s,
+			flag_valid		=> x_2_2_valid,
+			flag_ready		=> x_2_2_ready,
+			flag_data		=> x_2_2_last_b_stdlv,
+			--to output axi ports
+			output_valid	=> xtilde_valid,
+			output_ready	=> xtilde_ready,
+			output_data		=> xtilde_data,
+			output_last		=> xtilde_last_s
+		);
+	xhat_filter: entity work.AXIS_BATCH_FILTER
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			ELIMINATE_ON_UP => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid		=> xhat_pre_valid,
+			input_ready		=> xhat_pre_ready,
+			input_data		=> xhat_pre_data,
+			input_last		=> xhat_pre_last_s,
+			flag_valid		=> x_2_3_valid,
+			flag_ready		=> x_2_3_ready,
+			flag_data		=> x_2_3_last_b_stdlv,
+			--to output axi ports
+			output_valid	=> xhat_valid,
+			output_ready	=> xhat_ready,
+			output_data		=> xhat_data,
+			output_last		=> xhat_last_s
+		);
+
 		
-	--get substituter helper flags
-	x_2_last_b <= x_2_flags_data(x_2_flags_data'high-1);
-	x_2_last_s <= x_2_flags_data(x_2_flags_data'high-2);
+	--xtilde split (one to alpha, one to xhat precalc)
+	xtilde_split: entity work.AXIS_SPLITTER_2
+		Generic map (
+			DATA_WIDTH	 => DATA_WIDTH
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			--to input axi port
+			input_valid => xtilde_valid,
+			input_ready	=> xtilde_ready,
+			input_data	=> xtilde_data,
+			input_last  => xtilde_last_s,
+			output_0_valid	=> xtilde_0_valid,
+			output_0_ready	=> xtilde_0_ready,
+			output_0_data	=> xtilde_0_data,
+			output_0_last   => xtilde_0_last_s,
+			output_1_valid	=> xtilde_1_valid,
+			output_1_ready	=> xtilde_1_ready,
+			output_1_data	=> xtilde_1_data,
+			output_1_last	=> xtilde_1_last_s
+		);
+	xhat_split: entity work.AXIS_SPLITTER_2
+		Generic map (
+			DATA_WIDTH	 => DATA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid => xhat_valid,
+			input_ready	=> xhat_ready,
+			input_data	=> xhat_data,
+			input_last  => xhat_last_s,
+			output_0_valid	=> xhat_0_valid,
+			output_0_ready	=> xhat_0_ready,
+			output_0_data	=> xhat_0_data,
+			output_0_last   => xhat_0_last_s,
+			output_1_valid	=> xhat_1_valid,
+			output_1_ready	=> xhat_1_ready,
+			output_1_data	=> xhat_1_data,
+			output_1_last	=> xhat_1_last_s
+		);
+
+	--filter flag before using
+	filter_first_flag: entity work.AXIS_FILTER
+		Generic map (
+			DATA_WIDTH => 1,
+			ELIMINATE_ON_UP => true
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid		=> d_flag_2_valid,
+			input_ready		=> d_flag_2_ready,
+			input_data		=> d_flag_2_data_stdlv,
+			flag_valid		=> d_flag_2_valid,
+			flag_ready		=> open,
+			flag_data		=> d_flag_2_last_b_stdlv,
+			output_valid	=> d_flag_nonlast_valid,
+			output_ready	=> d_flag_nonlast_ready,
+			output_data		=> d_flag_nonlast_data_stdlv
+		);
+		
+	flag_nonlast_splitter: entity work.AXIS_SPLITTER_2
+		Generic map (
+			DATA_WIDTH	 => 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid => d_flag_nonlast_valid,
+			input_ready	=> d_flag_nonlast_ready,
+			input_data	=> d_flag_nonlast_data_stdlv,
+			output_0_valid	=> d_flag_nonlast_0_valid,
+			output_0_ready	=> d_flag_nonlast_0_ready,
+			output_0_data	=> d_flag_nonlast_0_data_stdlv,
+			output_1_valid	=> d_flag_nonlast_1_valid,
+			output_1_ready	=> d_flag_nonlast_1_ready,
+			output_1_data	=> d_flag_nonlast_1_data_stdlv
+		);
+
+	--batch selector for nth band module input
+	xhat_tilde_batch_sel: entity work.AXIS_BATCH_SELECTOR
+		generic map (
+			DATA_WIDTH => DATA_WIDTH,
+			LAST_POLICY => PASS_ZERO
+		)
+		port map (
+			clk => clk, rst => rst,
+			input_0_data	=> xhat_1_data,
+			input_0_ready	=> xhat_1_ready,
+			input_0_valid	=> xhat_1_valid,
+			input_0_last	=> xhat_1_last_s,
+			input_1_data	=> xtilde_1_data,
+			input_1_ready	=> xtilde_1_ready,
+			input_1_valid	=> xtilde_1_valid,
+			input_1_last	=> xtilde_1_last_s,
+			flag_data		=> d_flag_nonlast_1_data_stdlv,
+			flag_ready		=> d_flag_nonlast_1_ready,
+			flag_valid		=> d_flag_nonlast_1_valid,
+			output_data		=> xhatout_data,
+			output_valid	=> xhatout_valid,
+			output_ready	=> xhatout_ready,
+			output_last		=> xhatout_last_s
+		);
+
+		
 	--syncrhonize d flag with input b and s flags
 	d_flag_data_stdlv <= "1" when d_flag_data = '1' else "0";
-	x_2_last_s_and_valid <= x_2_last_s and x_2_valid;
-	x_2_last_b_stdlv <= "1" when x_2_last_b = '1' else "0";
 	d_flag_x_flags_syncer: entity work.AXIS_SYNCHRONIZER_2
 		Generic map (
 			DATA_WIDTH_0 => 1,
@@ -621,9 +1013,9 @@ begin
 			input_0_valid => d_flag_valid,
 			input_0_ready => d_flag_ready,
 			input_0_data  => d_flag_data_stdlv,
-			input_1_valid => x_2_last_s_and_valid,
-			input_1_ready => x_2_ready,
-			input_1_data => x_2_last_b_stdlv,
+			input_1_valid => x_2_1_valid,
+			input_1_ready => x_2_1_ready,
+			input_1_data => x_2_1_last_b_stdlv,
 			output_valid => d_flag_presub_valid,
 			output_ready => d_flag_presub_ready,
 			output_data_0=> d_flag_presub_flag,
@@ -646,11 +1038,12 @@ begin
 			input_last  => d_flag_presub_last_stdlv(0),
 			output_ready=> d_flag_sub_ready,
 			output_valid=> d_flag_sub_valid,
-			output_data => d_flag_sub_data_stdlv
+			output_data => d_flag_sub_data_stdlv,
+			output_last => d_flag_sub_last
 		);
 	
 	--d flag splitter
-	d_flag_splitter: entity work.AXIS_SPLITTER_2
+	d_flag_splitter: entity work.AXIS_SPLITTER_3
 		Generic map (
 			DATA_WIDTH	 => 1
 		)
@@ -660,106 +1053,19 @@ begin
 			input_valid => d_flag_sub_valid,
 			input_ready	=> d_flag_sub_ready,
 			input_data	=> d_flag_sub_data_stdlv,
+			input_last  => d_flag_sub_last,
 			output_0_valid	=> d_flag_0_valid,
-			output_0_ready	=> d_flag_0_ready,
+			output_0_ready	=> '1',
 			output_0_data	=> d_flag_0_data_stdlv,
 			output_1_valid	=> d_flag_1_valid,
 			output_1_ready	=> d_flag_1_ready,
-			output_1_data	=> d_flag_1_data_stdlv
-		);
-		
-	--xhat prediction and such
-	xhat_precalc: entity work.NEXT_XHAT_PRECALC
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			MAX_SLICE_SIZE_LOG => MAX_SLICE_SIZE_LOG
-		)
-		Port map (
-			rst => rst, clk	=> clk,
-			--inputs
-			xhat_data		=> xhat_data,
-			xhat_ready		=> xhat_ready,
-			xhat_valid		=> xhat_valid,
-			xhat_last_s	 	=> xhat_last_s,
-			xhat_last_b     => xhat_last_b,
-			xtilde_data		=> xtilde_data,
-			xtilde_ready	=> xtilde_ready,
-			xtilde_valid	=> xtilde_valid,
-			xtilde_last_s	=> xtilde_last,
-			d_flag_data		=> d_flag_0_data_stdlv(0),
-			d_flag_ready	=> d_flag_0_ready,
-			d_flag_valid	=> d_flag_0_valid,
-			xhatout_ready	=> xhatout_ready,
-			xhatout_valid	=> xhatout_valid,
-			xhatout_data	=> xhatout_data,
-			xhatout_last_s  => xhatout_last,
-			xhatoutmean_ready	=> xhatoutmean_ready,
-			xhatoutmean_data	=> xhatoutmean_data, 
-			xhatoutmean_valid	=> xhatoutmean_valid
-		);
-		
-	--splitter for xhatout
-	xhatout_splitter: entity work.AXIS_SPLITTER_2
-		Generic map (
-			DATA_WIDTH	 => DATA_WIDTH
-		)
-		Port map ( 
-			clk => clk, rst => rst,
-			--to input axi port
-			input_valid => xhatout_valid,
-			input_ready	=> xhatout_ready,
-			input_data	=> xhatout_data,
-			input_last	=> xhatout_last,
-			output_0_valid	=> xhatout_0_valid,
-			output_0_ready	=> xhatout_0_ready,
-			output_0_data	=> xhatout_0_data,
-			output_0_last   => xhatout_0_last,
-			output_1_valid	=> xhatout_1_valid,
-			output_1_ready	=> xhatout_1_ready,
-			output_1_data	=> xhatout_1_data,
-			output_1_last   => xhatout_1_last
-		);
-	
-	--one fifo for nth band input
-	xhatout_1_last_data <= xhatout_1_last & xhatout_1_data;
-	xhatout_buffer: entity work.AXIS_FIFO 
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH + 1,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
-		)
-		Port map ( 
-			clk	=> clk, rst => rst,
-			--input axi port
-			input_valid => xhatout_1_valid,
-			input_ready => xhatout_1_ready,
-			input_data	=> xhatout_1_last_data,
-			--out axi port
-			output_ready=> xhatout_delay_ready,
-			output_data => xhatout_delay_last_data,
-			output_valid=> xhatout_delay_valid
-		);
-	xhatout_delay_last <= xhatout_delay_last_data(DATA_WIDTH);
-	xhatout_delay_data <= xhatout_delay_last_data(DATA_WIDTH - 1 downto 0);
-		
-	--splitter for xhatoutmean
-	xhatoutmean_splitter: entity work.AXIS_SPLITTER_2
-		Generic map (
-			DATA_WIDTH	 => DATA_WIDTH
-		)
-		Port map ( 
-			clk => clk, rst => rst,
-			--to input axi port
-			input_valid => xhatoutmean_valid,
-			input_ready	=> xhatoutmean_ready,
-			input_data	=> xhatoutmean_data,
-			output_0_valid	=> xhatoutmean_0_valid,
-			output_0_ready	=> xhatoutmean_0_ready,
-			output_0_data	=> xhatoutmean_0_data,
-			output_1_valid	=> xhatoutmean_1_valid,
-			output_1_ready	=> xhatoutmean_1_ready,
-			output_1_data	=> xhatoutmean_1_data
-		);
-		
+			output_1_data	=> d_flag_1_data_stdlv,
+			output_2_valid  => d_flag_2_valid,
+			output_2_ready  => d_flag_2_ready,
+			output_2_data	=> d_flag_2_data_stdlv,
+			output_2_last	=> d_flag_2_last_b
+		);		
+	d_flag_2_last_b_stdlv <= "1" when d_flag_2_last_b = '1' else "0";
 		
 	--one fifo for nth band input
 	merr_last_data <= merr_last_i & merr_last_b & merr_last_s & merr_data;
@@ -888,7 +1194,7 @@ begin
 		)
 		port map (
 			clk => clk, rst => rst, 
-			valid => xmean_2_valid, data => xmean_2_data, ready => xmean_2_ready
+			valid => xmean_nonfirst_valid, data => xmean_nonfirst_data, ready => xmean_nonfirst_ready --xmean after removing first
 		);
 	-------------------
 
@@ -915,6 +1221,18 @@ begin
 		);
 	------------------
 
+	--predictor checks
+	firstband_pred_check_xtilde: inline_axis_checker
+		generic map (
+			DATA_WIDTH 	=> DATA_WIDTH,
+			FILE_NAME 	=> test_dir & "xtilde_firstband.smpl",
+			SKIP => 0
+		)
+		port map (
+			clk => clk, rst => rst, 
+			valid => prediction_first_valid, data => prediction_first_data_raw, ready => prediction_first_ready
+		);
+	------------------
 
 	--other checks
 	check_xhatout: inline_axis_checker

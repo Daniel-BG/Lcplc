@@ -25,17 +25,17 @@
 module test_lcplc;
 	parameter DATA_WIDTH = 16;
 	parameter WORD_WIDTH_LOG = 5;
-	parameter MAX_SLICE_SIZE_LOG = 12;
+	parameter MAX_SLICE_SIZE_LOG = 8;
 	parameter ALPHA_WIDTH = 10;
 	parameter ACCUMULATOR_WINDOW = 32;
 	parameter QUANTIZER_SHIFT_WIDTH = 4;
 	
-	parameter QUANTIZER_SHIFT = 0;
-	wire[63:0] THRESHOLD = 16'h0000_0000_0000_0000;
+	//parameter QUANTIZER_SHIFT = 0;
+	//wire[63:0] THRESHOLD = 16'h0000_0000_0000_0000;
 	//parameter QUANTIZER_SHIFT = 2;
 	//wire[63:0] THRESHOLD = 16'h0000_0000_0005_5555;
-	//parameter QUANTIZER_SHIFT = 2;
-	//wire[63:0] THRESHOLD = 64'h0000_0000_0010_0000;
+	parameter QUANTIZER_SHIFT = 2;
+	wire[63:0] THRESHOLD = 64'h0000_0000_0010_0000;
 	
 	parameter PERIOD = 10;
 	reg clk, rst;

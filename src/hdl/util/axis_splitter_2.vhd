@@ -30,7 +30,7 @@ entity AXIS_SPLITTER_2 is
 		clk, rst		: in 	std_logic;
 		--to input axi port
 		input_valid		: in	STD_LOGIC;
-		input_data		: in	STD_LOGIC_VECTOR (DATA_WIDTH - 1 downto 0);
+		input_data		: in	STD_LOGIC_VECTOR (DATA_WIDTH - 1 downto 0) := (others => '0');
 		input_ready		: out	STD_LOGIC;
 		input_last		: in 	std_logic := '0';
 		input_user		: in 	std_logic_vector(USER_WIDTH - 1 downto 0) := (others => '0');
