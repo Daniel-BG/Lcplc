@@ -135,7 +135,7 @@ architecture Behavioral of CODER is
 	--------------
 	--CONTROLLER--
 	--------------
-	type coder_ctrl_state_t is (DISCARD_FLAG, OUTPUT_FLAG, OUTPUT_XMEAN, OUTPUT_ALPHA, OUTPUT_XMEAN_ALPHA_LAST, OUTPUT_EXP_GOL, OUTPUT_GOL, OUTPUT_GOL_PRIMED, OUTPUT_GOL_LAST, END_SLICE_XMEAN, END_SLICE_ALPHA);
+	type coder_ctrl_state_t is (DISCARD_FLAG, OUTPUT_FLAG, OUTPUT_XMEAN, OUTPUT_ALPHA, OUTPUT_EXP_GOL, OUTPUT_GOL, OUTPUT_GOL_PRIMED, OUTPUT_GOL_LAST, END_SLICE_XMEAN, END_SLICE_ALPHA, END_SLICE);
 	signal state_curr, state_next: coder_ctrl_state_t;
 	
 	--control signals
@@ -502,18 +502,8 @@ begin
 				if d_flag_2_data(0) = '1' then
 					state_next <= OUTPUT_ALPHA;
 				else
-					state_next <= OUTPUT_XMEAN_ALPHA_LAST;
+					state_next <= END_SLICE_ALPHA;
 				end if;
-			end if;
-		--ALPHA AND XMEAN END THE SLICE. 
-		--FIRST READ CONTROL TO KNOW IF IT ENDS THE BLOCK OR NOT
-		elsif state_curr = OUTPUT_XMEAN_ALPHA_LAST then
-			debug_state <= x"008";
-			control_ready <= '1';
-			if control_valid = '1' then
-				control_end_image_buff_next <= control_end_image;
-				control_end_block_buff_next <= control_end_block;
-				state_next <= END_SLICE_ALPHA;
 			end if;
 		--OUTPUT EXP GOLOMB CODER RESULT
 		elsif state_curr = OUTPUT_EXP_GOL then
@@ -599,7 +589,16 @@ begin
 			packer_code <= (CODING_LENGTH_MAX - 1 downto DATA_WIDTH => '0') & xmean_data;
 			packer_length <= std_logic_vector(to_unsigned(DATA_WIDTH, packer_length'length)); 
 			if xmean_valid = '1' and packer_ready = '1' then
-				if control_end_block_buff = '1' then
+				state_next <= END_SLICE;
+			end if;
+		elsif state_curr = END_SLICE then
+			debug_state <= x"008";
+			control_ready <= '1';
+			if control_valid = '1' then
+				--save just in case (although probably not necessary)
+				control_end_image_buff_next <= control_end_image;
+				control_end_block_buff_next <= control_end_block;
+				if control_end_block = '1' then
 					state_next <= DISCARD_FLAG;
 				else
 					state_next <= OUTPUT_FLAG;

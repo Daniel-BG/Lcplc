@@ -200,6 +200,7 @@ architecture Behavioral of LCPLC is
 	signal xtilde_pre_ready, xtilde_ready		: std_logic;
 	signal xtilde_pre_last_s,xtilde_last_s		: std_logic;
 	signal xtilde_pre_data,  xtilde_data		: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal xtilde_pre_last_data: std_logic_vector(DATA_WIDTH downto 0);
 	signal xhat_pre_valid,   xhat_valid			: std_logic;
 	signal xhat_pre_ready,   xhat_ready			: std_logic;
 	signal xhat_pre_last_s,  xhat_last_s		: std_logic;
@@ -208,6 +209,12 @@ architecture Behavioral of LCPLC is
 	signal d_flag_valid		: std_logic;
 	signal d_flag_ready		: std_logic;
 	signal d_flag_data 		: std_logic;
+
+	--xtilde delayer
+	signal xtilde_pre_buf_valid, xtilde_pre_buf_ready: std_logic;
+	signal xtilde_pre_buf_last_data: std_logic_vector(DATA_WIDTH downto 0);
+	alias  xtilde_pre_buf_data: std_logic_vector(DATA_WIDTH - 1 downto 0) is xtilde_pre_buf_last_data(DATA_WIDTH - 1 downto 0);
+	alias  xtilde_pre_buf_last_s: std_logic is xtilde_pre_buf_last_data(DATA_WIDTH);
 
 	--xhat and xtilde splitters
 	signal xtilde_0_valid, xtilde_0_ready, xtilde_0_last_s, xtilde_1_valid, xtilde_1_ready, xtilde_1_last_s: std_logic;
@@ -246,10 +253,11 @@ architecture Behavioral of LCPLC is
 	signal d_flag_0_valid, d_flag_0_ready, d_flag_1_valid, d_flag_1_ready, d_flag_2_valid, d_flag_2_ready: std_logic;
 	signal d_flag_2_last_b: std_logic;
 	signal d_flag_2_last_b_stdlv: std_logic_vector(0 downto 0);
+	signal d_flag_2_valid_and_not_b: std_logic;
 
 	--dflag nonlast stuff
-	signal d_flag_nonlast_valid, d_flag_nonlast_ready, d_flag_nonlast_0_valid, d_flag_nonlast_0_ready, d_flag_nonlast_1_valid, d_flag_nonlast_1_ready: std_logic;
-	signal d_flag_nonlast_data_stdlv, d_flag_nonlast_0_data_stdlv, d_flag_nonlast_1_data_stdlv: std_logic_vector(0 downto 0);
+	signal d_flag_nonlast_0_valid, d_flag_nonlast_0_ready, d_flag_nonlast_1_valid, d_flag_nonlast_1_ready: std_logic;
+	signal d_flag_nonlast_0_data_stdlv, d_flag_nonlast_1_data_stdlv: std_logic_vector(0 downto 0);
 	
 	--buffers before coder
 	signal xmean_2_buf_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -326,7 +334,7 @@ begin
 
 	--splitter for bs flags
 	x_2_valid_and_last_s <= x_2_valid and x_2_last_bs(0);
-	input_bs_splitter: entity work.AXIS_SPLITTER_3
+	input_bs_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH => 1
 		)
@@ -335,15 +343,28 @@ begin
 			input_valid 	=> x_2_valid_and_last_s,
 			input_ready 	=> x_2_ready,
 			input_data  	=> x_2_last_bs(1 downto 1),
-			output_0_valid	=> x_2_1_valid,
-			output_0_ready	=> x_2_1_ready,
-			output_0_data	=> x_2_1_last_b_stdlv,
-			output_1_valid  => x_2_2_valid,
-			output_1_ready	=> x_2_2_ready,
-			output_1_data	=> x_2_2_last_b_stdlv,
-			output_2_valid	=> x_2_3_valid,
-			output_2_ready	=> x_2_3_ready,
-			output_2_data	=> x_2_3_last_b_stdlv
+			output_0_valid	=> x_2_0_valid,
+			output_0_ready	=> x_2_0_ready,
+			output_0_data	=> x_2_0_last_b_stdlv,
+			output_1_valid  => x_2_1_valid,
+			output_1_ready	=> x_2_1_ready,
+			output_1_data	=> x_2_1_last_b_stdlv
+		);
+	input_bs_splitter_2: entity work.AXIS_SPLITTER_2
+		Generic map (
+			DATA_WIDTH => 1
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_valid 	=> x_2_0_valid,
+			input_ready 	=> x_2_0_ready,
+			input_data  	=> x_2_0_last_b_stdlv,
+			output_0_valid	=> x_2_2_valid,
+			output_0_ready	=> x_2_2_ready,
+			output_0_data	=> x_2_2_last_b_stdlv,
+			output_1_valid  => x_2_3_valid,
+			output_1_ready	=> x_2_3_ready,
+			output_1_data	=> x_2_3_last_b_stdlv
 		);
 
 	--average calculator
@@ -497,7 +518,7 @@ begin
 	fifo_firstband: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 4,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk => clk, rst => rst,
@@ -565,7 +586,7 @@ begin
 	alpha_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2 + 200
+			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG) + 50 --give slack for the extra ~50 cycles per slice
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -723,7 +744,7 @@ begin
 	b_flag_fifo: entity work.AXIS_FIFO
 		generic map (
 			DATA_WIDTH => 1,
-			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2 + 20 + 200
+			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2
 		)
 		port map (
 			clk => clk, rst => rst,
@@ -788,7 +809,7 @@ begin
 	error_calc_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 3,
-			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2 + 20 + 200--leave some slack for the pipeline fill up times
+			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2 --leave some slack for the pipeline fill up times
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -846,7 +867,22 @@ begin
 			cfg_quant_shift => cfg_quant_shift,
 			cfg_threshold   => cfg_threshold
 		);
-
+	--add small buffer for xtilde since it comes out first
+	xtilde_pre_last_data <= xtilde_pre_last_s & xtilde_pre_data;
+	delay_err_calc_xtilde: entity work.AXIS_FIFO
+		Generic map (
+			DATA_WIDTH => DATA_WIDTH + 1,
+			FIFO_DEPTH => 20
+		)
+		Port map ( 
+			clk	=> clk, rst => rst,
+			input_valid => xtilde_pre_valid,
+			input_ready => xtilde_pre_ready,
+			input_data	=> xtilde_pre_last_data,
+			output_ready=> xtilde_pre_buf_ready,
+			output_data => xtilde_pre_buf_last_data,
+			output_valid=> xtilde_pre_buf_valid
+		);
 	--filter signals for last band
 	xtilde_filter: entity work.AXIS_BATCH_FILTER
 		Generic map (
@@ -855,10 +891,10 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_valid		=> xtilde_pre_valid,
-			input_ready		=> xtilde_pre_ready,
-			input_data		=> xtilde_pre_data,
-			input_last		=> xtilde_pre_last_s,
+			input_valid		=> xtilde_pre_buf_valid,
+			input_ready		=> xtilde_pre_buf_ready,
+			input_data		=> xtilde_pre_buf_data,
+			input_last		=> xtilde_pre_buf_last_s,
 			flag_valid		=> x_2_2_valid,
 			flag_ready		=> x_2_2_ready,
 			flag_data		=> x_2_2_last_b_stdlv,
@@ -868,6 +904,7 @@ begin
 			output_data		=> xtilde_data,
 			output_last		=> xtilde_last_s
 		);
+
 	xhat_filter: entity work.AXIS_BATCH_FILTER
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
@@ -931,34 +968,16 @@ begin
 			output_1_last	=> xhat_1_last_s
 		);
 
-	--filter flag before using
-	filter_first_flag: entity work.AXIS_FILTER
-		Generic map (
-			DATA_WIDTH => 1,
-			ELIMINATE_ON_UP => true
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_valid		=> d_flag_2_valid,
-			input_ready		=> d_flag_2_ready,
-			input_data		=> d_flag_2_data_stdlv,
-			flag_valid		=> d_flag_2_valid,
-			flag_ready		=> open,
-			flag_data		=> d_flag_2_last_b_stdlv,
-			output_valid	=> d_flag_nonlast_valid,
-			output_ready	=> d_flag_nonlast_ready,
-			output_data		=> d_flag_nonlast_data_stdlv
-		);
-		
+	d_flag_2_valid_and_not_b <= d_flag_2_valid and (not d_flag_2_last_b);
 	flag_nonlast_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH	 => 1
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_valid => d_flag_nonlast_valid,
-			input_ready	=> d_flag_nonlast_ready,
-			input_data	=> d_flag_nonlast_data_stdlv,
+			input_valid => d_flag_2_valid_and_not_b,
+			input_ready	=> d_flag_2_ready,
+			input_data	=> d_flag_2_data_stdlv,
 			output_0_valid	=> d_flag_nonlast_0_valid,
 			output_0_ready	=> d_flag_nonlast_0_ready,
 			output_0_data	=> d_flag_nonlast_0_data_stdlv,
@@ -973,7 +992,7 @@ begin
 	delay_xhat_1: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -988,7 +1007,7 @@ begin
 	delay_xtilde_1: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -1067,7 +1086,7 @@ begin
 		);
 	
 	--d flag splitter
-	d_flag_splitter: entity work.AXIS_SPLITTER_3
+	d_flag_splitter: entity work.AXIS_SPLITTER_2
 		Generic map (
 			DATA_WIDTH	 => 1
 		)
@@ -1078,16 +1097,13 @@ begin
 			input_ready	=> d_flag_sub_ready,
 			input_data	=> d_flag_sub_data_stdlv,
 			input_last  => d_flag_sub_last,
-			output_0_valid	=> d_flag_0_valid,
-			output_0_ready	=> '1',
-			output_0_data	=> d_flag_0_data_stdlv,
-			output_1_valid	=> d_flag_1_valid,
-			output_1_ready	=> d_flag_1_ready,
-			output_1_data	=> d_flag_1_data_stdlv,
-			output_2_valid  => d_flag_2_valid,
-			output_2_ready  => d_flag_2_ready,
-			output_2_data	=> d_flag_2_data_stdlv,
-			output_2_last	=> d_flag_2_last_b
+			output_0_valid	=> d_flag_1_valid,
+			output_0_ready	=> d_flag_1_ready,
+			output_0_data	=> d_flag_1_data_stdlv,
+			output_1_valid  => d_flag_2_valid,
+			output_1_ready  => d_flag_2_ready,
+			output_1_data	=> d_flag_2_data_stdlv,
+			output_1_last	=> d_flag_2_last_b
 		);		
 	d_flag_2_last_b_stdlv <= "1" when d_flag_2_last_b = '1' else "0";
 		
@@ -1096,7 +1112,7 @@ begin
 	delay_mapped_err: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH + 3,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -1114,7 +1130,7 @@ begin
 	delay_kj_calc: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => WORD_WIDTH_LOG,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,

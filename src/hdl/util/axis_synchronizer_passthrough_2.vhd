@@ -87,7 +87,7 @@ begin
 	output_user_0 <= buf_0_user;
 	output_user_1 <= buf_1_user;
 
-	seq: process(clk) 
+	seq: process(clk, rst) 
 	begin
 		if rising_edge(clk) then
 			if rst = '1' then

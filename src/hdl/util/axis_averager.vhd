@@ -199,6 +199,7 @@ begin
 		synced_last_buf_next <= synced_last_buf;
 		output_data <= (others => '0');
 		output_valid <= '0';
+		output_last_pt <= '0';
 		divider_input_valid <= '0';
 		divider_output_ready <= '0';
 		state_next <= state_curr;
@@ -218,6 +219,7 @@ begin
 		elsif state_curr = OUTPUT_SHIFT then
 			output_data <= synced_dividend_buf(DATA_WIDTH + MAX_COUNT_LOG - 1 downto MAX_COUNT_LOG);
 			output_valid<= '1';
+			output_last_pt <= synced_last_buf;
 			if output_ready = '1' then
 				state_next <= IDLE;
 			end if;
@@ -229,14 +231,13 @@ begin
 		elsif state_curr = AWAIT_DIVIDER then
 			output_data <= divider_data(DATA_WIDTH + MAX_COUNT_LOG - 1 downto MAX_COUNT_LOG);
 			output_valid<= divider_output_valid;
+			output_last_pt <= divider_last;
 			divider_output_ready<= output_ready;
 			if divider_output_valid = '1' and output_ready = '1' then
 				state_next <= IDLE;
 			end if;
 		end if;
 	end process;
-	
-	output_last_pt <= divider_last;
 
 	divider: entity work.AXIS_DIVIDER
 		Generic map (
