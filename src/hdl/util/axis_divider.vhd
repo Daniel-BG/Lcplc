@@ -24,6 +24,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use work.functions.all;
+use work.data_types.all;
 use IEEE.NUMERIC_STD.ALL;
 
 entity AXIS_DIVIDER is
@@ -31,20 +32,24 @@ entity AXIS_DIVIDER is
 		DIVIDEND_WIDTH: integer := 24;
 		DIVIDEND_SIGNED: boolean := false;
 		DIVISOR_WIDTH: integer := 9;
-		DIVISOR_SIGNED: boolean := false
+		DIVISOR_SIGNED: boolean := false;
+		LAST_POLICY: last_policy_t := PASS_ZERO
 	);
 	Port (
 		clk, rst: in std_logic;
 		dividend_data	: in  std_logic_vector(DIVIDEND_WIDTH - 1 downto 0);
 		dividend_ready	: out std_logic;
 		dividend_valid	: in  std_logic;
+		dividend_last	: in  std_logic := '0';
 		divisor_data	: in  std_logic_vector(DIVISOR_WIDTH - 1 downto 0);
 		divisor_ready	: out std_logic;
 		divisor_valid	: in  std_logic;
+		divisor_last	: in  std_logic := '0';
 		output_data		: out std_logic_vector(unsignedlen(DIVIDEND_WIDTH, DIVISOR_SIGNED) - 1 downto 0); --only need an extra bit when divisor is signed
 		output_err		: out std_logic;
 		output_valid	: out std_logic;
-		output_ready	: in  std_logic
+		output_ready	: in  std_logic;
+		output_last		: out std_logic
 	);
 end AXIS_DIVIDER;
 
@@ -57,6 +62,7 @@ architecture Behavioral of AXIS_DIVIDER is
 	signal joint_valid, joint_ready: std_logic;
 	signal joint_dividend: std_logic_vector(DIVIDEND_WIDTH - 1 downto 0);
 	signal joint_divisor: std_logic_vector(DIVISOR_WIDTH - 1 downto 0);
+	signal joint_last: std_logic;
 
 	--state
 	type divider_state_t is (IDLE, SHIFT_DIVISOR, DIVIDING, FINISHED, DIVIDE_BY_ZERO);
@@ -67,6 +73,7 @@ architecture Behavioral of AXIS_DIVIDER is
 	signal divisor_buf, divisor_buf_next: std_logic_vector(INNER_WIDTH - 1 downto 0);
 	signal dividend_buf_signed, dividend_buf_signed_next: boolean;
 	signal divisor_buf_signed, divisor_buf_signed_next: boolean;
+	signal last_buf, last_buf_next: std_logic;
 	
 	--intermediate result buffers
 	signal dividend_minus_divisor: std_logic_vector(INNER_WIDTH - 1 downto 0);
@@ -84,21 +91,25 @@ begin
 		generic map (
 			DATA_WIDTH_0 => DIVIDEND_WIDTH,
 			DATA_WIDTH_1 => DIVISOR_WIDTH,
-			LATCH => false
+			LATCH => false,
+			LAST_POLICY => LAST_POLICY
 		)
 		port map (
 			clk => clk, rst => rst,
 			input_0_valid => dividend_valid,
 			input_0_ready => dividend_ready,
 			input_0_data  => dividend_data,
+			input_0_last  => dividend_last,
 			input_1_valid => divisor_valid,
 			input_1_ready => divisor_ready,
 			input_1_data  => divisor_data,
+			input_1_last  => divisor_last,
 			--to output axi ports
 			output_valid  => joint_valid,
 			output_ready  => joint_ready,
 			output_data_0 => joint_dividend,
-			output_data_1 => joint_divisor
+			output_data_1 => joint_divisor,
+			output_last   => joint_last
 		);
 
 	seq: process(clk)
@@ -108,6 +119,7 @@ begin
 				state_curr   <= IDLE;
 				dividend_buf <= (others => '0');
 				divisor_buf  <= (others => '0');
+				last_buf     <= '0';
                 shamt        <= 0;
                 result       <= (others => '0');
                 dividend_buf_signed <= false;
@@ -116,6 +128,7 @@ begin
 				state_curr   <= state_next;
 				dividend_buf <= dividend_buf_next;
 				divisor_buf  <= divisor_buf_next;
+				last_buf 	 <= last_buf_next;
                 shamt        <= shamt_next;
                 result       <= result_next;
 				dividend_buf_signed <= dividend_buf_signed_next;
@@ -145,9 +158,9 @@ begin
 
 	dividend_minus_divisor <= std_logic_vector(unsigned(dividend_buf) - unsigned(divisor_buf));
 
-	comb: process(state_curr, joint_valid, joint_dividend, joint_divisor, dividend_minus_divisor,
+	comb: process(state_curr, joint_valid, joint_dividend, joint_divisor, joint_last, dividend_minus_divisor,
 		dividend_bitcnt, divisor_bitcnt, divisor_buf, dividend_buf, result, shamt,
-		dividend_buf_signed, divisor_buf_signed, output_ready)
+		dividend_buf_signed, divisor_buf_signed, last_buf, output_ready)
 	begin
 		--i/o
 		joint_ready <= '0';
@@ -158,6 +171,7 @@ begin
 		--others
 		dividend_buf_signed_next <= dividend_buf_signed;
 		divisor_buf_signed_next  <= divisor_buf_signed;
+		last_buf_next <= last_buf;
 		result_next <= result;
 		shamt_next <= shamt;
 		dividend_buf_next <= dividend_buf;
@@ -166,6 +180,7 @@ begin
 		if state_curr = IDLE then
 			joint_ready <= '1';
 			if joint_valid = '1' then
+				last_buf_next <= joint_last;
 				dividend_buf_signed_next <= false;
                 if DIVIDEND_SIGNED then
                     if joint_dividend(joint_dividend'high) = '1' then
@@ -249,6 +264,8 @@ begin
             end if;
 		end if;
 	end process;
+
+	output_last <= last_buf;
 
 	gen_output_dns_drs: if DIVIDEND_SIGNED and DIVISOR_SIGNED generate
     	output_data <= std_logic_vector(resize(unsigned(result), output_data'length)) when divisor_buf_signed = dividend_buf_signed

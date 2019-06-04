@@ -440,7 +440,7 @@ begin
 	comb: process (state_curr, control_valid, control_end_block, control_end_image, 
 		packer_ready, control_end_image_buff, control_end_block_buff,
 		eg_valid, eg_code, eg_length, golomb_valid, golomb_code, golomb_length, golomb_last,
-		d_flag_2_valid, d_flag_2_data, xmean_valid, alpha_valid,
+		d_flag_2_valid, d_flag_2_data, xmean_valid, alpha_valid, alpha_data, xmean_data,
 		golomb_last_buf, golomb_code_buf, golomb_length_buf)
 	begin
 		state_next    <= state_curr;
@@ -594,6 +594,7 @@ begin
 			end if;
 		elsif state_curr = END_SLICE_XMEAN then
 			debug_state <= x"231";
+			xmean_ready <= packer_ready;
 			packer_valid<= xmean_valid;
 			packer_code <= (CODING_LENGTH_MAX - 1 downto DATA_WIDTH => '0') & xmean_data;
 			packer_length <= std_logic_vector(to_unsigned(DATA_WIDTH, packer_length'length)); 

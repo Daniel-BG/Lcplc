@@ -67,7 +67,7 @@ architecture Behavioral of LCPLC is
 
 	--input separator signals
 	signal x_flags_data, x_0_flags_data, x_1_flags_data, x_2_flags_data, x_3_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
-	signal x_0_last_b, x_0_last_s, x_1_last_i, x_1_last_b, x_1_last_s, x_1_last_r, x_3_last_s: std_logic;
+	signal x_0_last_b, x_0_last_s, x_1_last_i, x_1_last_b, x_1_last_s, x_1_last_r, x_3_last_s, x_3_last_b: std_logic;
 	signal x_0_valid, x_0_ready, x_1_valid, x_1_ready, x_2_valid, x_2_ready, x_3_valid, x_3_ready: std_logic;
 	signal x_1_data, x_3_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal x_1_flags_bs_data: std_logic_vector(DATA_WIDTH + 2 downto 0);
@@ -322,10 +322,11 @@ begin
 	x_2_last_bs<= x_2_flags_data(x_2_flags_data'high-1 downto x_2_flags_data'high-2);
 	x_3_data   <= x_3_flags_data(DATA_WIDTH - 1 downto 0);
 	x_3_last_s <= x_3_flags_data(x_3_flags_data'high-2);
+	x_3_last_b <= x_3_flags_data(x_3_flags_data'high-1);
 
 	--splitter for bs flags
 	x_2_valid_and_last_s <= x_2_valid and x_2_last_bs(0);
-	input_bs_splitter: entity work.AXIS_SPLITTER_4
+	input_bs_splitter: entity work.AXIS_SPLITTER_3
 		Generic map (
 			DATA_WIDTH => 1
 		)
@@ -334,18 +335,15 @@ begin
 			input_valid 	=> x_2_valid_and_last_s,
 			input_ready 	=> x_2_ready,
 			input_data  	=> x_2_last_bs(1 downto 1),
-			output_0_valid	=> x_2_0_valid,
-			output_0_ready	=> x_2_0_ready,
-			output_0_data 	=> x_2_0_last_b_stdlv,
-			output_1_valid	=> x_2_1_valid,
-			output_1_ready	=> x_2_1_ready,
-			output_1_data	=> x_2_1_last_b_stdlv,
-			output_2_valid  => x_2_2_valid,
-			output_2_ready	=> x_2_2_ready,
-			output_2_data	=> x_2_2_last_b_stdlv,
-			output_3_valid	=> x_2_3_valid,
-			output_3_ready	=> x_2_3_ready,
-			output_3_data	=> x_2_3_last_b_stdlv
+			output_0_valid	=> x_2_1_valid,
+			output_0_ready	=> x_2_1_ready,
+			output_0_data	=> x_2_1_last_b_stdlv,
+			output_1_valid  => x_2_2_valid,
+			output_1_ready	=> x_2_2_ready,
+			output_1_data	=> x_2_2_last_b_stdlv,
+			output_2_valid	=> x_2_3_valid,
+			output_2_ready	=> x_2_3_ready,
+			output_2_data	=> x_2_3_last_b_stdlv
 		);
 
 	--average calculator
@@ -357,36 +355,16 @@ begin
 		)
 		Port map (
 			clk => clk, rst => rst,
-			input_data	=> x_3_data,
-			input_valid	=> x_3_valid,
-			input_ready	=> x_3_ready,
-			input_last	=> x_3_last_s,
-			output_data	=> xmean_pre_data,
-			output_valid=> xmean_pre_valid,
-			output_ready=> xmean_pre_ready
+			input_data		=> x_3_data,
+			input_valid		=> x_3_valid,
+			input_ready		=> x_3_ready,
+			input_last		=> x_3_last_s,
+			input_last_pt 	=> x_3_last_b,
+			output_data		=> xmean_data,
+			output_valid 	=> xmean_valid,
+			output_ready 	=> xmean_ready,
+			output_last_pt 	=> xmean_last
 		);
-
-	--sync average with 'b' flag to know ending
-	xmean_last_b_syncer: entity work.AXIS_SYNCHRONIZER_2
-		Generic map (
-			DATA_WIDTH_0 => DATA_WIDTH,
-			DATA_WIDTH_1 => 1,
-			LATCH => true
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_0_valid => xmean_pre_valid,
-			input_0_ready => xmean_pre_ready,
-			input_0_data  => xmean_pre_data,
-			input_1_valid => x_2_0_valid,
-			input_1_ready => x_2_0_ready,
-			input_1_data => x_2_0_last_b_stdlv,
-			output_valid => xmean_valid,
-			output_ready => xmean_ready,
-			output_data_0=> xmean_data,
-			output_data_1=> xmean_last_stdlv 
-		); 
-	xmean_last <= '1' when xmean_last_stdlv = "1" else '0';
 
 	--need now to split the means
 	average_splitter: entity work.AXIS_SPLITTER_3
@@ -519,7 +497,7 @@ begin
 	fifo_firstband: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 4,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
 		)
 		Port map ( 
 			clk => clk, rst => rst,
@@ -587,7 +565,7 @@ begin
 	alpha_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2 + 200
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -745,7 +723,7 @@ begin
 	b_flag_fifo: entity work.AXIS_FIFO
 		generic map (
 			DATA_WIDTH => 1,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2 + 20 + 200
 		)
 		port map (
 			clk => clk, rst => rst,
@@ -810,7 +788,7 @@ begin
 	error_calc_x_buffer: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 3,
-			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2
+			FIFO_DEPTH => (2**MAX_SLICE_SIZE_LOG)*2 + 20 + 200--leave some slack for the pipeline fill up times
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -995,7 +973,7 @@ begin
 	delay_xhat_1: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -1010,7 +988,7 @@ begin
 	delay_xtilde_1: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => DATA_WIDTH + 1,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -1118,7 +1096,7 @@ begin
 	delay_mapped_err: entity work.AXIS_FIFO
 		Generic map (
 			DATA_WIDTH => PREDICTION_WIDTH + 3,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,
@@ -1136,7 +1114,7 @@ begin
 	delay_kj_calc: entity work.AXIS_FIFO 
 		Generic map (
 			DATA_WIDTH => WORD_WIDTH_LOG,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG + 200
 		)
 		Port map ( 
 			clk	=> clk, rst => rst,

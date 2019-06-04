@@ -34,14 +34,16 @@ entity AXIS_ACCUMULATOR is
 		IS_SIGNED			: boolean := true
 	);
 	Port (
-		clk, rst	: in  std_logic;
-		input_data	: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-		input_valid	: in  std_logic;
-		input_ready	: out std_logic;
-		input_last	: in std_logic;
-		output_data	: out std_logic_vector(MAX_COUNT_LOG+ DATA_WIDTH - 1 downto 0);
-		output_valid: out std_logic;
-		output_ready: in  std_logic
+		clk, rst		: in  std_logic;
+		input_data		: in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_valid		: in  std_logic;
+		input_ready		: out std_logic;
+		input_last		: in  std_logic;
+		input_last_pt	: in  std_logic := '0';
+		output_data		: out std_logic_vector(MAX_COUNT_LOG+ DATA_WIDTH - 1 downto 0);
+		output_valid	: out std_logic;
+		output_ready	: in  std_logic;
+		output_last_pt	: out std_logic
 	);
 end AXIS_ACCUMULATOR;
 
@@ -49,6 +51,9 @@ architecture Behavioral of AXIS_ACCUMULATOR is
 	--counter signals
 	type acc_state_t is (READING, OUTPUTTING);
 	signal acc_state_curr, acc_state_next: acc_state_t;
+
+	--last_pt signals
+	signal last_buf, last_buf_next: std_logic;
 	
 	constant ACCUMULATOR_WIDTH: integer := DATA_WIDTH + MAX_COUNT_LOG;
 	signal accumulator, accumulator_next, accumulator_plus_input: std_logic_vector(ACCUMULATOR_WIDTH - 1 downto 0);
@@ -69,24 +74,28 @@ begin
 			if rst = '1' then
 				acc_state_curr <= READING;
 				accumulator <= (others => '0');
+				last_buf <= '0';
 			else 
 				acc_state_curr <= acc_state_next;
 				accumulator <= accumulator_next;
+				last_buf <= last_buf_next;
 			end if;
 		end if;
 	end process;
 	
-	comb: process(acc_state_curr, accumulator, accumulator_plus_input, output_ready, input_valid, input_last)
+	comb: process(acc_state_curr, accumulator, accumulator_plus_input, output_ready, input_valid, input_last, input_last_pt)
 	begin
 		acc_state_next <= acc_state_curr;
 		accumulator_next <= accumulator;
 		input_ready <= '0';
 		output_valid <= '0';
+		last_buf_next <= '0';
 	
 		if acc_state_curr = READING then
 			input_ready <= '1';
 			if input_valid = '1' then
 				accumulator_next <= accumulator_plus_input;
+				last_buf_next <= input_last_pt;
 				if input_last = '1' then
 					acc_state_next <= OUTPUTTING;
 				end if;
@@ -97,24 +106,11 @@ begin
 				accumulator_next <= (others => '0');
 				acc_state_next <= READING;
 			end if;
---			output_valid <= '1';
---			if output_ready = '1' then
---				input_ready <= '1';
---				if input_valid = '1' then
---					accumulator_next <= std_logic_vector(resize(unsigned(input_data), ACCUMULATOR_WIDTH));
---					if input_last = '0' then
---						acc_state_next <= READING;
---					end if;
---				else
---					accumulator_next <= (others => '0');
---					acc_state_next <= READING;
---				end if;
---			end if;
 		end if;
 	end process;
 	
 	output_data <= accumulator;
-	
+	output_last_pt <= last_buf;
 	
 	
 end Behavioral;
