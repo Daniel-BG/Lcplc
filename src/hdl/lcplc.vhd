@@ -260,6 +260,8 @@ architecture Behavioral of LCPLC is
 	signal d_flag_nonlast_0_data_stdlv, d_flag_nonlast_1_data_stdlv: std_logic_vector(0 downto 0);
 	
 	--buffers before coder
+	signal alpha_1_buf_data: std_logic_vector(ALPHA_WIDTH - 1 downto 0);
+	signal alpha_1_buf_ready, alpha_1_buf_valid: std_logic;
 	signal xmean_2_buf_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal xmean_2_buf_ready, xmean_2_buf_valid: std_logic;
 
@@ -1158,6 +1160,19 @@ begin
 			output_valid=> xmean_2_buf_valid,
 			output_data => xmean_2_buf_data
 		);
+	delay_alpha_coder: entity work.AXIS_LATCHED_CONNECTION 
+		Generic map (
+			DATA_WIDTH => ALPHA_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => alpha_1_ready,
+			input_valid => alpha_1_valid,
+			input_data  => alpha_1_data,
+			output_ready=> alpha_1_buf_ready,
+			output_valid=> alpha_1_buf_valid,
+			output_data => alpha_1_buf_data
+		);
 
 	coder: entity work.CODER 
 		Generic map (
@@ -1182,9 +1197,9 @@ begin
 			d_flag_data	=> d_flag_1_data_stdlv,
 			d_flag_ready=> d_flag_1_ready,
 			d_flag_valid=> d_flag_1_valid,
-			alpha_data	=> alpha_1_data,
-			alpha_ready => alpha_1_ready,
-			alpha_valid	=> alpha_1_valid,
+			alpha_data	=> alpha_1_buf_data,
+			alpha_ready => alpha_1_buf_ready,
+			alpha_valid	=> alpha_1_buf_valid,
 			xmean_data	=> xmean_2_buf_data,
 			xmean_ready => xmean_2_buf_ready,
 			xmean_valid => xmean_2_buf_valid,
