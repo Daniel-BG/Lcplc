@@ -19,15 +19,17 @@ public class ShifterQuantizer implements Quantizer {
 
 	@Override
 	public int quantize(int value) {
-		int qVal = (Math.abs(value) + this.addition) >> this.downscale;
-		return value > 0 ? qVal : -qVal;
+		//int qVal = (Math.abs(value) + this.addition) >> this.downscale;
+		//return value > 0 ? qVal : -qVal;
+		return (value + this.addition) >> this.downscale;
 	}
 
 	@Override
 	public int dequantize(int qVal) {
-		int absQVal = qVal > 0 ? qVal : -qVal;
-		int val = absQVal << this.downscale;
-		return qVal > 0 ? val : -val;
+		//int absQVal = qVal > 0 ? qVal : -qVal;
+		//int val = absQVal << this.downscale;
+		//return qVal > 0 ? val : -val;
+		return qVal << this.downscale;
 	}
 
 }

@@ -29,13 +29,13 @@ public class Main {
 	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.hdr";
 	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Beltsville_Radiance_w_IGM/0810_2022_rad.hdr";
 	
-	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data/";
+	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data_2/";
 	static String sampleExt = ".smpl";
 
 
 	public static void main(String[] args) {
-		/*for (int i = 0; i < 16; i++) {
-			testQuantization(i, 16);
+		/*for (int i = 0; i < 17; i++) {
+			testQuantization(i, 17);
 		}*/
 		
 		testCompressor();
@@ -92,13 +92,15 @@ public class Main {
 		
 		Quantizer quantizer = new ShifterQuantizer(downscale);
 		
-		for (int i = 0; i < (1 << depth); i++) {
+		for (int i = -(1 << depth); i < (1 << depth); i++) {
 			//option 1
 			int qval = quantizer.quantize(i);
 			int dqval = quantizer.dequantize(qval);
 			
 			//option 2, just remove bytes
-			int rawqdq = downscale == 0 ? i : (i + (1 << (downscale - 1))) & (~((1 << downscale) - 1));
+			int candidate = i >= 0 ? i : i;
+			int rawqdq = (candidate + ((1 << downscale) >> 1)) & ((-1) << downscale);
+			rawqdq = i > 0 ? rawqdq: rawqdq;
 			
 			if (dqval != rawqdq) {
 				System.out.println("Fails @ " + i + "(" + dqval + "," + rawqdq + ")");
@@ -117,7 +119,7 @@ public class Main {
 		private static final boolean USE_PRECALCULATED_MEAN = true;
 		private static final boolean COMPARE = true;
 		private static final int CONST_ACC_QUANT = 32;
-		private static final int BLOCKS_TO_CODE = 3;// Integer.MAX_VALUE; //code the full image
+		private static final int BLOCKS_TO_CODE = 2; //Integer.MAX_VALUE; //code the full image
 		private static final int BLOCKS_TO_SKIP = 0;
 		///////
 		
@@ -385,6 +387,10 @@ public class Main {
 		}
 		
 		
+		public int qdq(int q, int ds) {
+			return (q + ((1 << ds) >> 1)) & ((-1) << ds);
+		}
+		
 		public void compress(int[][][] block, int bands, int lines, int samples, boolean flushBlock, BitOutputStream bos) throws IOException {
 			Sampler.setSamplePath(samplerBaseDir);
 			Sampler.setSampleExt(sampleExt);
@@ -471,7 +477,7 @@ public class Main {
 					
 					if (l == 0 && s == 0) {
 						quant = quantizer.quantize(block[0][l][s]);
-						dequant = quantizer.dequantize(quant);
+						dequant = quantizer.dequantize(quant); 
 						
 						mappedError = Mapper.mapError(quant); //Mapper.mapError(block[0][l][s]);
 						
@@ -493,6 +499,7 @@ public class Main {
 						error = block[0][l][s] - (int) prediction;
 						quant  = quantizer.quantize(error);
 						dequant= quantizer.dequantize(quant);
+						
 						decodedBlock[0][l][s] = (int) prediction + dequant;
 
 						kj = findkj(acc);
@@ -612,7 +619,7 @@ public class Main {
 						//unquantized version since this is the one
 						//the decoder will have
 						int quant  = quantizer.quantize((int) error);
-						int dequant = quantizer.dequantize(quant);
+						int dequant = quantizer.dequantize(quant); 
 						long mappedError = Mapper.mapError(quant);
 						savedMappedError[l][s] = (int) mappedError;
 						

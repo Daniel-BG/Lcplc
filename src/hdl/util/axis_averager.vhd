@@ -229,7 +229,7 @@ begin
 				state_next <= AWAIT_DIVIDER;
 			end if;
 		elsif state_curr = AWAIT_DIVIDER then
-			output_data <= divider_data(DATA_WIDTH + MAX_COUNT_LOG - 1 downto MAX_COUNT_LOG);
+			output_data <= divider_data(DATA_WIDTH -1 downto 0);
 			output_valid<= divider_output_valid;
 			output_last_pt <= divider_last;
 			divider_output_ready<= output_ready;

@@ -49,13 +49,35 @@ end BINARY_QDQ;
 
 architecture Behavioral of BINARY_QDQ is
 
-	signal imm_ready:	std_logic;
-	signal imm_valid:	std_logic;
-	signal imm_data:	std_logic_vector(DATA_WIDTH - 1 downto 0);
-	signal imm_last:	std_logic;
-	signal imm_user:	std_logic_vector(USER_WIDTH - 1 downto 0);
+	signal imm_ready, imm_latched_ready:	std_logic;
+	signal imm_valid, imm_latched_valid:	std_logic;
+	signal imm_data,  imm_latched_data:		std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal imm_last,  imm_latched_last:		std_logic;
+	signal imm_user,  imm_latched_user:		std_logic_vector(USER_WIDTH - 1 downto 0);
+
+	signal addition_prescaled: std_logic_vector(DATA_WIDTH downto 0);
+	signal addition: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal mask: std_logic_vector(DATA_WIDTH - 1 downto 0);
+
 
 begin
+
+	--addition_prescaled <= std_logic_vector(shift_left(to_unsigned(1, DATA_WIDTH+1), to_integer(unsigned(input_shift))));
+	--addition <= addition_prescaled(DATA_WIDTH downto 1);
+	--mask <= std_logic_vector(shift_left(to_unsigned(2**DATA_WIDTH-1, DATA_WIDTH), to_integer(unsigned(input_shift))));
+--
+	--output_data <= std_logic_vector(unsigned(input_data) + unsigned(addition)) and mask;
+	--input_ready <= output_ready;
+	--output_valid <= input_valid;
+	--output_user <= input_user;
+	--output_last <= input_last;
+
+	--int rawqdq = int rawqdq = (i + ((1 << downscale) >> 1)) & (-1 << downscale);
+	-- if input_shift == 0 then
+	--	output same
+	-- else
+	--   add 2**(shift-1)
+	--   and it with (-1 << shift) not(2**shift - 1)
 
 	quant: entity work.BINARY_QUANTIZER
 		generic map (
@@ -78,6 +100,27 @@ begin
 			input_shift	=> input_shift
 		);
 
+
+	latch: entity work.AXIS_LATCHED_CONNECTION
+		Generic  map (
+			DATA_WIDTH => DATA_WIDTH,
+			USER_WIDTH => USER_WIDTH
+		)
+		Port map (
+			clk => clk, rst => rst,
+			input_ready => imm_ready,
+			input_valid => imm_valid,
+			input_data  => imm_data,
+			input_last  => imm_last,
+			input_user  => imm_user,
+			output_ready=> imm_latched_ready,
+			output_valid=> imm_latched_valid,
+			output_data => imm_latched_data,
+			output_last => imm_latched_last,
+			output_user => imm_latched_user
+		);
+
+
 	dequant: entity work.BINARY_DEQUANTIZER
 		generic map (
 			SHIFT_WIDTH => SHIFT_WIDTH,
@@ -86,11 +129,11 @@ begin
 		)
 		port map (
 			clk => clk, rst => rst,
-			input_ready	=> imm_ready,
-			input_valid	=> imm_valid,
-			input_data	=> imm_data,
-			input_last	=> imm_last,
-			input_user	=> imm_user,
+			input_ready	=> imm_latched_ready,
+			input_valid	=> imm_latched_valid,
+			input_data	=> imm_latched_data,
+			input_last	=> imm_latched_last,
+			input_user	=> imm_latched_user,
 			output_ready=> output_ready,
 			output_valid=> output_valid,
 			output_data	=> output_data,
