@@ -109,10 +109,6 @@ architecture Behavioral of LCPLC is
 	signal xmean_nonfirst_0_data, xmean_nonfirst_1_data, xmean_nonfirst_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal xmean_nonlast_0_valid, xmean_nonlast_0_ready, xmean_nonlast_1_valid, xmean_nonlast_1_ready,  xmean_nonlast_2_valid, xmean_nonlast_2_ready: std_logic;
 	signal xmean_nonlast_0_data, xmean_nonlast_1_data, xmean_nonlast_2_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
-	
-	--fifo before first band predictor
-	signal x_0_red_pre_valid, x_0_red_pre_ready: std_logic;
-	signal x_0_red_pre_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
 
 	--diverter for first band/rest
 	signal x_0_red_flags_data: std_logic_vector(DATA_WIDTH + 4 - 1 downto 0);
@@ -127,9 +123,17 @@ architecture Behavioral of LCPLC is
 	signal x_1_red_last_b_stdlv: std_logic_vector(0 downto 0);
 	
 	--prediction first band
-	signal prediction_first_ready, prediction_first_valid, prediction_first_last: std_logic;
-	signal prediction_first_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
-	signal prediction_first_data_raw: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal prediction_first_pre_ready, prediction_first_pre_valid: std_logic;
+	signal prediction_first_pre_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0);
+	signal prediction_first_pre_data_raw: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal prediction_first_pre_last: std_logic;
+	signal prediction_first_pre_last_data: std_logic_vector(PREDICTION_WIDTH downto 0);
+
+	--fifo after first prediction
+	signal prediction_first_ready, prediction_first_valid: std_logic;
+	signal prediction_first_last_data: std_logic_vector(PREDICTION_WIDTH downto 0);
+	alias  prediction_first_last: std_logic is prediction_first_last_data(prediction_first_last_data'high);
+	alias  prediction_first_data: std_logic_vector(PREDICTION_WIDTH - 1 downto 0) is prediction_first_last_data(PREDICTION_WIDTH - 1 downto 0);
 	
 	--splitter for reduced stuff
 	signal x_others_1_valid, x_others_1_ready: std_logic;
@@ -510,27 +514,12 @@ begin
 			input_last_zero	=> x_0_last_s,
 			input_last_one	=> x_0_last_b,
 			--to output axi ports
-			output_0_valid	=> x_0_red_pre_valid,
-			output_0_ready	=> x_0_red_pre_ready,
-			output_0_data	=> x_0_red_pre_flags_data,
+			output_0_valid	=> x_0_red_valid,
+			output_0_ready	=> x_0_red_ready,
+			output_0_data	=> x_0_red_flags_data,
 			output_1_valid	=> x_1_red_valid,
 			output_1_ready	=> x_1_red_ready,
 			output_1_data	=> x_1_red_flags_data
-		);
-	fifo_firstband: entity work.AXIS_FIFO
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH + 4,
-			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
-		)
-		Port map ( 
-			clk => clk, rst => rst,
-			input_valid		=> x_0_red_pre_valid,
-			input_ready		=> x_0_red_pre_ready,
-			input_data		=> x_0_red_pre_flags_data,
-			--out axi port
-			output_ready	=> x_0_red_ready,
-			output_data		=> x_0_red_flags_data,
-			output_valid	=> x_0_red_valid
 		);
 	x_0_red_data <= x_0_red_flags_data(DATA_WIDTH - 1 downto 0);
 	x_0_red_last_r <= x_0_red_flags_data(x_0_red_flags_data'high - 3);
@@ -553,13 +542,30 @@ begin
 			x_data       => x_0_red_data,
 			x_last_r     => x_0_red_last_r,
 			x_last_s     => x_0_red_last_s,
-			xtilde_ready => prediction_first_ready,
-			xtilde_valid => prediction_first_valid,
-			xtilde_data  => prediction_first_data_raw,
-			xtilde_last  => prediction_first_last,
+			xtilde_ready => prediction_first_pre_ready,
+			xtilde_valid => prediction_first_pre_valid,
+			xtilde_data  => prediction_first_pre_data_raw,
+			xtilde_last  => prediction_first_pre_last,
 			cfg_quant_shift => cfg_quant_shift
 		);
-	prediction_first_data <= std_logic_vector(resize(unsigned(prediction_first_data_raw), prediction_first_data'length));
+	prediction_first_pre_data <= std_logic_vector(resize(unsigned(prediction_first_pre_data_raw), prediction_first_pre_data'length));
+	prediction_first_pre_last_data <= prediction_first_pre_last & prediction_first_pre_data;
+
+	fifo_firstband: entity work.AXIS_FIFO
+		Generic map (
+			DATA_WIDTH => PREDICTION_WIDTH + 1,
+			FIFO_DEPTH => 2**MAX_SLICE_SIZE_LOG
+		)
+		Port map ( 
+			clk => clk, rst => rst,
+			input_valid		=> prediction_first_pre_valid,
+			input_ready		=> prediction_first_pre_ready,
+			input_data		=> prediction_first_pre_last_data,
+			--out axi port
+			output_ready	=> prediction_first_ready,
+			output_data		=> prediction_first_last_data,
+			output_valid	=> prediction_first_valid
+		);
 	
 
 	--splitter for rest of bands
@@ -1293,13 +1299,13 @@ begin
 	--predictor checks
 	firstband_pred_check_xtilde: inline_axis_checker
 		generic map (
-			DATA_WIDTH 	=> DATA_WIDTH,
+			DATA_WIDTH 	=> PREDICTION_WIDTH,
 			FILE_NAME 	=> test_dir & "xtilde_firstband.smpl",
 			SKIP => 0
 		)
 		port map (
 			clk => clk, rst => rst, 
-			valid => prediction_first_valid, data => prediction_first_data_raw, ready => prediction_first_ready
+			valid => prediction_first_valid, data => prediction_first_data, ready => prediction_first_ready
 		);
 	------------------
 
