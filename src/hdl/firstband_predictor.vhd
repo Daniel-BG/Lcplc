@@ -85,11 +85,7 @@ architecture Behavioral of FIRSTBAND_PREDICTOR is
 	signal mer_prediction_valid, mer_prediction_ready: std_logic;
 	signal mer_prediction_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
 	signal mer_prediction_last: std_logic;
-	signal mer_prediction_last_stdlv: std_logic_vector(0 downto 0);
-
-	--filter out last prediction
-	signal filt_pred_valid, filt_pred_ready: std_logic;
-	signal filt_pred_data: std_logic_vector(DATA_WIDTH - 1 downto 0);
+	signal mer_prediction_valid_and_not_last: std_logic;
 
 	--final syncer
 	signal synced_pred_valid, synced_pred_ready: std_logic;
@@ -260,28 +256,8 @@ begin
 			output_data		=> mer_prediction_data,
 			output_last		=> mer_prediction_last
 		);
-	mer_prediction_last_stdlv <= "1" when mer_prediction_last = '1' else "0";
 
-	
-	last_prediction_filter: entity work.AXIS_FILTER
-		Generic map (
-			DATA_WIDTH => DATA_WIDTH,
-			ELIMINATE_ON_UP => true
-		)
-		Port map (
-			clk => clk, rst => rst,
-			input_valid		=> mer_prediction_valid,
-			input_ready		=> mer_prediction_ready,
-			input_data		=> mer_prediction_data,
-			flag_valid		=> mer_prediction_valid,
-			flag_ready		=> open,
-			flag_data		=> mer_prediction_last_stdlv,
-			--to output axi ports
-			output_valid	=> filt_pred_valid,
-			output_ready	=> filt_pred_ready,
-			output_data		=> filt_pred_data
-		);
-
+	mer_prediction_valid_and_not_last <= mer_prediction_valid and (not mer_prediction_last);
 	flag_sync: entity work.AXIS_SYNCHRONIZER_2
 		Generic map (
 			DATA_WIDTH_0 => DATA_WIDTH,
@@ -291,9 +267,9 @@ begin
 		Port map (
 			clk => clk, rst => rst,
 			--to input axi port
-			input_0_valid => filt_pred_valid,
-			input_0_ready => filt_pred_ready,
-			input_0_data  => filt_pred_data,
+			input_0_valid => mer_prediction_valid_and_not_last,
+			input_0_ready => mer_prediction_ready,
+			input_0_data  => mer_prediction_data,
 			input_1_valid => x_1_valid,
 			input_1_ready => x_1_ready,
 			input_1_data  => x_1_last_r_s,
