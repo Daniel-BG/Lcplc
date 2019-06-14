@@ -77,7 +77,7 @@ begin
 	severity error;
 
 	addition_prescaled <= std_logic_vector(shift_left(to_unsigned(1, DATA_WIDTH+1), to_integer(unsigned(input_shift))));
-	addition <= std_logic_vector(unsigned(input_data) + unsigned(addition_prescaled(DATA_WIDTH downto 1)));
+	addition <= std_logic_vector(signed(input_data) + signed(addition_prescaled(DATA_WIDTH downto 1)));
 
 	output_data <= std_logic_vector(shift_right(signed(addition), to_integer(unsigned(input_shift))));
 	output_valid <= input_valid;
