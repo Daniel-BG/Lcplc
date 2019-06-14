@@ -21,8 +21,8 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
-use work.functions.all;
-use work.data_types.all;
+use work.lcplc_functions.all;
+use work.am_data_types.all;
 
 entity CODING_OUTPUT_PACKER is
 	Generic (
@@ -48,7 +48,7 @@ end CODING_OUTPUT_PACKER;
 architecture Behavioral of CODING_OUTPUT_PACKER is
 	function calc_slack (input_width, target_width_log: integer) return integer is
 	begin
-		return bits(input_width-1)-target_width_log + 1;
+		return lcplc_bits(input_width-1)-target_width_log + 1;
 	end function;
 	
 	constant OUTPUT_WIDTH_SLACK: integer := calc_slack(CODE_WIDTH, OUTPUT_WIDTH_LOG);

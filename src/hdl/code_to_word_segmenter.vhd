@@ -28,7 +28,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
-use work.data_types.all;
+use work.am_data_types.all;
 
 --up to BASE_WIDTH bits can come in the input vector
 --at least 1 is used in the first cycle, and then they are used
@@ -42,7 +42,7 @@ entity CODE_TO_WORD_SEGMENTER is
 		BASE_WIDTH: integer := 39;
 		WORD_WIDTH_LOG: integer := 5;
 		WORD_CNT_SLACK: integer := 2;
-		LAST_POLICY: last_policy_t := PASS_ZERO
+		LAST_POLICY: am_last_policy_t := PASS_ZERO
 	);
 	Port (
 		clk, rst		: in	std_logic;

@@ -21,8 +21,8 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use work.functions.all;
-use work.data_types.all;
+use work.lcplc_functions.all;
+use work.am_data_types.all;
 use IEEE.NUMERIC_STD.ALL;
 
 entity CODER is
@@ -47,7 +47,7 @@ entity CODER is
 		ehat_last_i : in 	std_logic; --last sample in image (triggers inner buffer flush)
 		--KJ INPUT: total of 2**BLOCK_SIZE_LOG - 1 per BAND
 		--	one less is needed than EHAT since the first goes to EXP coder and does not need param kj
-		kj_data		: in    std_logic_vector(bits(bits(ACCUMULATOR_WINDOW-1)+DATA_WIDTH) - 1 downto 0);
+		kj_data		: in    std_logic_vector(lcplc_bits(lcplc_bits(ACCUMULATOR_WINDOW-1)+DATA_WIDTH) - 1 downto 0);
 		kj_ready	: out	std_logic;
 		kj_valid	: in 	std_logic;
 		--D FLAG INPUT: one per BAND, if flag is 1 the block is coded, otherwise it is not

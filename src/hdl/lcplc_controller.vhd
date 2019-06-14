@@ -21,7 +21,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use ieee.NUMERIC_STD.all;
-use work.constants.all; --get axi constants from here
+use work.am_constants.all; --get axi constants from here
 
 entity lcplc_controller is
 	Generic (

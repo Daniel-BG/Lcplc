@@ -23,7 +23,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
-use work.functions.all;
+use work.lcplc_functions.all;
 
 entity SLIDING_ACCUMULATOR is
 	Generic (
@@ -36,16 +36,16 @@ entity SLIDING_ACCUMULATOR is
 		input_valid	: in  std_logic;
 		input_ready	: out std_logic;
 		input_last	: in  std_logic;
-		output_cnt	: out std_logic_vector(bits(ACCUMULATOR_WINDOW) - 1 downto 0);
-		output_data	: out std_logic_vector(DATA_WIDTH + bits(ACCUMULATOR_WINDOW-1) - 1 downto 0);
+		output_cnt	: out std_logic_vector(lcplc_bits(ACCUMULATOR_WINDOW) - 1 downto 0);
+		output_data	: out std_logic_vector(DATA_WIDTH + lcplc_bits(ACCUMULATOR_WINDOW-1) - 1 downto 0);
 		output_valid: out std_logic;
 		output_ready: in  std_logic
 	);
 end SLIDING_ACCUMULATOR;
 
 architecture Behavioral of SLIDING_ACCUMULATOR  is
-	constant ACC_WINDOW_BITS: integer := bits(ACCUMULATOR_WINDOW);
-	constant ACC_WINDOW_M1_BITS: integer := bits(ACCUMULATOR_WINDOW-1);
+	constant ACC_WINDOW_BITS: integer := lcplc_bits(ACCUMULATOR_WINDOW);
+	constant ACC_WINDOW_M1_BITS: integer := lcplc_bits(ACCUMULATOR_WINDOW-1);
 
 	type sliding_acc_state_t is (IDLE, PRIMED, EMPTYING);
 	signal state_curr, state_next: sliding_acc_state_t;

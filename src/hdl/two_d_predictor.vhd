@@ -21,8 +21,6 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use work.functions.all;
-use work.data_types.all;
 use IEEE.NUMERIC_STD.ALL;
 
 entity TWO_D_PREDICTOR is

@@ -20,7 +20,7 @@
 
 
 library IEEE;
-use work.functions.all;
+use work.lcplc_functions.all;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
@@ -34,7 +34,7 @@ entity EXP_ZERO_GOLOMB is
 		input_valid			: in	std_logic;
 		input_ready			: out	std_logic;
 		output_code			: out	std_logic_vector(DATA_WIDTH*2 downto 0);
-		output_length		: out	std_logic_vector(bits(DATA_WIDTH) downto 0); -- natural range 0 to DATA_WIDTH*2+1;
+		output_length		: out	std_logic_vector(lcplc_bits(DATA_WIDTH) downto 0); -- natural range 0 to DATA_WIDTH*2+1;
 		output_valid		: out	std_logic;
 		output_ready		: in 	std_logic
 	);
@@ -54,7 +54,7 @@ architecture Behavioral of EXP_ZERO_GOLOMB is
 	signal input_buf_full: std_logic;
 	
 	signal output_code_buf: std_logic_vector(DATA_WIDTH*2 downto 0);
-	signal output_length_buf: std_logic_vector(bits(DATA_WIDTH) downto 0);
+	signal output_length_buf: std_logic_vector(lcplc_bits(DATA_WIDTH) downto 0);
 	signal output_buf_full: std_logic;
 begin
 

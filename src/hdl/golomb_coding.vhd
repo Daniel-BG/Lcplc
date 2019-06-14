@@ -20,10 +20,10 @@
 
 
 library IEEE;
-use work.functions.all;
+use work.lcplc_functions.all;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
-use work.data_types.all;
+use work.am_data_types.all;
 
 entity GOLOMB_CODING is
 	Generic (
@@ -34,7 +34,7 @@ entity GOLOMB_CODING is
 		--these two are just for performance reasons to operate over powers of two
 		SLACK_LOG: integer := 4;
 		MAX_1_OUT_LOG: integer := 5;
-		LAST_POLICY: last_policy_t := AND_ALL
+		LAST_POLICY: am_last_policy_t := AND_ALL
 	);
 	Port (
 		clk, rst			: in	std_logic;
@@ -47,7 +47,7 @@ entity GOLOMB_CODING is
 		input_value_ready	: out 	std_logic;
 		input_value_last	: in 	std_logic;
 		output_code			: out	std_logic_vector(OUTPUT_WIDTH - 1 downto 0);
-		output_length		: out	std_logic_vector(bits(OUTPUT_WIDTH) - 1 downto 0);
+		output_length		: out	std_logic_vector(lcplc_bits(OUTPUT_WIDTH) - 1 downto 0);
 		output_last 		: out 	std_logic;
 		output_valid		: out	std_logic;
 		output_ready		: in 	std_logic

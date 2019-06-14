@@ -22,8 +22,8 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
-use work.data_types.all;
-use work.functions.all;
+use work.am_data_types.all;
+use work.lcplc_functions.all;
 
 entity ERROR_CALC is
 	Generic (
@@ -59,7 +59,7 @@ entity ERROR_CALC is
 		merr_last_i		: out std_logic;
 		kj_ready		: in  std_logic;
 		kj_valid		: out std_logic;
-		kj_data			: out std_logic_vector(bits(bits(ACCUMULATOR_WINDOW-1)+DATA_WIDTH) - 1 downto 0);
+		kj_data			: out std_logic_vector(lcplc_bits(lcplc_bits(ACCUMULATOR_WINDOW-1)+DATA_WIDTH) - 1 downto 0);
 		xtilde_out_valid: out std_logic;
 		xtilde_out_ready: in  std_logic;
 		xtilde_out_data	: out std_logic_vector(DATA_WIDTH - 1 downto 0);
@@ -80,8 +80,8 @@ end ERROR_CALC;
 
 architecture Behavioral of ERROR_CALC is
 	constant PREDICTION_WIDTH: integer := DATA_WIDTH + 3;
-	constant ACC_WINDOW_BITS: integer := bits(ACCUMULATOR_WINDOW);
-	constant ACC_WINDOW_M1_BITS: integer := bits(ACCUMULATOR_WINDOW-1);
+	constant ACC_WINDOW_BITS: integer := lcplc_bits(ACCUMULATOR_WINDOW);
+	constant ACC_WINDOW_M1_BITS: integer := lcplc_bits(ACCUMULATOR_WINDOW-1);
 	
 	--
 	signal x_last_ibs: std_logic_vector(2 downto 0);

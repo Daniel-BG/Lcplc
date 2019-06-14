@@ -24,7 +24,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
-use work.data_types.all;
+use work.am_data_types.all;
 
 entity ALPHA_CALC is
 	Generic (
