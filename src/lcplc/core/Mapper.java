@@ -1,4 +1,4 @@
-package lcplc;
+package lcplc.core;
 
 public class Mapper {
 

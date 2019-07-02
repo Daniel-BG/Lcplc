@@ -1,4 +1,4 @@
-package lcplc;
+package lcplc.core;
 
 import java.io.IOException;
 
@@ -6,6 +6,9 @@ import com.jypec.util.bits.Bit;
 import com.jypec.util.bits.BitInputStream;
 import com.jypec.util.bits.BitOutputStream;
 import com.jypec.util.bits.BitStreamConstants;
+
+import lcplc.util.Sampler;
+import lcplc.util.Utils;
 
 /**
  * Create an Exponential Golomb Coder/Decoder

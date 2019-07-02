@@ -1,6 +1,6 @@
 
 
-package lcplc;
+package lcplc.core;
 
 public class IntegerUniformThresholdQuantizer implements Quantizer {
 	

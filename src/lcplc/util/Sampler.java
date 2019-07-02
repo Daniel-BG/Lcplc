@@ -1,4 +1,4 @@
-package lcplc;
+package lcplc.util;
 
 import java.io.BufferedWriter;
 import java.io.FileOutputStream;
@@ -22,7 +22,7 @@ public class Sampler <T> {
 	}
 
 	public void export() throws IOException {
-		FileOutputStream fos = new FileOutputStream(Sampler.samplePath + this.filename + Sampler.extension, true);
+		FileOutputStream fos = new FileOutputStream(Sampler.samplePath + this.filename + Sampler.extension, false);
 		OutputStreamWriter osw = new OutputStreamWriter(fos);
 		BufferedWriter bw = new BufferedWriter(osw);
 		for (T s: samples) {

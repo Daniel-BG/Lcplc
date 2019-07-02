@@ -1,4 +1,4 @@
-package lcplc;
+package lcplc.core;
 
 import java.util.LinkedList;
 import java.util.Queue;

@@ -1,4 +1,4 @@
-package lcplc;
+package lcplc.core;
 
 public class ShifterQuantizer implements Quantizer {
 	
@@ -17,14 +17,13 @@ public class ShifterQuantizer implements Quantizer {
 			this.addition  = 1 << (downscale - 1);
 	}
 
-	@Override
+	
 	public int quantize(int value) {
 		//int qVal = (Math.abs(value) + this.addition) >> this.downscale;
 		//return value > 0 ? qVal : -qVal;
 		return (value + this.addition) >> this.downscale;
 	}
 
-	@Override
 	public int dequantize(int qVal) {
 		//int absQVal = qVal > 0 ? qVal : -qVal;
 		//int val = absQVal << this.downscale;
