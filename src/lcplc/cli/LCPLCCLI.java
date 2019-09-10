@@ -14,6 +14,8 @@ public class LCPLCCLI {
 	/** Compress/Decompress/Compare */
 	public static final String OPTION_COMPRESS = "compress";
 	public static final String OPTION_DECOMPRESS = "decompress";
+	public static final String OPTION_COMPARE = "compare";
+	/** Custom size */
 	public static final String OPTION_CUSTOM_SIZE = "custom_size";
 	/** Input/Output file options */
 	public static final String OPTION_INPUT = "input";
@@ -29,6 +31,7 @@ public class LCPLCCLI {
 	public static final String OPTION_TYPE_SIGNED = "type_signed";
 	
 	
+	
 	/* Options for jypec */
 	private static Options lcplcOptions;
 	/* Only one instance */
@@ -37,6 +40,7 @@ public class LCPLCCLI {
 		Option help				= new Option("h", OPTION_HELP, false, "print this message");
 		Option compress			= new Option("c", OPTION_COMPRESS, false, "compress image");
 		Option decompress		= new Option("d", OPTION_DECOMPRESS, false, "decompress image");
+		Option compare 			= new Option("k", OPTION_COMPARE, false, "compare image after compression");
 		
 		/* input output files */
 		Option input = Option
@@ -128,6 +132,7 @@ public class LCPLCCLI {
 		lcplcOptions.addOption(outputHeader);
 		lcplcOptions.addOption(compress);
 		lcplcOptions.addOption(decompress);
+		lcplcOptions.addOption(compare);
 		lcplcOptions.addOption(blockSize);
 		lcplcOptions.addOption(downscale);
 		lcplcOptions.addOption(gamma);

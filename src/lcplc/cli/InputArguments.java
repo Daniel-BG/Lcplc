@@ -98,7 +98,7 @@ public class InputArguments {
 		
 		args.useCustomGamma = line.hasOption(LCPLCCLI.OPTION_CUSTOM_GAMMA);
 		if (args.useCustomGamma)
-			args.gamma = Integer.parseInt(line.getOptionValue(LCPLCCLI.OPTION_CUSTOM_GAMMA));
+			args.gamma = Double.parseDouble(line.getOptionValue(LCPLCCLI.OPTION_CUSTOM_GAMMA));
 		
 		if (args.decompress) {
 			if (!line.hasOption(LCPLCCLI.OPTION_TYPE_DEPTH)) 

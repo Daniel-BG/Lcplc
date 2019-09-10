@@ -15,8 +15,8 @@ import lcplc.util.Utils;
 public class Compressor {
 	
 	///////Constants
-	private static final boolean FAST_COMPRESS = false;
-	private static final boolean REPORT_BLOCK_STATUS = true;
+	private static final boolean FAST_COMPRESS = true;
+	private static final boolean REPORT_BLOCK_STATUS = false;
 	private static final boolean USE_PRECALCULATED_MEAN = true;
 	private static final int CONST_ACC_QUANT = 32;
 	///////

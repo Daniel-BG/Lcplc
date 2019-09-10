@@ -9,7 +9,9 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.ParseException;
+import org.ejml.data.FMatrixRMaj;
 
+import com.jypec.distortion.ImageComparisons;
 import com.jypec.img.HyperspectralImage;
 import com.jypec.img.HyperspectralImageData;
 import com.jypec.img.ImageDataType;
@@ -24,14 +26,6 @@ import lcplc.util.Sampler;
 
 public class Main {
 
-	//USE THIS SINCE ITS DATA TYPE 12: UNSIGNED TWO BYTE!!
-	static String input = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.dat";
-	//static String input = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.dat";
-	//static String input = "C:/Users/Daniel/Hiperspectral images/Beltsville_Radiance_w_IGM/0810_2022_rad.dat";
-	static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.hdr";
-	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.hdr";
-	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Beltsville_Radiance_w_IGM/0810_2022_rad.hdr";
-	
 	static String samplerBaseDir = "C:/Users/Daniel/Repositorios/Lcplc/test_data_2/";
 	static String sampleExt = ".smpl";
 
@@ -70,7 +64,6 @@ public class Main {
 	        		if (iArgs.useCustomGamma) 
 	        			c.setGamma(iArgs.gamma);
 	        		
-	        		//TODO call compress function
 	        		BitOutputStream bos = new BitOutputStream(new FileOutputStream(new File(iArgs.output)));
 	        		c.compress(hid, bos);
 	        		
@@ -96,8 +89,53 @@ public class Main {
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
+	        } else if (line.hasOption(LCPLCCLI.OPTION_COMPARE)) {
+	        	try {
+	        		//read input image
+	        		HyperspectralImage hi = HyperspectralImageReader.read(iArgs.input, iArgs.inputHeader, true);	   
+	        		HyperspectralImageData hid = hi.getData();
+	        		if (iArgs.useCustomSize)
+	        			hid = hid.resize(iArgs.bands, iArgs.lines, iArgs.samples);
+	        		else {
+	        			iArgs.bands = hid.getNumberOfBands();
+	        			iArgs.lines = hid.getNumberOfLines();
+	        			iArgs.samples = hid.getNumberOfSamples();
+	        		}
+	        			
+	        		
+	        		//call compress function
+	        		Compressor c = new Compressor();
+	        		if (iArgs.useCustomBlockSize)
+	        			c.setBlockSize(iArgs.blockLines, iArgs.blockSamples);
+	        		if (iArgs.useCustomDownscale)
+	        			c.setSQDownscale(iArgs.sqDownscale);
+	        		if (iArgs.useCustomGamma) 
+	        			c.setGamma(iArgs.gamma);
+	        		
+	        		BitOutputStream bos = new BitOutputStream(new FileOutputStream(new File(iArgs.output)));
+	        		c.compress(hid, bos);
+	        		bos.close();
+	        		
+	        		FMatrixRMaj fdm = hid.tofloatMatrix();
+	        		ImageDataType idt = hid.getDataType();
+	        		float dynRange = idt.getDynamicRange();
+	        		hid = null;
+	        		
+	        		BitInputStream bis = new BitInputStream(new FileInputStream(new File(iArgs.output)));
+	        		HyperspectralImageData hidd = c.uncompress(idt, iArgs.bands, iArgs.lines, iArgs.samples, bis);
+	        		FMatrixRMaj sdm = hidd.tofloatMatrix();
+	        		hidd = null;
+	        		
+	        		//output metrics
+					System.out.println("PSNR: " + ImageComparisons.rawPSNR(fdm, sdm, dynRange));
+					System.out.println("SNR: " + ImageComparisons.SNR(fdm, sdm));
+					System.out.println("MSE: " + ImageComparisons.MSE(fdm, sdm));
+
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 	        } else {
-	        	throw new ParseException("Missing options -c -d, i don't know what to do");
+	        	throw new ParseException("Missing options -c -d -k, i don't know what to do");
 	        }
 	    }
 	    catch( ParseException exp ) {
