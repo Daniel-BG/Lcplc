@@ -31,7 +31,7 @@ entity LCPLC is
 		WORD_WIDTH_LOG: integer := 5;
 		--configure max slice size 
 		--the max slice size accepted is 2**MAX_SLICE_SIZE_LOG
-		MAX_SLICE_SIZE_LOG: integer := 8;
+		MAX_SLICE_SIZE_LOG: integer := 4;  --4,6,8,10,12
 		--width of the alpha value. This can increase accuracy in prediction
 		ALPHA_WIDTH: integer := 10;
 		--window with which predictions are made. Smaller windows adapt better to fast changes, while 

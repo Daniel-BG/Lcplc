@@ -2,15 +2,15 @@ package lcplc;
 
 public class Test {
 	
-	//static String input = "C:/Users/Daniel/Hiperspectral images/cupriteBSQ/Cuprite";
+	static String input = "C:/Users/Daniel/Hiperspectral images/cupriteBSQ/Cuprite";
 	//static String input= "C:/Users/Daniel/Hiperspectral images/CCSDS 123 suite/AVIRIS/aviris_hawaii_f011020t01p03r05_sc01.uncal-u16be-224x512x614.raw";
 	//static String input = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.dat";
-	static String input = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.dat";
+	//static String input = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.dat";
 	//static String input = "C:/Users/Daniel/Hiperspectral images/Beltsville_Radiance_w_IGM/0810_2022_rad.dat";
-	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/cupriteBSQ/Cuprite.hdr";
+	static String inputHeader = "C:/Users/Daniel/Hiperspectral images/cupriteBSQ/Cuprite.hdr";
 	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/CCSDS 123 suite/AVIRIS/aviris_hawaii_f011020t01p03r05_sc01.uncal-u16be-224x512x614.raw.hdr";
 	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Reno_Radiance_wIGMGLT/0913-1248_rad.hdr";
-	static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.hdr";
+	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Gulf_Wetlands_Sample_Rad/Suwannee_0609-1331_rad.hdr";
 	//static String inputHeader = "C:/Users/Daniel/Hiperspectral images/Beltsville_Radiance_w_IGM/0810_2022_rad.hdr";
 	
 	
@@ -20,26 +20,26 @@ public class Test {
 	
 	static String[] argsCompression = 
 		{
-			"--downscale", "2",
-			"--gamma", "3",
+			//"--downscale", "2",
+			//"--gamma", "3",
 			"--block_size", "32", "32",
 			"-i", input,
 			"--input_header", inputHeader,
 			"-o", output,
 			"-c",
-			//"--custom_size", "360", "64", "64"
+			"--custom_size", "360", "32", "32"
 		};
 	
 	static String[] argsDecompression = 
 		{
-			"--downscale", "2",
-			"--gamma", "3",
+			//"--downscale", "2",
+			//"--gamma", "3",
 			"--block_size", "32", "32",
 			"-i", output,
 			"-o", output2,
 			"-d",
 			"--type_depth", "16",
-			//"--custom_size", "360", "64", "64",			
+			"--custom_size", "360", "32", "32",			
 		};
 
 	static String[] argsComparison = 
@@ -55,9 +55,9 @@ public class Test {
 		};
 	
 	public static void main(String[] args) {
-		Test.multiTest();
+		//Test.multiTest();
 		//Main.main(argsComparison);
-		//Main.main(argsCompression);
+		Main.main(argsCompression);
 		//Main.main(argsDecompression);
 	}
 	

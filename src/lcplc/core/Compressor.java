@@ -1,5 +1,6 @@
 package lcplc.core;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
 import com.jypec.img.HyperspectralImageData;
@@ -15,8 +16,8 @@ import lcplc.util.Utils;
 public class Compressor {
 	
 	///////Constants
-	private static final boolean FAST_COMPRESS = true;
-	private static final boolean REPORT_BLOCK_STATUS = false;
+	private static final boolean FAST_COMPRESS = false;
+	private static final boolean REPORT_BLOCK_STATUS = true;
 	private static final boolean USE_PRECALCULATED_MEAN = true;
 	private static final int CONST_ACC_QUANT = 32;
 	///////
@@ -55,11 +56,21 @@ public class Compressor {
 		return (q + ((1 << ds) >> 1)) & ((-1) << ds);
 	}
 	
-	public void compress(HyperspectralImageData hid, BitOutputStream bos) throws IOException {
+	public void compress(HyperspectralImageData hid, BitOutputStream outputStream) throws IOException {
 		int imgBands	= hid.getNumberOfBands();
 		int imgLines	= hid.getNumberOfLines();
 		int imgSamples	= hid.getNumberOfSamples();
 		this.SAMPLE_DEPTH = hid.getDataType().getBitDepth();
+		
+		//wrap around a new bitoutputstream to be able to output it
+		ByteArrayOutputStream baos;
+		BitOutputStream bos;
+		if (!FAST_COMPRESS) {
+			baos = new ByteArrayOutputStream();
+			bos = new BitOutputStream(baos);
+		} else {
+			bos = outputStream;
+		}
 		
 		///////
 		//get starting time here
@@ -111,6 +122,30 @@ public class Compressor {
 		double rate = (double) bos.getBitsOutput() / (double) hid.getBitSize();
 		System.out.println("Rate: " + rate);
 		///////
+		
+		//output data again to bypass original output stream
+		if (!FAST_COMPRESS) {
+			Sampler<Integer> outputSampler = new Sampler<Integer>("output");
+			
+			byte[] bytesoutput = baos.toByteArray();
+			for (int i = 0; i < bytesoutput.length; i+=4) {
+				if (i + 3 >= bytesoutput.length)
+					break;
+				int word = ((bytesoutput[i]   << 24) & 0xff000000) 
+						 | ((bytesoutput[i+1] << 16) & 0x00ff0000) 
+						 | ((bytesoutput[i+2] << 8 ) & 0x0000ff00) 
+						 | ((bytesoutput[i+3]      ) & 0x000000ff);
+				outputSampler.sample(word);
+			}
+			for (byte b: bytesoutput)
+				outputStream.writeByte(b);
+			try {
+				outputSampler.export();
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.exit(0);
+			}
+		}
 	}
 	
 	private void compressBlock(int[][][] block, int bands, int lines, int samples, boolean flushBlock, BitOutputStream bos) throws IOException {
