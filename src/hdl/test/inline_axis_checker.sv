@@ -27,6 +27,7 @@ module inline_axis_checker (
 	parameter DATA_WIDTH=10;
 	parameter FILE_NAME = null;
 	parameter SKIP = 0;
+	parameter SHOW_ALL = 0;
 
 	input					clk, rst;
 	input 					valid;
@@ -55,11 +56,13 @@ module inline_axis_checker (
 		if (valid == 1 && ready == 1) begin
 			if (ref_valid == 1) begin
 				//data should match ref_data
-				if (data != ref_data) begin
+				if (data != ref_data || (^data === 1'bX)) begin
 					$info("Seen: 0x%h Expected: 0x%h", data, ref_data);
 				end else begin
 					//data matches expected value
-					//$info("Displaying info 0x%h", data); 
+					if (SHOW_ALL == 1) begin
+						$info("Displaying info 0x%h", data); 
+					end
 				end
 			end else begin
 				//error, we don't have data we are asking for
