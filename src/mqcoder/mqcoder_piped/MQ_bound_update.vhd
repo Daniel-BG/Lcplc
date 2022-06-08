@@ -89,6 +89,8 @@ architecture Behavioral of MQ_bound_update is
 	--debug purposes
 	file out_file : text;
 	constant out_file_name: string := "out_probhit_bpc.bin";
+	
+	constant empty_string: character := ' ';
 		
 begin	
 
@@ -316,9 +318,9 @@ begin
 				wait until rising_edge(clk);
 				if (output_state_curr = VALUES_READ) then
 					write(out_line, std_logic_vector(curr_probability), right, 16);
-					write(out_line, " ", right, 1);
+					write(out_line, empty_string, right, 1);
 					write(out_line, std_logic_vector(to_unsigned(curr_shift, 4)), right, 4);
-					write(out_line, " ", right, 1);
+					write(out_line, empty_string, right, 1);
 					write(out_line, fifonorm_out_hit, right, 1);
 					writeline(out_file, out_line);
 				end if;

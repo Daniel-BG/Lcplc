@@ -72,6 +72,8 @@ architecture Behavioral of BPC_output_controller is
 	--debug purposes
 	file out_file : text;
 	constant out_file_name: string := "out_CXD_bpc.bin";
+	
+	constant empty_string: character := ' ';
 
 begin
 
@@ -204,7 +206,7 @@ begin
 				wait until rising_edge(clk);
 				if (out_valid_i = '1') then
 					write(out_line, out_context_i, right, 2);
-					write(out_line, " ", right, 1);
+					write(out_line, empty_string, right, 1);
 					write(out_line, out_symbol_i, right, 1);
 					writeline(out_file, out_line);
 				end if;

@@ -39,45 +39,10 @@ package JypecConstants is
 	--	SIGNIFICANT_NEGATIVE => "10"
 	--);
 	
-	function significance_state_to_vector(input: significance_state_t) return std_logic_vector is
-	begin
-		if (input = INSIGNIFICANT) then
-			return "00";
-		elsif (input = SIGNIFICANT_POSITIVE) then
-			return "01";
-		else
-			return "10";
-		end if;
-	end significance_state_to_vector;
-	
-	function vector_to_significance_state(input: std_logic_vector(1 downto 0)) return significance_state_t is
-	begin
-		if (input = "00") then
-			return INSIGNIFICANT;
-		elsif (input = "01") then
-			return SIGNIFICANT_POSITIVE;
-		else
-			return SIGNIFICANT_NEGATIVE;
-		end if;
-	end vector_to_significance_state;
-	
-	function significance_strip_to_vector(input: significance_strip_t) return std_logic_vector is
-	begin
-		return 	significance_state_to_vector(input.ss_0) &
-					significance_state_to_vector(input.ss_1) &
-					significance_state_to_vector(input.ss_2) &
-					significance_state_to_vector(input.ss_3);
-	end significance_strip_to_vector;
-	
-	function vector_to_significance_strip(input: std_logic_vector(7 downto 0)) return significance_strip_t is
-		variable result: significance_strip_t;
-	begin
-		result.ss_0 := vector_to_significance_state(input(7 downto 6));
-		result.ss_1 := vector_to_significance_state(input(5 downto 4));
-		result.ss_2 := vector_to_significance_state(input(3 downto 2));
-		result.ss_3 := vector_to_significance_state(input(1 downto 0));
-		return result;
-	end vector_to_significance_strip;
+	function significance_state_to_vector(input: significance_state_t) return std_logic_vector;
+	function vector_to_significance_state(input: std_logic_vector(1 downto 0)) return significance_state_t;
+	function significance_strip_to_vector(input: significance_strip_t) return std_logic_vector;
+	function vector_to_significance_strip(input: std_logic_vector(7 downto 0)) return significance_strip_t;
 	
 	type subband_t is (LL, LH, HL, HH);
 	type encoder_pass_t is (CLEANUP, SIGNIFICANCE, REFINEMENT);
@@ -242,3 +207,46 @@ package JypecConstants is
 	
 end package;
 
+package body JypecConstants is
+
+	function significance_state_to_vector(input: significance_state_t) return std_logic_vector is
+	begin
+		if (input = INSIGNIFICANT) then
+			return "00";
+		elsif (input = SIGNIFICANT_POSITIVE) then
+			return "01";
+		else
+			return "10";
+		end if;
+	end significance_state_to_vector;
+	
+	function vector_to_significance_state(input: std_logic_vector(1 downto 0)) return significance_state_t is
+	begin
+		if (input = "00") then
+			return INSIGNIFICANT;
+		elsif (input = "01") then
+			return SIGNIFICANT_POSITIVE;
+		else
+			return SIGNIFICANT_NEGATIVE;
+		end if;
+	end vector_to_significance_state;
+	
+	function significance_strip_to_vector(input: significance_strip_t) return std_logic_vector is
+	begin
+		return 	significance_state_to_vector(input.ss_0) &
+					significance_state_to_vector(input.ss_1) &
+					significance_state_to_vector(input.ss_2) &
+					significance_state_to_vector(input.ss_3);
+	end significance_strip_to_vector;
+	
+	function vector_to_significance_strip(input: std_logic_vector(7 downto 0)) return significance_strip_t is
+		variable result: significance_strip_t;
+	begin
+		result.ss_0 := vector_to_significance_state(input(7 downto 6));
+		result.ss_1 := vector_to_significance_state(input(5 downto 4));
+		result.ss_2 := vector_to_significance_state(input(3 downto 2));
+		result.ss_3 := vector_to_significance_state(input(1 downto 0));
+		return result;
+	end vector_to_significance_strip;
+	
+end ;

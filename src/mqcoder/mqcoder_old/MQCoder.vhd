@@ -148,6 +148,7 @@ architecture Behavioral of MQCoder is
 	file out_file, out_file_prob : text;
 	constant out_file_name: string := "out_CXD_old.bin";
 	constant out_file_name_prob: string := "out_probhit_old.bin";
+	signal empty_string: string := " ";
 	
 	
 begin
@@ -399,7 +400,7 @@ begin
 				wait until rising_edge(clk);
 				if (clk_en = '1') then
 					write(out_line, in_context, right, 2);
-					write(out_line, " ", right, 1);
+					write(out_line, empty_string, right, 1);
 					write(out_line, in_bit, right, 1);
 					writeline(out_file, out_line);
 				end if;
@@ -415,9 +416,9 @@ begin
 				wait until rising_edge(clk);
 				if (clk_en = '1' and (hit_watcher = '1' or num_shifts_watcher /= "0000") and hit_watcher /= 'U') then
 					write(out_line, probability_watcher, right, 16);
-					write(out_line, " ", right, 1);
+					write(out_line, empty_string, right, 1);
 					write(out_line, num_shifts_watcher, right, 4);
-					write(out_line, " ", right, 1);
+					write(out_line, empty_string, right, 1);
 					write(out_line, hit_watcher, right, 1);
 					writeline(out_file_prob, out_line);
 				end if;

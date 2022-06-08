@@ -117,7 +117,7 @@ begin
 	
 		wait for clk_period*20;
 		
-		send_block(9973);
+		send_block(0);
 		--send_block(7);
 		clk_en <= '1';
 		

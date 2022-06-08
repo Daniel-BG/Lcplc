@@ -61,7 +61,7 @@ begin
 	s0 <= memout(4*BIT_DEPTH - 1 downto 3*BIT_DEPTH);
 	s1 <= memout(3*BIT_DEPTH - 1 downto 2*BIT_DEPTH);
 	s2 <= memout(2*BIT_DEPTH - 1 downto 1*BIT_DEPTH);
-	s3 <= memout(BIT_DEPTH - 1 downto 0);
+	s3 <= memout(  BIT_DEPTH - 1 downto 0          );
 
 	gen_proc: process(clk, rst, clk_en, input, input_loc, input_en) 
 	begin
@@ -81,6 +81,5 @@ begin
 			end if;
 		end if;
 	end process;
-
 
 end Behavioral;
